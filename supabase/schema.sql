@@ -12,6 +12,24 @@
 --   nothing on its own.
 -- ══════════════════════════════════════════════════════════════════════
 
+-- ── coming from version 4 ─────────────────────────────────────────────
+-- Version 4 had push tables with the same names but no owner column. They
+-- only ever held short-lived notification data, so they are replaced.
+-- Tables that already have the new shape are left alone.
+do $$
+begin
+  if to_regclass('public.push_queue') is not null and not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'push_queue' and column_name = 'user_id') then
+    drop table public.push_queue;
+  end if;
+  if to_regclass('public.push_subscriptions') is not null and not exists (
+       select 1 from information_schema.columns
+       where table_schema = 'public' and table_name = 'push_subscriptions' and column_name = 'user_id') then
+    drop table public.push_subscriptions;
+  end if;
+end $$;
+
 -- ── the dashboard document: one row per user ──────────────────────────
 create table if not exists public.dashboards (
   user_id    uuid primary key default auth.uid() references auth.users (id) on delete cascade,

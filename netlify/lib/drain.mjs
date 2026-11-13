@@ -43,6 +43,9 @@ export async function drain() {
   const due = await sql.select(`push_queue?sent_at=is.null&send_at=lte.${encodeURIComponent(nowIso)}&order=send_at.asc&limit=${BATCH}`);
   const result = { due: due.length, sent: 0, expired: 0, failed: 0, pruned: 0 };
   if (!due.length) return result;
+  // A queue table left over from version 4 has no owner column. Do nothing
+  // until supabase/schema.sql has been run.
+  if (due.some(r => !r.user_id)) return { ...result, skipped: 'the queue table is from an older version: run supabase/schema.sql' };
 
   const users = [...new Set(due.map(r => r.user_id))];
   const subs = await sql.select(`push_subscriptions?select=*&user_id=in.(${users.join(',')})`);

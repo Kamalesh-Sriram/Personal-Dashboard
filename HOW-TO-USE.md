@@ -34,6 +34,8 @@ You need two free accounts: [GitHub](https://github.com) (holds your copy of the
 
 Every time you change something in your GitHub copy, Netlify redeploys by itself.
 
+Prefer not to connect GitHub? Install the [Netlify CLI](https://docs.netlify.com/cli/get-started/) and run `netlify deploy --prod` in the project folder. Do not drag the whole project folder onto Netlify: that uploads everything in it, including files that are not part of the site.
+
 > The site is the same empty shell for anyone who opens the address. Your tasks, habits and history are **not** stored on it. See [Security and privacy](#10-security-and-privacy).
 
 ## 2. First launch
@@ -356,5 +358,5 @@ Version 5 is a rebuild and stores its data differently.
 
 1. Deploy version 5 to the **same** Netlify site as before.
 2. Open it in the browser you used for version 4, go to **Settings > Data**, and press **Import from v4**. Activities and their sessions, habits and their history, the board, goals, subscriptions and the journal come across. The win and loss record starts fresh.
-3. Deploy with `netlify deploy --prod` from now on, or connect the repository to Netlify. Do **not** use `--dir .` any more: it would publish the whole project folder.
-4. Version 4 kept its data in a Supabase table that anyone with the page source could read. After importing, delete the old `app_state` table (or the whole old project), run the new `supabase/schema.sql`, and follow Part 5 to set up sync with a login.
+3. Deploy with `netlify deploy --prod` from now on, or connect the repository to Netlify. Do **not** use `--dir .` any more, and do not drag the project folder onto Netlify: both send the whole folder, old files included.
+4. Version 4 kept its data in a Supabase table that anyone with the page source could read. After importing, delete the old `app_state` table (or the whole old project), run the new `supabase/schema.sql` (it replaces the old push tables by itself), and follow Part 5 to set up sync with a login. If you keep the same Netlify site, the only new variable to add is `SUPABASE_ANON_KEY`.

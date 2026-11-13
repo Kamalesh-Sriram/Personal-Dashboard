@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en" data-theme="dark" data-font="classic">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Dashboard</title>
+  <meta name="description" content="A private personal dashboard: tasks, time tracking, habits, goals and a rival who keeps you honest.">
+  <meta name="theme-color" content="#080A0D">
+  <meta name="color-scheme" content="dark light">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Dashboard">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+  <link rel="stylesheet" href="css/tokens.css">
+  <link rel="stylesheet" href="css/app.css">
+  <link rel="stylesheet" href="css/views.css">
+  <!-- Applies the saved theme before first paint, so there is no flash. -->
+  <script src="js/boot-theme.js"></script>
+  <script type="module" src="js/main.js"></script>
+</head>
+<body>
+  <div id="bg" aria-hidden="true"></div>
+  <div id="scrim" aria-hidden="true"></div>
+
+  <div class="shell" id="shell">
+    <aside class="side" id="side" aria-label="Sections"></aside>
+    <div class="side-back" data-act="nav.close"></div>
+    <div class="main">
+      <header class="top" id="top"></header>
+      <div id="strip"></div>
+      <main class="view" id="view" tabindex="-1"></main>
+    </div>
+  </div>
+
+  <div id="focus" role="dialog" aria-modal="true" aria-label="Focus session"></div>
+  <div id="modal-root"></div>
+  <div id="toasts" role="status" aria-live="polite"></div>
+  <div id="onb-root"></div>
+
+  <noscript>
+    <p style="padding:24px;font-family:system-ui">This dashboard runs entirely in your browser and needs JavaScript enabled.</p>
+  </noscript>
+</body>
+</html>

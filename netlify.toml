@@ -1,0 +1,44 @@
+# Netlify configuration.
+#
+# Only the ./app folder is published. Everything else in the repository
+# (functions, SQL, docs, tools) stays off the public site.
+# There is no build step and there are no dependencies.
+
+[build]
+  publish = "app"
+  functions = "netlify/functions"
+  command = "echo 'No build step: the app folder is served as it is.'"
+
+[functions]
+  node_bundler = "esbuild"
+
+# ── security headers, on every response ──────────────────────────────
+# Content-Security-Policy is the important one: scripts may only come from
+# this site (no inline scripts, no third parties), and the page may only
+# talk to this site and to a Supabase project. The two Google hosts are
+# for the optional "Classic" typeface and nothing else.
+# If your Supabase project is on a custom domain, add it to connect-src.
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Content-Security-Policy = "default-src 'self'; script-src 'self'; style-src 'self' https://fonts.googleapis.com; style-src-attr 'unsafe-inline'; font-src 'self' https://fonts.gstatic.com; img-src 'self' blob: data:; connect-src 'self' https://*.supabase.co; worker-src 'self'; manifest-src 'self'; base-uri 'self'; form-action 'self'; frame-ancestors 'none'; object-src 'none'; upgrade-insecure-requests"
+    X-Content-Type-Options = "nosniff"
+    X-Frame-Options = "DENY"
+    Referrer-Policy = "no-referrer"
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), payment=(), usb=(), browsing-topics=()"
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    Cross-Origin-Opener-Policy = "same-origin"
+    X-Robots-Tag = "noindex, nofollow"
+    # Always revalidate, so a device never keeps running an old build.
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache"
+    Service-Worker-Allowed = "/"
+
+[[headers]]
+  for = "/icons/*"
+  [headers.values]
+    Cache-Control = "public, max-age=604800"

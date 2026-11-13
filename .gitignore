@@ -1,0 +1,20 @@
+# Netlify's local folder (holds the id of your own site)
+.netlify/
+
+# The previous version, kept locally for reference. It contains personal
+# data and old keys and must never be published.
+legacy-v4/
+
+# Local tooling and editor state
+.claude/
+node_modules/
+.env
+.env.*
+*.log
+.DS_Store
+Thumbs.db
+
+# Generated: your own data must not end up in the repository
+demo-backup.json
+dashboard-backup-*.json
+app/demo.json

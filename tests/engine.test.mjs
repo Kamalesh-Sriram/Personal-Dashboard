@@ -175,12 +175,15 @@ test('a task logs its time under the activity its tag is linked to', () => {
   assert.equal(E.activityForCard({ id: 'c', tagId: null }).id, 'deep');
 });
 
-test('daily goals start empty and yesterday is offered as the prompt', () => {
-  fresh(st => { st.days[Y] = { goals: [{ t: 'Ship it', done: true }] }; });
+test('main goals start empty each day, show the last ones as a prompt, and earn XP up to a cap', () => {
+  fresh(st => { st.days[Y] = { goals: [{ t: 'Make my first million' }] }; });
   assert.deepEqual(E.dayGoals(T), []);
-  assert.equal(E.prevDayGoals(T)[0].t, 'Ship it');
-  E.setDayGoal(T, 0, { t: 'Ship it' });
-  assert.equal(E.dayGoals(T)[0].done, false);
+  assert.equal(E.prevDayGoals(T)[0].t, 'Make my first million');
+  assert.equal(E.goalXP(T), 0);
+  for (let i = 0; i < 8; i++) E.setDayGoal(T, i, { t: 'Goal ' + i });
+  assert.equal(E.dayGoals(T).length, 8);          // as many as you like
+  assert.equal(E.goalXP(T), 10);                  // but only five of them pay, at 2 XP each
+  assert.equal(E.dayScore(T).goals, 10);
 });
 
 test('custom notification lines replace the built-in ones and fill in placeholders', () => {

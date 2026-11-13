@@ -49,7 +49,7 @@ const sideOpen = () => (isDrawer() ? ui.drawer : !!S().settings.sidebarOpen);
 
 function statusInfo() {
   const a = E.runningActivity(), t = today();
-  if (a) return { cls: 'run', text: `${E.label(a)} · ${fmtTimer(Date.now() - a.lastStart)}`, act: 'focus.show', title: 'Timer running: open focus view' };
+  if (a) return { cls: 'run', text: `${E.label(a)} · ${fmtTimer(Date.now() - a.lastStart)}`, act: 'focus.show', title: 'Your timer is running. Open the focus view.' };
   if (E.isRest(t)) return { cls: 'rest', text: 'Rest day' };
   const w = E.winMinutes(), n = E.nowMinutes();
   if (n < w.start) return { cls: '', text: 'Before hours' };
@@ -148,12 +148,12 @@ function announceSettlement(r) {
   const before = E.rankFor(r.repBefore).cur, after = E.rankFor(r.repAfter).cur;
   if (r.settled.length <= 3) {
     const d = r.settled[r.settled.length - 1];
-    const body = d.v === 'R' ? 'Rest day. Nothing was scored.'
-      : `${d.v === 'W' ? 'Won' : 'Lost'}: ${d.x} XP against ${L.shadow}'s ${d.s}.` + (d.ex != null ? ` Execution ${d.ex}%.` : '');
-    toast(`Day closed · ${fmtDate(d.date)}`, body, { kind: d.v === 'W' ? 'good' : '', ms: 12000 });
+    const body = d.v === 'R' ? 'Nothing was scored.'
+      : `You scored ${d.x} XP and ${L.shadow} scored ${d.s}.` + (d.ex != null ? ` You finished ${d.ex}% of your mission.` : '');
+    toast(`${fmtDate(d.date)}: ${d.v === 'R' ? 'rest day' : d.v === 'W' ? 'you won' : 'you lost'}`, body, { kind: d.v === 'W' ? 'good' : '', ms: 12000 });
   }
   if (st.settings.modules.rank && before.name !== after.name) {
-    notify(after.at > before.at ? 'Promoted' : 'Demoted', `${before.name} to ${after.name}. ${L.rep} ${Math.round(r.repAfter)}.`, { kind: after.at > before.at ? 'good' : 'bad' });
+    notify(after.at > before.at ? `You've been promoted to ${after.name}` : `You've dropped to ${after.name}`, `Your ${L.rep.toLowerCase()} is now ${Math.round(r.repAfter)}.`, { kind: after.at > before.at ? 'good' : 'bad' });
   }
 }
 function dayStart() {
@@ -170,7 +170,7 @@ function housekeeping() {
   nudgeTick();
   E.checkLiveRecords().forEach(b => {
     const def = E.RECORD_DEFS[b.key];
-    notify('New record', `${def.label}: ${E.fmtRecord(b.key, b.v)}: previous ${E.fmtRecord(b.key, b.prev)}. ${b.key === 'xp' ? E.voice('pb') : ''}`.trim(), { kind: 'good' });
+    notify('You set a new record', `${def.label}: ${E.fmtRecord(b.key, b.v)}. Your previous best was ${E.fmtRecord(b.key, b.prev)}. ${b.key === 'xp' ? E.voice('pb') : ''}`.trim(), { kind: 'good' });
   });
 }
 
@@ -231,7 +231,7 @@ async function boot() {
 
   if (S().profile.onboarded) dayStart();
   onChange(kind => {
-    if (kind === 'quota') { toast('Storage is full', 'This browser refused to save. Export a backup from Settings > Data.', { kind: 'bad', ms: 15000 }); return; }
+    if (kind === 'quota') { toast("Your browser's storage is full", 'That change could not be saved. Export a backup under Settings > Data.', { kind: 'bad', ms: 15000 }); return; }
     if (kind !== 'quiet') applyTheme();
     if (kind === 'sync' || kind === 'replace') { E.invalidate(); if (S().profile.onboarded) announceSettlement(E.settlePending()); }
     if (kind !== 'quiet') scheduleRender(kind);
@@ -242,7 +242,7 @@ async function boot() {
 
   if (!S().profile.onboarded) startOnboarding(() => { dayStart(); renderAll(); });
   if (landed === 'recovery') VIEWS.settings.newPasswordModal();
-  if (landed === 'confirmed') toast('Email confirmed', 'You are signed in. Sync is on.', { kind: 'good' });
+  if (landed === 'confirmed') toast('Your email is confirmed', "You're signed in and sync is on.", { kind: 'good' });
 
   setInterval(tick, 1000);
   setInterval(housekeeping, 20000);

@@ -9,6 +9,10 @@ import { ui, refresh } from '../bus.js';
 import { L } from '../flows.js';
 
 const open = new Set();          // cards whose sub-tasks are expanded on the board
+/* The tag colours of the earlier versions. A new tag takes the next one
+   that is not in use yet, and the cycle button steps through them. */
+const TAG_COLORS = ['#8AB4F8', '#2BD4F0', '#2BF0A0', '#C58AF9', '#F28B82', '#F5A623', '#FFD93D', '#FF4D5E', '#9B6EF0', '#56CFB2'];
+const nextTagColor = used => TAG_COLORS.find(c => !used.some(u => (u || '').toLowerCase() === c.toLowerCase())) || TAG_COLORS[used.length % TAG_COLORS.length];
 const DONE_SHOWN = 25;
 
 function cardHtml(c, colId) {
@@ -120,6 +124,7 @@ function openTags() {
   const removed = [];
   const rows = () => tags.map((t, i) => `<div class="row tag-row">
       <input type="color" class="input" value="${safeColor(t.color)}" data-k="color" data-i="${i}" aria-label="Colour">
+      <button type="button" class="icon-btn sm" data-cycle="${i}" title="Next colour" aria-label="Next colour">${icon('refresh')}</button>
       <input class="input" value="${esc(t.name)}" data-k="name" data-i="${i}" maxlength="40" aria-label="Tag name">
       <select class="input" data-k="activityId" data-i="${i}" aria-label="Logs time under"><option value="">Default focus activity</option>
         ${st.activities.map(a => `<option value="${esc(a.id)}" ${a.id === t.activityId ? 'selected' : ''}>${esc(E.label(a))}</option>`).join('')}</select>
@@ -127,15 +132,19 @@ function openTags() {
   openModal({
     title: 'Tags', wide: true,
     body: `<p class="hint">A tag groups tasks and decides where their time goes: when you ${esc(L().lockIn.toLowerCase())} on a tagged task, the timer runs under the linked activity instead of the default.</p>
-      <div class="row tiny dim" style="padding:0 2px"><span style="width:56px">Colour</span><span class="grow">Name</span><span class="grow">Logs time under</span><span style="width:28px"></span></div>
+      <div class="row tiny dim" style="padding:0 2px"><span style="width:92px">Colour</span><span class="grow">Name</span><span class="grow">Logs time under</span><span style="width:28px"></span></div>
       <div id="tag-rows" class="col" style="gap:8px">${rows()}</div>
       <button type="button" class="btn sm" id="tag-add" style="align-self:flex-start">${icon('plus')} Add tag</button>`,
     onMount: el => {
       const box = el.querySelector('#tag-rows');
       const sync = e => { const t = e.target.closest('[data-k]'); if (t) tags[+t.dataset.i][t.dataset.k] = t.value; };
       box.addEventListener('input', sync); box.addEventListener('change', sync);
-      box.addEventListener('click', e => { const d = e.target.closest('[data-del]'); if (d) { removed.push(tags[+d.dataset.del].id); tags.splice(+d.dataset.del, 1); box.innerHTML = rows(); } });
-      el.querySelector('#tag-add').addEventListener('click', () => { tags.push({ id: uid(), name: 'New tag', color: '#8B7CF6', activityId: '' }); box.innerHTML = rows(); });
+      box.addEventListener('click', e => {
+        const d = e.target.closest('[data-del]'), cy = e.target.closest('[data-cycle]');
+        if (d) { removed.push(tags[+d.dataset.del].id); tags.splice(+d.dataset.del, 1); box.innerHTML = rows(); }
+        if (cy) { const t = tags[+cy.dataset.cycle], at = TAG_COLORS.findIndex(c => c.toLowerCase() === (t.color || '').toLowerCase()); t.color = TAG_COLORS[(at + 1) % TAG_COLORS.length]; box.innerHTML = rows(); }
+      });
+      el.querySelector('#tag-add').addEventListener('click', () => { tags.push({ id: uid(), name: 'New tag', color: nextTagColor(tags.map(t => t.color)), activityId: '' }); box.innerHTML = rows(); });
     },
     onSubmit: () => {
       st.tags = tags.filter(t => t.name.trim()).map(t => touch({ ...t, name: t.name.trim(), color: safeColor(t.color), activityId: t.activityId || null }));

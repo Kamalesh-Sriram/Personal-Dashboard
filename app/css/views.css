@@ -37,10 +37,8 @@ i.v.W { background: var(--good); } i.v.L { background: var(--bad); } i.v.R { bac
 .home { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, 1.2fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
 .home > .hud, .home > .home-goals { grid-column: 1 / -1; }
 .dgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
-.dg { display: flex; align-items: center; gap: 8px; }
-.dg .input { background: transparent; }
-.dg .input::placeholder { color: var(--text-3); opacity: .75; font-style: italic; }
-.dg.done .input { color: var(--text-3); text-decoration: line-through; }
+.input.dg { background: transparent; }
+.input.dg::placeholder { color: var(--text-3); opacity: .7; font-style: italic; }
 .check:disabled { opacity: .35; cursor: default; }
 details.lines { border-top: 1px solid var(--line); padding: 4px 0; }
 details.lines summary { display: flex; align-items: center; gap: 12px; padding: 10px 0; cursor: pointer; list-style: none; }
@@ -52,9 +50,9 @@ details.lines textarea { margin-bottom: 8px; font-size: 13px; }
 .pace { text-align: center; font-weight: 650; margin: 2px 0 4px; }
 .xp-parts { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 14px; margin-top: 12px; font-size: 12px; color: var(--text-3); }
 .xp-parts b { color: var(--text); font-weight: 650; }
-.mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(72px, 1fr)); gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); text-align: center; }
+.mini-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(52px, 1fr)); gap: 8px; margin-top: 16px; padding-top: 14px; border-top: 1px solid var(--line); text-align: center; }
 .mini-stats b { display: block; font-size: 22px; }
-.mini-stats span { font-size: 11px; color: var(--text-3); }
+.mini-stats span { display: block; font-size: 11px; line-height: 1.25; color: var(--text-3); }
 .objs { display: flex; flex-direction: column; }
 .obj { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-top: 1px solid var(--line); }
 .obj:first-child { border-top: 0; }
@@ -81,7 +79,8 @@ details.lines textarea { margin-bottom: 8px; font-size: 13px; }
 .task-m { display: flex; flex-wrap: wrap; gap: 3px 10px; font-size: 11.5px; color: var(--text-3); margin-top: 2px; }
 .sweep { display: flex; align-items: center; gap: 10px; margin-top: 12px; padding: 10px 12px; border-radius: var(--r-ctl); background: var(--card-2); border: 1px dashed var(--line-2); }
 .sweep > svg { width: 20px; height: 20px; flex: none; color: var(--text-3); }
-.sweep b { display: block; font-size: 13px; } .sweep span { font-size: 12px; color: var(--text-3); }
+.sweep span { font-size: 13px; color: var(--text-2); }
+.sweep.on span { color: var(--text); }
 .sweep.on { border-style: solid; border-color: var(--warn); background: color-mix(in srgb, var(--warn) 12%, transparent); }
 .sweep.on > svg { color: var(--warn); }
 .logbook { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
@@ -89,7 +88,7 @@ details.lines textarea { margin-bottom: 8px; font-size: 13px; }
 .log-item:hover { background: var(--card-2); }
 .log-item svg { width: 16px; height: 16px; flex: none; }
 .log-item.ok { border-style: solid; border-color: transparent; background: color-mix(in srgb, var(--good) 14%, transparent); color: var(--good); }
-.hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: var(--gap); }
+.hud { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: var(--gap); }
 .hud-cell::before { content: ""; position: absolute; top: 0; left: 12%; right: 12%; height: 1px; background: linear-gradient(90deg, transparent, var(--accent), transparent); opacity: .55; }
 .hud-cell { position: relative; display: flex; flex-direction: column; gap: 7px; padding: 14px 16px; text-align: left; background: var(--card-grad, var(--card)); border: 1px solid var(--line); border-radius: var(--r-card); box-shadow: var(--shadow); min-width: 0; color: inherit; }
 :root[data-bg="on"] .hud-cell { background: color-mix(in srgb, var(--card) var(--glass), transparent); -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); }

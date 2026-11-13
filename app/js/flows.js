@@ -18,7 +18,7 @@ const shadowName = () => L().shadow;
 function offerRating(activity) {
   const s = (activity.sessions || [])[activity.sessions.length - 1];
   if (!s || s.dur < E.COMBO.minMs || s.eff != null) return;
-  toast(`${E.label(activity)}: ${fmtDur(s.dur)} logged`, 'How focused was it? Rating it counts toward today\'s logbook.', {
+  toast(`You logged ${fmtDur(s.dur)} of ${E.label(activity)}`, 'How focused were you?', {
     ms: 14000,
     buttons: [1, 2, 3, 4, 5].map(n => ({ label: String(n), run: () => { s.eff = n / 5; touch(activity); E.invalidate(); save(); } }))
   });
@@ -26,7 +26,7 @@ function offerRating(activity) {
 function stopAndRate() {
   const r = E.stopRunning();
   if (!r) return null;
-  if (!r.kept) toast('Not logged', 'Under 15 seconds: treated as a mis-tap.', { ms: 3500 });
+  if (!r.kept) toast('Not saved', 'That was under 15 seconds, so it was left out.', { ms: 3500 });
   else offerRating(r.activity);
   return r;
 }
@@ -52,14 +52,14 @@ function renderFocus() {
     `<button class="focus-sub ${s.done ? 'done' : ''}" data-act="focus.sub" data-id="${esc(s.id)}"><span class="check sq ${s.done ? 'on' : ''}">${icon('check')}</span><span>${esc(s.t)}</span></button>`).join('')}</div>` : '';
   el.innerHTML = `<div class="focus-in">
       <div class="eyebrow">${a ? esc(E.label(a)) : 'Focus'}${tag && (!a || tag.name !== a.name) ? ' · ' + esc(tag.name) : ''}</div>
-      <div class="focus-task">${card ? esc(card.text) : 'No task queued: just work.'}</div>
+      <div class="focus-task">${card ? esc(card.text) : 'No task picked. Just work.'}</div>
       <div class="focus-timer" id="focus-timer">00:00</div>
       <div class="muted" id="focus-hint"></div>
       ${subs}
       <div class="row wrap" style="justify-content:center;gap:10px">
-        ${card ? `<button class="btn primary" data-act="focus.done">${icon('check')} Task done</button>` : ''}
+        ${card ? `<button class="btn primary" data-act="focus.done">${icon('check')} I'm done with this task</button>` : ''}
         <button class="btn" data-act="focus.stop" id="focus-stop" disabled>${icon('stop')} Stop</button>
-        <button class="btn ghost" data-act="focus.hide" id="focus-hide" disabled>Keep running, hide</button>
+        <button class="btn ghost" data-act="focus.hide" id="focus-hide" disabled>Keep the timer running and hide this</button>
       </div>
     </div>`;
 }
@@ -71,8 +71,8 @@ function tickFocus() {
   if (!t) return;
   t.textContent = fmtTimer(Date.now() - a.lastStart);
   const hint = document.getElementById('focus-hint'), stop = document.getElementById('focus-stop'), hide = document.getElementById('focus-hide');
-  if (el < E.LOCK_MIN_MS) hint.textContent = `${Math.ceil((E.LOCK_MIN_MS - el) / 1000)}s until stopping unlocks`;
-  else { if (stop.disabled) { stop.disabled = false; hide.disabled = false; } hint.textContent = 'Minimum served. Every minute past this is yours.'; }
+  if (el < E.LOCK_MIN_MS) hint.textContent = `You can stop in ${Math.ceil((E.LOCK_MIN_MS - el) / 1000)}s`;
+  else { if (stop.disabled) { stop.disabled = false; hide.disabled = false; } hint.textContent = 'You can stop whenever you like now.'; }
 }
 function openFocus() {
   focusStart = Date.now();
@@ -98,7 +98,7 @@ function lockIn(cardId) {
 function bailCheck() {
   if (Date.now() - focusStart < 5 * 60000) {
     const n = E.logFriction();
-    if (n === 3 || n === 6) notify('Hesitation logged', `${n} false starts today. ${E.voice('idle')}`.trim());
+    if (n === 3 || n === 6) notify(`That's ${n} false starts today`, E.voice('idle'));
   }
 }
 export function completeCard(id) {
@@ -118,7 +118,7 @@ function statusLines() {
     <div><span>Momentum</span><b class="tone-${mom.tone}">${mom.label}</b><i>${esc(mom.sub)}</i></div>
     <div><span>Yesterday</span><b>${esc(yLine)}</b></div>
     <div><span>${esc(shadowName())} today</span><b>${E.shadowXP(t)} XP</b><i>${esc(E.shadowBasis(t))}</i></div>
-    <div><span>Avg start delay</span><b>${fmtMins(E.serviceRecord().ttfbAvg)}</b></div>
+    <div><span>Average start delay</span><b>${fmtMins(E.serviceRecord().ttfbAvg)}</b></div>
   </div>`;
 }
 function openBrief() {
@@ -126,27 +126,27 @@ function openBrief() {
   const line = E.voice(E.hasMission(t) ? 'morning' : 'nomission');
   const v = o => esc((o && o.t) || '');
   openModal({
-    title: E.hasMission(t) ? 'Morning brief: confirm the mission' : 'Morning brief: declare the mission',
-    submit: 'Accept mission', wide: true,
+    title: E.hasMission(t) ? "Good morning. Is this still today's mission?" : 'Good morning. What is today for?',
+    submit: 'Set mission', wide: true,
     body: `${statusLines()}
       ${line ? `<blockquote class="quote">${esc(line)}<cite>${esc(shadowName())}</cite></blockquote>` : ''}
-      <div class="field"><label>Critical: the one thing that makes today count (50%)</label><input class="input" name="c" value="${v(m.c)}" maxlength="140" autofocus></div>
-      <div class="field"><label>Primary: up to three (35%)</label>
+      <div class="field"><label>Critical: the one thing that makes today count</label><input class="input" name="c" value="${v(m.c)}" maxlength="140" autofocus></div>
+      <div class="field"><label>Primary: up to three more</label>
         <input class="input" name="p0" value="${v((m.p || [])[0])}" maxlength="140" placeholder="Optional">
         <input class="input" name="p1" value="${v((m.p || [])[1])}" maxlength="140" placeholder="Optional">
         <input class="input" name="p2" value="${v((m.p || [])[2])}" maxlength="140" placeholder="Optional"></div>
-      <div class="field"><label>Fallback: the minimum acceptable day (15%)</label><input class="input" name="f" value="${v(m.f)}" maxlength="140">
-        <div class="hint">A declared floor stops a bad morning turning into a zero day.</div></div>`,
+      <div class="field"><label>Fallback: the least you'll accept from today</label><input class="input" name="f" value="${v(m.f)}" maxlength="140">
+        <div class="hint">Having a fallback keeps a bad morning from becoming a wasted day.</div></div>`,
     onSubmit: d => {
       const prev = E.missionFor(t) || {};
       const keep = (txt, old) => ({ t: txt.trim(), done: !!(txt.trim() && old && old.t === txt.trim() && old.done) });
       const p = ['p0', 'p1', 'p2'].map((k, i) => keep(d[k], (prev.p || [])[i])).filter(x => x.t);
       const mission = { c: keep(d.c, prev.c), p, f: keep(d.f, prev.f), src: prev.src || 'morning', at: prev.at || Date.now() };
-      if (!mission.c.t && !p.length && !mission.f.t) { toast('Declare at least one objective', '', { kind: 'bad', ms: 4000 }); return false; }
+      if (!mission.c.t && !p.length && !mission.f.t) { toast('Add at least one objective first', '', { kind: 'bad', ms: 4000 }); return false; }
       S().game.missions[t] = mission;
       S().game.notif.brief = t;
       save();
-      toast('Mission accepted', mission.c.t ? 'Critical: ' + mission.c.t : 'Objectives logged.', { kind: 'good' });
+      toast('Mission set', mission.c.t ? 'Your critical task: ' + mission.c.t : 'Your objectives are saved.', { kind: 'good' });
     }
   });
 }
@@ -173,9 +173,9 @@ export function objectiveRows(m) {
 function debriefExecHtml() {
   if (!S().settings.modules.mission) return '';
   const ex = E.execScoreFor(today()), d = E.repDelta(ex);
-  if (E.isRest(today())) return `<div class="pill">Rest day: nothing is scored</div>`;
+  if (E.isRest(today())) return `<div class="pill">It's a rest day, so nothing is scored.</div>`;
   return ex === null
-    ? `<div class="pill bad">No mission declared: execution 0% · ${esc(L().rep)} ${d}</div>`
+    ? `<div class="pill bad">No mission was set, so execution is 0% (${esc(L().rep)} ${d})</div>`
     : `<div class="pill ${ex >= 60 ? 'good' : ex >= 40 ? 'warn' : 'bad'}">Execution ${ex}% · ${esc(L().rep)} ${d > 0 ? '+' : ''}${d}</div>`;
 }
 function openDebrief() {
@@ -184,7 +184,7 @@ function openDebrief() {
   const tm = E.missionFor(addDays(t, 1)) || {};
   const x = st.settings.xp;
   const modal = openModal({
-    title: 'Debrief: close the day', submit: 'Log debrief', wide: true,
+    title: 'Close the day', submit: 'Save', wide: true,
     body: `<div class="telemetry">
         <div><span>Focus</span><b>${fmtDur(E.focusMsOn(t))}</b></div>
         <div><span>Tasks</span><b>${E.tasksDoneOn(t)}</b></div>
@@ -193,7 +193,7 @@ function openDebrief() {
         <div><span>Start delay</span><b>${fmtMins(E.ttfbFor(t))}</b></div>
         <div><span>Hesitations</span><b>${st.game.friction[t] || 0}</b></div>
       </div>
-      ${m && st.settings.modules.mission ? `<div><div class="label" style="margin-bottom:6px">Resolve today's objectives</div><div id="debrief-obj">${objectiveRows(m)}</div></div>` : ''}
+      ${m && st.settings.modules.mission ? `<div><div class="label" style="margin-bottom:6px">Tick off what you finished</div><div id="debrief-obj">${objectiveRows(m)}</div></div>` : ''}
       <div id="debrief-exec">${debriefExecHtml()}</div>
       <div class="form-row">
         <div class="field"><label>What went right</label><textarea class="input" name="w" maxlength="2000">${esc(j.w || '')}</textarea></div>
@@ -202,7 +202,7 @@ function openDebrief() {
       <div class="field"><label>The fix for tomorrow</label><input class="input" name="f" value="${esc(j.f || '')}" maxlength="300"></div>
       <div class="form-row">
         <div class="field"><label>How effective was today? (0-100)</label><input class="input" type="number" min="0" max="100" name="efficacy" value="${day.efficacy ?? ''}" placeholder="Your honest read">
-          <div class="hint">Logged for the record. It earns logbook XP for being written down, not for being high.</div></div>
+          <div class="hint">An honest number is worth more than a high one.</div></div>
         <div class="field"><label>Energy (1-5)</label><input class="input" type="number" min="1" max="5" name="e" value="${j.e || ''}"></div>
         <div class="field"><label>Minutes lost to social media</label><input class="input" type="number" min="0" max="1440" name="sm" value="${j.sm || ''}">
           <div class="hint">First ${x.socialFreeMins} min free, then ${x.socialPerMin} XP per minute.</div></div>
@@ -211,7 +211,7 @@ function openDebrief() {
       <div class="form-row">
         <div class="field"><label>Tomorrow's critical objective</label><input class="input" name="tc" value="${esc((tm.c && tm.c.t) || '')}" maxlength="140"></div>
         <div class="field"><label>Tomorrow's fallback</label><input class="input" name="tf" value="${esc((tm.f && tm.f.t) || '')}" maxlength="140"></div>
-      </div><div class="hint">Declared tonight, tomorrow morning is a confirmation instead of a decision.</div>` : ''}`,
+      </div><div class="hint">Set these tonight and tomorrow starts with a plan.</div>` : ''}`,
     onSubmit: d => {
       const e = {};
       ['w', 'l', 'f'].forEach(k => { if (d[k].trim()) e[k] = d[k].trim(); });
@@ -227,7 +227,7 @@ function openDebrief() {
       st.game.notif.debrief = t;
       E.invalidate(); save();
       const pen = E.socialPenalty(t);
-      toast('Debrief logged', pen ? `${pen} XP taken off for ${sm} min of social media. ${E.voice('social')}`.trim() : (d.tc && d.tc.trim() ? 'Tomorrow opens with: ' + d.tc.trim() : 'Day resolved.'), { kind: 'good' });
+      toast('Day saved', pen ? `${sm} minutes of social media cost you ${pen} XP. ${E.voice('social')}`.trim() : (d.tc && d.tc.trim() ? 'Tomorrow starts with: ' + d.tc.trim() : 'See you tomorrow.'), { kind: 'good' });
     }
   });
   modal.el.dataset.debrief = '1';
@@ -243,7 +243,7 @@ let escTimer = null;
 function escapeChallenge(a) {
   const g = S().game, line = E.voice('escape');
   openModal({
-    title: 'Break requested', cancel: '',
+    title: 'Taking a break already?', cancel: '',
     body: `${line ? `<blockquote class="quote">${esc(line)}<cite>${esc(shadowName())}</cite></blockquote>` : ''}
       <div class="telemetry">
         <div><span>Focus logged today</span><b class="tone-bad">${fmtDur(E.focusMsOn(today()))}</b><i>the gate is 25m</i></div>
@@ -251,9 +251,9 @@ function escapeChallenge(a) {
         <div><span>Folded</span><b class="tone-bad">${g.folds}</b></div>
         <div><span>Requested</span><b>${esc(E.label(a))}</b></div>
       </div>
-      <p class="hint">Nothing is blocked. Either choice is logged.</p>`,
+      <p class="hint">It's your call. Either choice is recorded.</p>`,
     footer: `<button type="button" class="btn ghost" data-act="escape.fold" data-id="${esc(a.id)}">Take it anyway</button>
-             <button type="button" class="btn primary" data-act="escape.hold" autofocus>Hold the line: 15 min first</button>`
+             <button type="button" class="btn primary" data-act="escape.hold" autofocus>Work 15 minutes first</button>`
   });
 }
 
@@ -261,7 +261,7 @@ function escapeChallenge(a) {
 async function toggleRest(date = today()) {
   const on = !E.isRest(date), b = E.restBudget(date);
   if (on && b.left <= 0) {
-    toast('No rest days left this week', `Allowance is ${b.allowed} per 7 days. Change it in Settings > Game.`, { kind: 'bad' });
+    toast('You have no rest days left this week', `You get ${b.allowed} every 7 days. You can change that in Settings > Game.`, { kind: 'bad' });
     return;
   }
   const ok = await confirmDialog(on
@@ -270,7 +270,7 @@ async function toggleRest(date = today()) {
     : { title: 'Cancel the rest day?', ok: 'Cancel rest day', body: 'The day goes back to being scored normally.' });
   if (!ok) return;
   E.setRest(date, on);
-  if (on && E.runningActivity() === null) toast('Rest day logged', E.voice('rest'), { ms: 5000 });
+  if (on && E.runningActivity() === null) toast('Rest day set', E.voice('rest'), { ms: 5000 });
 }
 
 /* ══════════════════════ LOGBOOK ENTRIES ══════════════════════ */
@@ -296,10 +296,10 @@ function openSleep(date = today()) {
 function openEfficacy(date = today()) {
   const day = S().days[date] || {};
   openModal({
-    title: 'How effective was the day?',
+    title: 'How well did today go?',
     body: `<div class="field"><label>Efficacy: <span id="eff-out">${day.efficacy ?? 50}</span>%</label>
         <input type="range" min="0" max="100" step="5" name="efficacy" value="${day.efficacy ?? 50}" data-input="log.effPreview"></div>
-      <div class="hint">Your honest read on whether the hours went to the right things. It is kept as a record and shown on the calendar; it does not change your XP beyond the logbook entry.</div>`,
+      <div class="hint">Did your hours go to the right things? This is only a record. It doesn't change your XP beyond the logbook entry.</div>`,
     onSubmit: d => {
       const dd = S().days[date] || (S().days[date] = {});
       dd.efficacy = clamp(parseInt(d.efficacy) || 0, 0, 100);
@@ -310,7 +310,7 @@ function openEfficacy(date = today()) {
 
 registerActions({
   'lock.in': d => lockIn(d.card || null),
-  'focus.done': () => { const id = focusCardId; closeFocus(); stopAndRate(); if (id) completeCard(id); toast('Task completed', 'Chain another block before the combo drops.', { kind: 'good', ms: 4500 }); },
+  'focus.done': () => { const id = focusCardId; closeFocus(); stopAndRate(); if (id) completeCard(id); toast('Task done', 'Start another block soon to keep your combo.', { kind: 'good', ms: 4500 }); },
   'focus.stop': () => { bailCheck(); closeFocus(); stopAndRate(); },
   'focus.hide': () => closeFocus(),
   'focus.show': () => { const a = E.runningActivity(); if (a) { focusCardId = a.runCardId || null; openFocus(); focusStart = Date.now() - E.LOCK_MIN_MS; tickFocus(); } },
@@ -337,14 +337,14 @@ registerActions({
   'escape.hold': () => {
     closeModal(); S().game.holds++; save();
     clearTimeout(escTimer);
-    escTimer = setTimeout(() => notify('15 minutes elapsed', 'Take the break now if you still want it.'), 15 * 60000);
-    toast('Held', 'Fifteen minutes of work, then it is yours.', { kind: 'good', ms: 5000 });
+    escTimer = setTimeout(() => notify('15 minutes done', 'Take your break now if you still want it.'), 15 * 60000);
+    toast('Good call', 'Do 15 minutes of work, then the break is yours.', { kind: 'good', ms: 5000 });
   },
   'escape.fold': d => {
     closeModal(); const g = S().game; g.folds++; save();
     E.logFriction();
     E.startActivity(d.id);
-    toast('Logged', `Fold ${g.folds}. Combo reset.`, { ms: 5000 });
+    toast('Break started', 'Your combo has been reset.', { ms: 5000 });
   },
   'rest.toggle': d => toggleRest(d.date || today()),
   'log.sleep': d => openSleep(d.date || today()),

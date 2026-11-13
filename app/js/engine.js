@@ -264,6 +264,12 @@ export function clearDone(before = null) {
 
 /* ── main goals for the day: free text, fresh every morning ── */
 export const dayGoals = date => ((S().days[date] || {}).goals || []);
+/** XP for writing your goals out today. Capped, so the reward is for the
+ *  habit of rewriting them, not for making the list longer. */
+export function goalXP(date) {
+  const x = S().settings.xp;
+  return Math.min(dayGoals(date).filter(g => g && g.t).length, x.goalCap) * x.goal;
+}
 /** The most recent earlier day that had goals: shown faintly as a prompt. */
 export function prevDayGoals(date) {
   for (let i = 1; i <= 21; i++) {
@@ -470,9 +476,10 @@ export function dayScore(date) {
     const eff = (efficiencyOn(date) || 0) * x.efficiency;
     const sweep = sweepBonus(date);
     const log = logbook(date).count * x.log;
+    const goals = goalXP(date);
     const penalty = socialPenalty(date);
-    const total = Math.max(0, Math.round(habits + focus + tasks + eff + sweep + log - penalty));
-    return { total, habits, focus: Math.round(focus), tasks, eff: Math.round(eff), sweep, log, penalty, combo: walk };
+    const total = Math.max(0, Math.round(habits + focus + tasks + eff + sweep + log + goals - penalty));
+    return { total, habits, focus: Math.round(focus), tasks, eff: Math.round(eff), sweep, log, goals, penalty, combo: walk };
   });
 }
 export const dayXP = date => dayScore(date).total;
@@ -481,7 +488,7 @@ export const dayXP = date => dayScore(date).total;
 export function maxXP(date) {
   const st = S(), x = st.settings.xp, due = habitsDue(date).length;
   return Math.round(due * x.habit + st.settings.targets.hours * x.perHour + st.settings.targets.tasks * x.task +
-    x.efficiency + (due ? x.sweep : 0) + 4 * x.log);
+    x.efficiency + (due ? x.sweep : 0) + 4 * x.log + x.goal * Math.min(3, x.goalCap));
 }
 
 /* ══════════════════════ THE SHADOW ══════════════════════
@@ -521,9 +528,8 @@ export function shadowInfo(date = today()) {
 export const shadowXP = date => shadowInfo(date).xp;
 export function shadowBasis(date = today()) {
   const i = shadowInfo(date);
-  if (i.calibrating) return `Calibrating: ${i.need} more scored day${i.need === 1 ? '' : 's'} until he adapts to you`;
-  const tail = i.capped ? ' · capped at your 30-day best' : i.held ? ' · easing down slowly' : '';
-  return `7-day avg ${i.avg7} · last day ${i.last} · +${i.edge}% edge${tail}`;
+  if (i.calibrating) return `Still learning your pace. ${i.need} more day${i.need === 1 ? '' : 's'} to go.`;
+  return `Based on your 7-day average of ${i.avg7} XP and your last day of ${i.last} XP.`;
 }
 /** He works the whole window evenly, so his pace is knowable at any minute. */
 export function shadowPaceNow() {
@@ -619,9 +625,9 @@ const scoredDays = (n) => {
  *  run leaves the state intact: that is the point of using it over a streak. */
 export function momentum() {
   const g = S().game, days = scoredDays(5);
-  if (days.length < 3) return { key: 'establishing', label: 'Establishing', tone: 'mute', sub: `${days.length}/3 days of data` };
+  if (days.length < 3) return { key: 'establishing', label: 'Establishing', tone: 'mute', sub: `Needs ${3 - days.length} more day${3 - days.length === 1 ? '' : 's'}` };
   const vals = days.map(d => g.days[d].ex);
-  const a = avg(vals), sub = `${Math.round(a)}% avg over ${vals.length}d`;
+  const a = avg(vals), sub = `${Math.round(a)}% average over ${vals.length} days`;
   if (a >= 75 && Math.min(...vals) >= 40) return { key: 'peak', label: 'Peak', tone: 'good', sub };
   if (a >= 60) return { key: 'high', label: 'High', tone: 'good', sub };
   if (a >= 40) return { key: 'building', label: 'Building', tone: 'accent', sub };
@@ -792,17 +798,17 @@ export function monthlyCost(sub) {
    freely. */
 const VOICE = {
   cold: {
-    idle: ['No timer running. The window is still open.', 'Idle time is accumulating. Nothing is being logged.', 'Still idle. One block changes the reading.', 'The window does not pause when you do.', 'No block started. The gap is widening.'],
-    behind: ['He is ahead. The gap closes one block at a time.', 'Behind pace. He has not stopped.', 'The scoreboard reads against you. It is not final yet.'],
-    ahead: ['Ahead of pace. Hold it.', 'You are in front. He is still moving.', 'Lead confirmed. Do not spend it.'],
-    escape: ['Under 25 minutes of focus logged. This reads as an exit, not a break.', 'The request is logged. So is the timing.', 'Fifteen minutes of work first. Then take it.'],
-    pb: ['New record. That is now the standard.', 'Record logged. It will be harder to call that a fluke twice.'],
-    morning: ['Window open. The first block decides the day.', 'Start delay is being measured from now.', 'You know the first move. Make it.'],
-    night: ['Debrief. Record what happened, not what was intended.', 'Close the day. Declare the next one.'],
-    nomission: ['No mission declared. An undeclared day cannot be executed.', 'Nothing was committed to today. Nothing can be kept.'],
-    habits: ['{n} still unchecked today.', 'Habits open: {n}. The day is not closed.'],
-    social: ['That time is logged as lost.', 'Logged. It bought nothing.'],
-    rest: ['Rest day logged. Nothing is scored. He waits.']
+    idle: ['Nothing is running right now. Pick one task and start.', "You've been idle for a while. One block gets you moving again.", 'Your day is still open. Start a timer.', "No timer is running. What's the next thing?", 'A short block now is better than a long one later.'],
+    behind: ['{rival} is ahead of you. One focused block closes the gap.', "You're behind pace. Start the next block now.", "You're trailing, but the day isn't over."],
+    ahead: ["You're ahead of {rival}. Keep going.", "You're in front. Don't ease off yet.", 'Good pace. Hold it.'],
+    escape: ["You've done under 25 minutes of focus today. Do 15 minutes first, then take the break.", 'Is this a break or a way out? Give it 15 minutes first.', 'You can take it, but 15 minutes of work first would feel better.'],
+    pb: ["That's a new record.", "That's your best yet. Now you know you can."],
+    morning: ['Your day has started. Begin with the first block.', "Start with the critical task while you're fresh.", 'You know the first move. Make it.'],
+    night: ["It's time to close the day. Write down what happened and set tomorrow's first task.", 'Wrap up the day and decide what tomorrow starts with.'],
+    nomission: ["You haven't set a mission today. Decide what today is for.", 'There is no mission yet. Set one so the day has a target.'],
+    habits: ['You still have {n} to check off today.', '{n} left today. Do them before the day ends.'],
+    social: ['That time cost you some XP today.', "That's time you won't get back. Tomorrow, less."],
+    rest: ['Enjoy the rest day. Nothing is scored today.']
   },
   harsh: {
     idle: ["Nothing running. Again. You are exactly the person you keep promising you're not.", "Still nothing. All that talk about what you're going to build, and you can't start one block.", "You've been 'about to start' for hours. That's your whole personality now.", "Look at the timer. Zero. That's not bad luck, that's you.", "Everyone you want to be ahead of is working right now. You're reading this.", "You're not tired. You're soft. There's a difference and you know which one applies.", 'Another day of being average. You said you were done with average.', 'You talk like someone with a plan and work like someone with an excuse.'],

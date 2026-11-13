@@ -149,7 +149,7 @@ The dashboard is built around one loop. It takes about two minutes in the mornin
 
 **Morning**
 
-1. **Type your main goals.** The strip at the top of Home is empty every morning. What you wrote last time is shown faintly as a prompt. Retyping it is deliberate: it makes you decide again.
+1. **Write out your main goals.** These are the big ones you are working toward, not today's tasks. The strip at the top of Home is empty every morning and shows what you wrote last time in faint text. Typing them out again keeps them in front of you, and each one earns a little XP. Add as many as you like.
 2. **Declare the mission.** The morning brief opens by itself near the start of your day. Name one critical objective, up to three primary ones, and a fallback (the least you will accept from today).
 3. **Press Lock in.** It starts the timer on the top task in your Today list and fills the screen with it. Stopping is locked for the first 90 seconds, which is usually all it takes to get going.
 
@@ -173,9 +173,10 @@ The tabs live in the strip on the left. Press the arrows at the top of the strip
 
 ### Home
 
-Everything for today on one page: main goals, you against the rival, the mission, the Lock in button with today's tasks, habits, and the logbook.
+Everything for today on one page: your main goals, you against the rival, the mission, the Lock in button with your top three tasks, habits, and the logbook.
 
-- Click a task to select it. **Lock in** always starts the selected task. The line under the button says which activity the time will be logged under.
+- **Top tasks** are the first three in the board's Today column. Click one to select it. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
+- Press the question mark on the dial card for today's numbers: where your XP came from and how the rival's target was set.
 - **Rest day** (top of the dial card) marks today as not scored. See [rest days](#rest-days).
 - The **logbook** has four entries: sleep, session ratings, efficacy, and the debrief. Each one you fill in earns a little XP. Tap any of them to fill it in.
 
@@ -242,6 +243,7 @@ The week in numbers, a weekly self-rating, the journal, and your long-term recor
 | Efficiency (average session rating) | up to 10 |
 | Clean sweep (every due habit done) | 15, plus 3 for each day in the chain, up to 45 |
 | Each logbook entry | 3 |
+| Each main goal written out | 2, for up to 5 goals |
 | Social media beyond 20 minutes | minus 0.4 per minute |
 
 Back-to-back work blocks (at most 10 minutes apart, at least 5 minutes each) build a **combo**: 1.2x for the second block, 1.4x for the third, up to 3x. A longer gap or a break resets it.

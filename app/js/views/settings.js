@@ -88,6 +88,8 @@ function dayHtml() {
       ${xpRow('sweep', 'Clean sweep', 'Paid when every habit due that day is done: a full set is worth more than its parts, because the one you skip is always the same one.', 0, 200)}
       ${xpRow('sweepStep', 'Sweep chain bonus per day', `Added for each consecutive clean sweep, up to the cap below.`, 0, 50)}
       ${xpRow('sweepCap', 'Sweep bonus cap', '', 0, 500)}
+      ${xpRow('goal', 'Per main goal written', 'For writing your main goals out each day.', 0, 50)}
+      ${xpRow('goalCap', 'Main goals that count', 'How many goals a day can earn XP. You can still write as many as you like.', 0, 50)}
       ${xpRow('log', 'Per logbook entry', 'Sleep, session ratings, efficacy and the debrief: paid for being written down, never for the value entered.', 0, 50)}
       ${xpRow('socialFreeMins', 'Social media: free minutes', 'A short check is not the problem; hours are.', 0, 600)}
       ${xpRow('socialPerMin', 'Social media: XP lost per minute over', '', 0, 5, 0.1)}
@@ -117,7 +119,7 @@ function gameHtml() {
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">${esc(s.labels.shadow)}</span><span class="tiny dim">today's bar: ${info.xp} XP</span></div>
       ${row('His edge', `How far ahead of your recent form he stays. He is rebuilt each morning from 60% of your 7-day average and 40% of your last day, plus this. He never asks for more than your best day of the last 30. <button class="btn sm ghost" data-act="home.shadowInfo" style="height:24px;padding:0 8px">See today's numbers</button>`, range('settings.shadow.edge', s.shadow.edge, 0, 25, '%'))}
-      ${row('Voice', 'Cold speaks in flat telemetry. Ruthless is contempt: only pick it if that is what moves you. Silent removes his lines entirely.', seg('settings.shadow.voice', [['cold', 'Cold'], ['harsh', 'Ruthless'], ['off', 'Silent']], s.shadow.voice))}
+      ${row('Voice', 'Direct is plain and to the point. Ruthless is harsh on purpose, so only pick it if that is what gets you moving. Silent removes his lines.', seg('settings.shadow.voice', [['cold', 'Direct'], ['harsh', 'Ruthless'], ['off', 'Silent']], s.shadow.voice))}
       <p class="hint" style="margin-top:12px">Every line he and the notifications can say is editable: Settings > Notifications > What they say.</p>
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Rest days</span></div>

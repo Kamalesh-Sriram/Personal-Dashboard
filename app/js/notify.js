@@ -76,23 +76,23 @@ export function nudgeTick() {
     const since = ends.length ? Math.max(...ends) : (n.dayOpened && n.dayOpenedOn === t ? n.dayOpened : now);
     if (n.dayOpenedOn !== t) { n.dayOpenedOn = t; n.dayOpened = now; dirty = true; }
     const gap = st.settings.nudgeMins * 60000;
-    if (now - since > gap && now - (n.lastIdle || 0) > gap) { n.lastIdle = now; dirty = true; notify(name, E.voice('idle') || 'Nothing is running.', { tag: 'hq-idle' }); }
+    if (now - since > gap && now - (n.lastIdle || 0) > gap) { n.lastIdle = now; dirty = true; notify(name, E.voice('idle') || 'Nothing is running right now.', { tag: 'hq-idle' }); }
   }
 
   if (!rest && st.settings.modules.shadow && cfg.overtake && inWindow) {
     const you = E.dayXP(t), pace = E.shadowPaceNow();
-    if (pace > you && you > 0 && n.overtake !== t) { n.overtake = t; dirty = true; notify(`${name} just passed you`, `${pace} XP to your ${you}. ${E.voice('behind')}`.trim(), { tag: 'hq-overtake' }); }
+    if (pace > you && you > 0 && n.overtake !== t) { n.overtake = t; dirty = true; notify(`${name} just passed you`, `${name} is on ${pace} XP and you're on ${you}. ${E.voice('behind')}`.trim(), { tag: 'hq-overtake' }); }
   }
 
   if (!rest && cfg.habits && nowMin >= hm(cfg.habitsAt) && n.habits !== t) {
     const open = E.habitsDue(t).filter(h => h.history[t] !== 'done').length;
-    if (open > 0) { n.habits = t; dirty = true; notify('Habits still open', E.voice('habits', { n: open }) || `${open} habit${open > 1 ? 's' : ''} unchecked today.`, { tag: 'hq-habits' }); }
+    if (open > 0) { n.habits = t; dirty = true; notify('Habits left today', E.voice('habits', { n: open }) || `You still have ${open} habit${open > 1 ? 's' : ''} to check off today.`, { tag: 'hq-habits' }); }
   }
 
   if (st.settings.modules.mission && !rest) {
     if (cfg.brief && inWindow && n.brief !== t && nowMin <= w.start + 120 && !modalOpen()) { n.brief = t; dirty = true; runAction('brief.open'); }
-    if (cfg.brief && inWindow && !E.hasMission(t) && n.nomission !== t && nowMin >= w.start + 180) { n.nomission = t; dirty = true; notify('No mission declared', E.voice('nomission') || 'Declare one to score execution today.', { tag: 'hq-mission' }); }
-    if (cfg.debrief && nowMin >= w.end - 30 && n.debrief !== t && !modalOpen()) { n.debrief = t; dirty = true; notify('Debrief', E.voice('night') || 'Close the day.', { tag: 'hq-debrief' }); runAction('debrief.open'); }
+    if (cfg.brief && inWindow && !E.hasMission(t) && n.nomission !== t && nowMin >= w.start + 180) { n.nomission = t; dirty = true; notify('No mission yet', E.voice('nomission') || 'Set one so the day has a target.', { tag: 'hq-mission' }); }
+    if (cfg.debrief && nowMin >= w.end - 30 && n.debrief !== t && !modalOpen()) { n.debrief = t; dirty = true; notify('Time to close the day', E.voice('night') || 'Write up the day and plan tomorrow.', { tag: 'hq-debrief' }); runAction('debrief.open'); }
   }
   // A payment leaving tomorrow, said once, at 10:00 or the first time the app is open after that.
   if (cfg.subs && nowMin >= 10 * 60) {
@@ -102,7 +102,7 @@ export function nudgeTick() {
       const key = 'sub:' + x.id;
       if (n[key] === t) return;
       n[key] = t; dirty = true;
-      notify('Payment tomorrow', `${x.name}: ${x.amount} ${x.currency || st.settings.currency} leaves your account tomorrow.`, { tag: 'hq-sub' });
+      notify('Payment tomorrow', `${x.name} will charge ${x.amount} ${x.currency || st.settings.currency} tomorrow.`, { tag: 'hq-sub' });
     });
   }
   if (dirty) saveQuiet();
@@ -151,23 +151,23 @@ export async function enableNotifications() {
   if (state === 'unsupported') { toast('Not supported here', 'This browser has no notification support.', { kind: 'bad' }); return state; }
   if (state === 'denied') { toast('Notifications are blocked', 'Allow them for this site in your browser or system settings, then tap the bell again.', { kind: 'bad', ms: 10000 }); return state; }
   const p = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-  if (p !== 'granted') { toast('Notifications not enabled', 'You can turn them on later from the bell.'); return pushState(); }
+  if (p !== 'granted') { toast('Notifications are still off', 'You can turn them on any time from the bell.'); return pushState(); }
   try {
-    if (await subscribe(true)) toast('Notifications on', 'They will arrive even when the app is closed.', { kind: 'good' });
-    else toast('Notifications on: while the app is open', 'To receive them with the app closed, set up sync and sign in (Settings > Sync).', { ms: 10000 });
+    if (await subscribe(true)) toast('Notifications are on', "You'll get them even when the app is closed.", { kind: 'good' });
+    else toast('Notifications are on while the app is open', 'To get them with the app closed, set up sync and sign in under Settings > Sync.', { ms: 10000 });
   } catch (e) { toast('Could not finish push setup', e.message, { kind: 'bad', ms: 10000 }); }
   return pushState();
 }
 
 export async function testNotification() {
-  if (!sub) { notify('Test notification', 'This is what a callout looks like.'); if (document.visibilityState === 'visible') toast('Sent', 'System notifications only show when the app is not on screen.', { ms: 5000 }); return; }
+  if (!sub) { notify('Test notification', 'This is what a reminder looks like.'); if (document.visibilityState === 'visible') toast('Test sent', "You only see system notifications when the app isn't on screen.", { ms: 5000 }); return; }
   try {
     await Sync.rest('POST', 'push_queue?on_conflict=user_id,dedupe_key', [{
       dedupe_key: 'test:' + Date.now(), send_at: new Date().toISOString(), expires_at: null, repeat_sec: null,
-      kind: 'nudge', title: 'Test notification', body: 'Push is working on this device.', tag: 'hq-test', ongoing: false, silent: false, data: {}
+      kind: 'nudge', title: 'Test notification', body: 'Notifications are working on this device.', tag: 'hq-test', ongoing: false, silent: false, data: {}
     }], 'resolution=merge-duplicates,return=minimal');
     flush();
-    toast('Test sent', 'Lock the screen or switch apps: it arrives within a few seconds.', { ms: 8000 });
+    toast('Test sent', 'Lock your screen or switch apps. It should arrive in a few seconds.', { ms: 8000 });
   } catch (e) { toast('Test failed', e.message, { kind: 'bad', ms: 10000 }); }
 }
 const flush = async () => {
@@ -205,7 +205,7 @@ function buildPlan() {
         if (ymd(when) !== t || m > w.end) break;
         if (m < w.start) continue;
         // keyed by the minute it is due, so a sent row is never reused
-        add({ dedupe_key: `idle:${t}:${m}`, send_at: when.toISOString(), title: name, body: E.voice('idle') || 'Nothing is running.', tag: 'hq-idle' });
+        add({ dedupe_key: `idle:${t}:${m}`, send_at: when.toISOString(), title: name, body: E.voice('idle') || 'Nothing is running right now.', tag: 'hq-idle' });
         n++;
       }
     }
@@ -214,16 +214,16 @@ function buildPlan() {
       const you = E.dayXP(t), sx = E.shadowXP(t);
       if (you > 0 && sx > 0 && !running) {
         const cross = w.start + w.total * (you / sx);
-        if (cross > nowMin && cross <= w.end) add({ dedupe_key: `overtake:${t}`, send_at: atMin(cross), title: `${name} just passed you`, body: E.voice('behind') || 'You are behind pace.', tag: 'hq-overtake' });
+        if (cross > nowMin && cross <= w.end) add({ dedupe_key: `overtake:${t}`, send_at: atMin(cross), title: `${name} just passed you`, body: E.voice('behind') || "You're behind pace.", tag: 'hq-overtake' });
       }
     }
     if (st.settings.modules.mission) {
-      if (cfg.brief && !E.hasMission(t) && nowMin < w.start + 180) add({ dedupe_key: `nomission:${t}`, send_at: atMin(w.start + 180), title: 'No mission declared', body: E.voice('nomission') || 'Declare one to score execution today.', tag: 'hq-mission' });
-      if (cfg.debrief && nowMin < w.end - 30 && g.notif.debrief !== t) add({ dedupe_key: `debrief:${t}`, send_at: atMin(w.end - 30), title: 'Debrief', body: E.voice('night') || 'Close the day.', tag: 'hq-debrief' });
+      if (cfg.brief && !E.hasMission(t) && nowMin < w.start + 180) add({ dedupe_key: `nomission:${t}`, send_at: atMin(w.start + 180), title: 'No mission yet', body: E.voice('nomission') || 'Set one so the day has a target.', tag: 'hq-mission' });
+      if (cfg.debrief && nowMin < w.end - 30 && g.notif.debrief !== t) add({ dedupe_key: `debrief:${t}`, send_at: atMin(w.end - 30), title: 'Time to close the day', body: E.voice('night') || 'Write up the day and plan tomorrow.', tag: 'hq-debrief' });
     }
     if (cfg.habits && nowMin < hm(cfg.habitsAt)) {
       const open = E.habitsDue(t).filter(h => h.history[t] !== 'done').length;
-      if (open > 0) add({ dedupe_key: `habits:${t}`, send_at: atMin(hm(cfg.habitsAt)), title: 'Habits still open', body: E.voice('habits', { n: open }) || `${open} habit${open > 1 ? 's' : ''} unchecked today.`, tag: 'hq-habits' });
+      if (open > 0) add({ dedupe_key: `habits:${t}`, send_at: atMin(hm(cfg.habitsAt)), title: 'Habits left today', body: E.voice('habits', { n: open }) || `You still have ${open} habit${open > 1 ? 's' : ''} to check off today.`, tag: 'hq-habits' });
     }
   }
   if (cfg.subs) {
@@ -234,7 +234,7 @@ function buildPlan() {
       if (days !== 1) return;
       const at = Math.max(10 * 60, nowMin + 1);
       if (at > 23 * 60) return;
-      add({ dedupe_key: `sub:${x.id}:${ymd(due)}`, send_at: atMin(at), title: 'Payment tomorrow', body: `${x.name}: ${x.amount} ${x.currency || st.settings.currency} leaves your account tomorrow.`, tag: 'hq-sub' });
+      add({ dedupe_key: `sub:${x.id}:${ymd(due)}`, send_at: atMin(at), title: 'Payment tomorrow', body: `${x.name} will charge ${x.amount} ${x.currency || st.settings.currency} tomorrow.`, tag: 'hq-sub' });
     });
   }
   if (cfg.timer) {

@@ -78,12 +78,12 @@ function habitHtml(h, dueToday) {
     </div>
     <div class="hab-streak ${s.streak >= 7 ? 'hot' : ''} ${s.frozen ? 'frozen' : ''}" title="${s.frozen ? 'Frozen for a rest day' : 'Current streak'}">
       <div class="row" style="gap:4px;justify-content:center">${icon(s.frozen ? 'snow' : 'flame')}<b class="num">${s.streak}</b></div>
-      <span>${s.frozen ? 'streak frozen' : s.streak === 1 ? 'day streak' : 'day streak'}</span>
+      <span>${s.frozen ? 'streak frozen' : 'day streak'}</span>
       <span class="dim">best ${s.longest}${s.bonus > 1 ? ` · ${s.bonus}× XP` : ''}</span>
     </div>
     <div class="hab-xp">
       <div class="row between"><span><b>${s.lv.name}</b> <span class="dim">Lv ${s.lv.level}</span></span>
-        <span class="${gained ? 'xp-gain' : 'dim'}">${gained ? `+${gained} XP today` : dueToday ? `+${s.nextGain} XP if done` : ''}</span></div>
+        <span class="${gained ? 'xp-gain' : 'dim'}">${gained ? `+${gained} XP today` : dueToday ? `+${s.nextGain} XP when done` : ''}</span></div>
       <div class="bar"><i style="width:${s.pct}%;background:var(--c)"></i></div>
       <div class="row between tiny dim"><span><b style="color:var(--text)">${s.xp}</b>${s.next ? ` / ${s.next.min} XP` : ' XP · mastered'}</span>
         <span>${toNext ? `${s.milestone}-day bonus in ${toNext} day${toNext === 1 ? '' : 's'}` : 'all streak bonuses unlocked'}</span></div>
@@ -107,12 +107,12 @@ function summaryHtml() {
   const rest = E.isRest(t);
   return `<div class="hab-sum">
     <div class="card stat"><div>${ringHtml(due.length ? done / due.length * 100 : 0, { size: 62, stroke: 7, label: `${done} of ${due.length} habits done` })}</div>
-      <div><span class="eyebrow">Today</span><b class="num">${done}<small>/${due.length}</small></b><span>${rest ? 'rest day: streaks frozen' : done === due.length && due.length ? 'all done' : `${due.length - done} to go`}</span></div></div>
+      <div><span class="eyebrow">Today</span><b class="num">${done}<small>/${due.length}</small></b><span>${rest ? 'Rest day, streaks are frozen' : done === due.length && due.length ? 'All done' : `${due.length - done} to go`}</span></div></div>
     <div class="card stat ${sw.done ? 'lit' : ''}"><div class="stat-ico">${icon('flame')}</div>
       <div><span class="eyebrow">Clean-sweep chain</span><b class="num">${sw.chain}<small> day${sw.chain === 1 ? '' : 's'}</small></b>
-        <span>${!due.length ? 'no habits due' : sw.done ? `+${sw.bonus} XP banked today` : `all ${due.length} today: +${sw.bonus} XP`}</span></div></div>
+        <span>${!due.length ? 'no habits due' : sw.done ? `+${sw.bonus} XP earned today` : `Do all ${due.length} today for +${sw.bonus} XP`}</span></div></div>
     <div class="card stat"><div class="stat-ico">${icon('zap')}</div>
-      <div><span class="eyebrow">Habit XP</span><b class="num">${totalXp}</b><span>${todayXp ? `+${todayXp} earned today` : 'nothing earned yet today'}</span></div></div>
+      <div><span class="eyebrow">Habit XP</span><b class="num">${totalXp}</b><span>${todayXp ? `+${todayXp} earned today` : 'Nothing earned yet today'}</span></div></div>
     <div class="card stat"><div class="stat-ico">${icon('gauge')}</div>
       <div><span class="eyebrow">Longest live streak</span><b class="num">${best ? best.s.streak : 0}<small> days</small></b><span class="ell">${best && best.s.streak ? esc(best.h.name) : '-'} · 30-day rate ${dueN ? Math.round(doneN / dueN * 100) + '%' : '-'}</span></div></div>
   </div>`;

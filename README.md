@@ -10,7 +10,7 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 
 ## What it does
 
-- **Home.** Main goals for the day, you against your rival, today's mission, a one-press Lock in on the next task, habits, and a daily logbook.
+- **Home.** Your main goals, you against your rival, today's mission, a one-press Lock in on your top tasks, habits, and a daily logbook.
 - **Board.** A kanban board. Tasks carry a tag, estimate, deadline, notes and steps, and can be duplicated. A task's tag decides which activity its time is logged under.
 - **Track.** Activity timers, a 24-hour ring of your day, a timeline, and editable sessions.
 - **Habits.** Streaks and XP levels in plain sight, a clean-sweep chain for doing all of them, and habit maps.

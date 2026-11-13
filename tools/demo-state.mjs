@@ -75,8 +75,8 @@ for (let off = -DAYS; off <= 0; off++) {
     journal[d] = { w: pick(['Started inside the first half hour.', 'Three blocks back to back before lunch.', 'Phone stayed in the other room.']), l: pick(['Lost the afternoon after the meal.', 'Checked messages between blocks.', 'Went to bed late again.']), f: pick(['Lay out the first task tonight.', 'Eat at the desk, walk after.', 'Lights out by 23:15.']), e: pick([3, 4, 4, 5]) };
   }
 }
-days[ymd(day(-1))].goals = [{ t: 'Finish chapter 3 draft', done: true }, { t: 'Send the client proposal', done: true }, { t: 'Train legs', done: false }];
-days[T].goals = [{ t: 'Finish chapter 3 draft', done: false }];
+days[ymd(day(-1))].goals = [{ t: 'Make my first million' }, { t: 'Graduate with distinction' }, { t: 'Bench 100 kg' }, { t: 'Run my own studio' }];
+days[T].goals = [{ t: 'Make my first million' }, { t: 'Graduate with distinction' }];
 missions[T] = { c: { t: 'Results section: first full draft', done: false }, p: [{ t: 'Reply to supervisor comments', done: true }, { t: 'Invoice for October', done: false }], f: { t: 'Two focused hours on the thesis', done: true }, src: 'night', at: Date.now() - 12 * 3600000 };
 
 const tag = (name, color, a) => ({ id: slug('tag', name), name, color, activityId: slug('act', a) });
@@ -119,7 +119,7 @@ const state = {
     { id: 'sub-4', name: 'Gym', amount: 29.9, currency: 'EUR', cycle: 'custom', every: 28, anchor: ymd(day(17)), remind: true, active: true, note: '', history: [] }
   ],
   days, journal, weekRatings: {},
-  game: { start: ymd(day(-DAYS)), campaign: { on: false, name: 'War Mode', start: T, len: 60, no: 1 }, campaigns: [], days: gameDays, missions, friction: {}, combo: {}, notif: { brief: T, overtake: T, habits: T, nomission: T, debrief: T, dayOpenedOn: T, dayOpened: Date.now(), lastIdle: Date.now() }, holds: 4, folds: 1, focusActId: slug('act', 'Deep Work') },
+  game: { start: ymd(day(-DAYS)), campaign: { on: false, name: 'War Mode', start: T, len: 60, no: 1 }, campaigns: [], days: gameDays, missions, friction: {}, combo: {}, notif: { brief: T, 'sub:sub-1': T, overtake: T, habits: T, nomission: T, debrief: T, dayOpenedOn: T, dayOpened: Date.now(), lastIdle: Date.now() }, holds: 4, folds: 1, focusActId: slug('act', 'Deep Work') },
   lastActiveDay: T, tomb: {}, _rev: 1, _at: Date.now(), _dev: 'demo'
 };
 process.stdout.write(JSON.stringify(state));

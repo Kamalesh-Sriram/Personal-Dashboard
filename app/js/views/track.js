@@ -32,7 +32,7 @@ function tilesHtml() {
     const list = acts.filter(a => E.tierOf(a) === k);
     if (!list.length) return '';
     const rate = Math.round(S().settings.xp.perHour * E.TIERS[k].mult * 10) / 10;
-    return `<div class="tier"><div class="tier-h"><span class="eyebrow">${E.TIERS[k].label}</span><span class="tiny dim">${rate} XP per hour · ${esc(E.TIERS[k].note)}</span></div>
+    return `<div class="tier"><div class="tier-h"><span class="eyebrow">${E.TIERS[k].label}</span><span class="tiny dim">${rate} XP per hour</span></div>
       <div class="tiles">${list.map(tileHtml).join('')}</div></div>`;
   }).join('');
 }
@@ -70,7 +70,7 @@ function ringHtmlFor(date) {
 
 function sessionsHtml(date) {
   const rows = E.sessionsOn(date);
-  if (!rows.length) return `<div class="empty">Nothing tracked ${date === today() ? 'yet today' : 'on this day'}.</div>`;
+  if (!rows.length) return `<div class="empty">${date === today() ? "You haven't tracked anything yet today." : 'Nothing was tracked on this day.'}</div>`;
   if (ui.sessView === 'timeline') return timelineHtml(date, rows);
   return `<div class="sess-list">${rows.map(({ a, s }) => {
     const tier = E.tierOf(a), f = s.cardId ? E.findCard(s.cardId) : null;
@@ -106,7 +106,7 @@ function timelineHtml(date, rows) {
   return `<div class="tl"><div class="tl-grid"><div class="tl-win" style="left:${pct(Math.max(lo, w.start))}%;width:${((Math.min(w.end, lo + span) - Math.max(lo, w.start)) / span * 100).toFixed(3)}%"></div>${grid}
       ${now !== null && now >= lo && now <= lo + span ? `<u style="left:${pct(now)}%"></u>` : ''}</div>
     ${Object.keys(E.TIERS).map(lane).join('')}</div>
-    <div class="tiny dim" style="margin-top:8px">Shaded band = your productive window · click a block to edit it</div>`;
+    <div class="tiny dim" style="margin-top:8px">The shaded band is your working day. Click a block to edit it.</div>`;
 }
 
 /* ── editors ── */

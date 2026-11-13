@@ -47,6 +47,7 @@ export const DEFAULT_RANKS = [
 export const DEFAULT_XP = {
   habit: 12, perHour: 14, task: 9, efficiency: 10,
   sweep: 15, sweepStep: 3, sweepCap: 45, log: 3,
+  goal: 2, goalCap: 5,
   socialPerMin: 0.4, socialFreeMins: 20
 };
 

@@ -14,7 +14,8 @@ A rebuild. The single 300 KB page of version 4 becomes a small modular app that 
 
 ### Home
 
-- **Main goals for the day.** A strip that clears every morning and shows what you wrote last time as a faint prompt.
+- **Main goals.** Your lasting goals, written out fresh each morning. What you wrote last time shows as a faint prompt, there is no limit on how many, and writing them earns XP.
+- **Top tasks.** The first three tasks from the board's Today column, ready to lock in on.
 - **The Day Dial.** One gauge for your XP, the rival's pace right now, and where he will finish.
 - **Logbook.** Sleep, session ratings, efficacy and the debrief each earn XP for being recorded.
 
@@ -32,7 +33,7 @@ A rebuild. The single 300 KB page of version 4 becomes a small modular app that 
 - **Tags decide the timer.** Each tag links to an activity, so locking in on a task logs time in the right place.
 - **Duplicate** a task with its name, tag, estimate, deadline, notes and steps.
 - **Steps** (sub-tasks) with a progress bar on the card.
-- Tasks are coloured by their tag. Columns can be renamed, added, removed and reordered.
+- Tasks are coloured by their tag, and a new tag picks its own colour from the palette. Columns can be renamed, added, removed and reordered.
 - The Done column empties each morning (optional). The day a task was finished keeps the credit.
 
 ### Track

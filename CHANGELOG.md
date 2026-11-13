@@ -1,5 +1,21 @@
 # Changelog
 
+## 5.0.1
+
+### Fixed
+
+- **Sync never uploaded a real dashboard.** Uploads were sent in a mode browsers cap at 64 KB, so anything larger failed with "Failed to fetch" while a small, empty dashboard from another device went through.
+- **A second device started from scratch.** The welcome screen now offers "I already have a dashboard. Sign in", which loads your dashboard instead of making a new one.
+- **Two different dashboards on one account.** The first time a device meets an account that already holds a dashboard, it asks which one to keep. Settings > Sync has buttons to put the right copy everywhere later.
+- **Test notifications were invisible** when the app was on screen. A test is now always shown.
+- The tick in small checkboxes sat off-centre.
+
+### Changed
+
+- Home is built around four blocks: you against the rival, the mission, Lock in, and top tasks. Habits are a single count that links to the Habits tab.
+- Quieter text on the board, a single-column Goals list, green XP on the calendar, and habit names in the reading typeface.
+- Habit levels are now Starting, Building, Consistent, Established and Mastered.
+
 ## 5.0.0
 
 A rebuild. The single 300 KB page of version 4 becomes a small modular app that anyone can fork and run as their own.

@@ -95,29 +95,7 @@ function lockHtml() {
     </form>`;
 }
 
-/* ── habits + logbook ── */
-function habitsHtml() {
-  const t = today(), due = E.habitsDue(t), done = due.filter(h => h.history[t] === 'done').length;
-  const sw = E.sweepStatus(), rest = E.isRest(t);
-  const rows = due.map(h => {
-    const s = E.habitStats(h);
-    return `<div class="li ${s.doneToday ? 'done' : ''}">
-      <button class="check ${s.doneToday ? 'on' : ''}" data-act="habit.toggle" data-id="${esc(h.id)}" aria-pressed="${s.doneToday}" aria-label="${esc(h.name)}">${icon('check')}</button>
-      <span class="li-t grow ell">${esc(E.label(h))}</span>
-      <span class="streak ${s.streak >= 7 ? 'hot' : ''}" title="${s.streak}-day streak">${icon(s.frozen ? 'snow' : 'flame')}${s.streak}</span>
-      <span class="tiny ${s.doneToday ? 'tone-good' : 'dim'}" style="min-width:44px;text-align:right">${s.doneToday ? 'done' : '+' + s.nextGain + ' XP'}</span>
-    </div>`;
-  }).join('');
-  const sweep = rest ? 'Your sweep is frozen for the rest day.'
-    : sw.done ? `All done. That's a ${sw.chain}-day sweep, +${sw.bonus} XP.`
-    : sw.chain ? `Finish all ${due.length} to keep your ${sw.chain}-day sweep (+${sw.bonus} XP).`
-    : `Finish all ${due.length} for +${sw.bonus} XP.`;
-  return `<div class="card-h"><span class="eyebrow">Habits today</span><span class="num" style="font-size:18px">${done}<span class="dim" style="font-size:13px">/${due.length}</span></span>
-      <button class="icon-btn sm" data-act="nav.go" data-tab="habits" title="Open habits" aria-label="Open habits">${icon('right')}</button></div>
-    <div class="bar"><i style="width:${due.length ? done / due.length * 100 : 0}%"></i></div>
-    ${due.length ? `<div class="sweep ${sw.done ? 'on' : ''}">${icon('flame')}<span class="grow">${sweep}</span></div>` : ''}
-    <div class="list" style="margin-top:6px">${rows || `<div class="empty">Nothing is due today.<br><button class="btn sm" data-act="nav.go" data-tab="habits">Add a habit</button></div>`}</div>`;
-}
+/* ── logbook ── */
 function logbookHtml() {
   const lb = E.logStatus(), x = S().settings.xp;
   const item = (ok, label, act, ico, hint) => `<button class="log-item ${ok ? 'ok' : ''}" data-act="${act}" title="${esc(hint)}">${icon(ok ? 'check' : ico)}<span>${label}</span></button>`;
@@ -136,11 +114,15 @@ function logbookHtml() {
 function hudHtml() {
   const st = S(), t = today(), sb = E.scoreboard(), rk = E.rankFor(sb.rep), mom = E.momentum();
   const ex = E.execScoreFor(t), e7 = E.exec7(), tt = E.ttfbFor(t), avgT = E.serviceRecord().ttfbAvg;
+  const due = E.habitsDue(t), left = due.filter(h => h.history[t] !== 'done').length, sw = E.sweepStatus(), rest = E.isRest(t);
   const cells = [];
+  // habits are a count here; the list lives on its own tab
+  cells.push(`<button class="hud-cell" data-act="nav.go" data-tab="habits"><span class="eyebrow">Habits</span>
+    <b class="num ${!due.length || rest ? 'tone-mute' : left ? '' : 'tone-good'}">${!due.length ? 'None due' : rest ? 'Rest day' : left ? left + ' left' : 'All done'}</b>
+    <span>${!due.length ? 'Nothing is due today' : rest ? 'Your streaks are frozen' : left ? (sw.chain ? `Keep your ${sw.chain}-day sweep` : `${due.length - left} of ${due.length} done`) : `${sw.chain}-day sweep, +${sw.bonus} XP`}</span></button>`);
   if (st.settings.modules.rank) {
     cells.push(`<button class="hud-cell" data-act="home.ranks"><span class="eyebrow">${esc(L().rank)}</span><b class="tone-accent">${esc(rk.cur.name)}</b>
-      <div class="bar thin"><i style="width:${rk.pct}%"></i></div><span>${rk.next ? `${Math.ceil(rk.next.at - sb.rep)} more to reach ${esc(rk.next.name)}` : 'The top rank'}</span></button>`);
-    cells.push(`<div class="hud-cell"><span class="eyebrow">${esc(L().rep)}</span><b class="num">${Math.round(sb.rep)}</b><span>${st.settings.modules.mission && !E.isRest(t) ? `${fmtSigned(E.repDelta(ex))} if the day ended now` : 'Earned by keeping your word'}</span></div>`);
+      <div class="bar thin"><i style="width:${rk.pct}%"></i></div><span>${Math.round(sb.rep)} ${esc(L().rep.toLowerCase())}${rk.next ? `, ${Math.ceil(rk.next.at - sb.rep)} more to ${esc(rk.next.name)}` : ''}</span></button>`);
   }
   if (st.settings.modules.mission) {
     cells.push(`<div class="hud-cell"><span class="eyebrow">Execution</span><b class="num tone-${ex === null ? 'mute' : tone(ex >= 60, ex >= 40)}">${ex === null ? '-' : ex + '%'}</b><span>${e7 !== null ? `Your 7-day average is ${e7}%` : ex === null ? 'Set a mission to score this' : 'Of the mission you set'}</span></div>`);
@@ -177,35 +159,24 @@ function deadlinesHtml() {
   return `<div class="card-h"><span class="eyebrow">Deadlines</span></div>
     <div class="list">${items.slice(0, 5).map(row).join('') || '<div class="empty">No deadlines coming up.</div>'}</div>`;
 }
-function timeHtml() {
-  const t = today(), map = new Map();
-  E.sessionsOn(t).forEach(({ a, s }) => map.set(a, (map.get(a) || 0) + s.dur));
-  const rows = [...map.entries()].sort((a, b) => b[1] - a[1]).slice(0, 5), max = Math.max(1, ...rows.map(r => r[1]));
-  return `<div class="card-h"><span class="eyebrow">Time today</span><span class="tiny dim">${fmtDur(E.trackedMsOn(t))} tracked</span></div>
-    ${rows.length ? rows.map(([a, ms]) => `<div class="time-row"><span class="ell">${esc(E.label(a))}</span><div class="bar"><i style="width:${ms / max * 100}%;background:${safeColor(a.color)}"></i></div><b>${fmtDur(ms)}</b></div>`).join('')
-      : `<div class="empty">You haven't tracked anything yet.<br><button class="btn sm" data-act="nav.go" data-tab="track">Open Track</button></div>`}`;
-}
-
 export default {
   render() {
     const st = S(), t = today(), rest = E.isRest(t), b = E.restBudget(t);
     return `<div class="home">
       <section class="card home-goals" aria-label="Main goals">${goalsHtml()}</section>
-      <section class="card" aria-label="Today's score">
+      <section class="card home-duel" aria-label="Today's score">
         <div class="card-h"><span class="eyebrow">${st.settings.modules.shadow ? `You vs ${esc(L().shadow)}` : 'Today'}</span>
           <button class="btn sm ${rest ? 'primary' : 'ghost'}" data-act="rest.toggle" title="A rest day is not scored. You have ${b.left} of ${b.allowed} left this week.">${icon('moon')} ${rest ? 'Rest day on' : 'Rest day'}</button>
-          ${st.settings.modules.shadow ? `<button class="icon-btn sm" data-act="home.shadowInfo" title="How ${esc(L().shadow)} is set" aria-label="How the rival is set">${icon('help')}</button>` : ''}</div>
+          ${st.settings.modules.shadow ? `<button class="icon-btn sm" data-act="home.shadowInfo" title="Today's numbers" aria-label="Today's numbers">${icon('help')}</button>` : ''}</div>
         <div id="home-duel">${duelHtml()}</div>
       </section>
-      <section class="card" aria-label="Mission and tasks">${missionHtml()}<div id="home-lock">${lockHtml()}</div></section>
-      <div class="stack">
-        <section class="card" aria-label="Habits">${habitsHtml()}</section>
-        <section class="card" aria-label="Logbook">${logbookHtml()}</section>
-      </div>
+      <section class="card home-main" aria-label="Mission and tasks">${missionHtml()}<div id="home-lock">${lockHtml()}</div></section>
       <section class="hud" id="home-hud" aria-label="Standing">${hudHtml()}</section>
-      <section class="card">${weekHtml()}</section>
-      <section class="card">${deadlinesHtml()}</section>
-      <section class="card">${timeHtml()}</section>
+      <div class="home-row">
+        <section class="card" aria-label="Logbook">${logbookHtml()}</section>
+        <section class="card">${weekHtml()}</section>
+        <section class="card">${deadlinesHtml()}</section>
+      </div>
     </div>`;
   },
   mount(root) {

@@ -212,7 +212,7 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .bar.thin { height: 4px; }
 
 .check {
-  flex: none; width: 26px; height: 26px; border-radius: 50%; border: 2px solid var(--line-2); background: transparent;
+  flex: none; width: 26px; height: 26px; padding: 0; border-radius: 50%; border: 2px solid var(--line-2); background: transparent;
   display: grid; place-items: center; color: transparent; transition: background-color .12s, border-color .12s;
 }
 .check svg { width: 14px; height: 14px; }

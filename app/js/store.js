@@ -12,7 +12,7 @@
 import { today, uid, slug, deepClone } from './util.js';
 import { mergeStates } from './merge.js';
 
-export const APP_VERSION = '5.0.0';
+export const APP_VERSION = '5.0.1';
 export const LS_KEY = 'hq.v5.state';
 const DEVICE_KEY = 'hq.v5.device';
 

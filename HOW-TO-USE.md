@@ -136,7 +136,7 @@ It uses your own free [Supabase](https://supabase.com) project. Your data sits i
 **E. Create your account**
 
 8. Open your dashboard, go to **Settings > Sync**, type your email and a password of at least eight characters, and press **Create account**. If Supabase sends a confirmation email, click the link in it and then sign in.
-9. On every other device: open the dashboard, go to **Settings > Sync**, and **Sign in** with the same details. The data on that device is merged with your account. Nothing is overwritten.
+9. On every other device: open the dashboard and, on the welcome screen, press **I already have a dashboard. Sign in**. Your dashboard loads and that device stays in step from then on. If a device already has its own dashboard, it asks which one to keep.
 10. On each device, tap the **bell** once more so it registers for closed-app notifications.
 
 **F. Close the door behind you (recommended)**
@@ -349,7 +349,7 @@ What you should do:
 | Notifications still not arriving | Open `/.netlify/functions/push-health` on your site. Anything marked false is the part to fix. |
 | "Sync is not set up yet" | The five Netlify variables are missing, or the site was not redeployed after adding them. |
 | Sign-in says the email is not confirmed | Click the link in the confirmation email, or turn off "Confirm email" in Supabase under Authentication. |
-| Two devices show different things | Check that both are signed in to the same account under Settings > Sync, then press **Sync now**. |
+| Two devices show different things | On the device with the right dashboard, open Settings > Sync and press **Use this device's everywhere**. On the other, press **Load my account's here**. |
 | The page looks out of date | Close the app completely and open it again. |
 
 ## 12. Upgrading from version 4

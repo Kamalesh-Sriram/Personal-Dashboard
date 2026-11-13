@@ -6,6 +6,7 @@ import { icon } from '../icons.js';
 import { esc, today, uid, fmtDate, safeColor, daysBetween } from '../util.js';
 import { ui, refresh } from '../bus.js';
 
+const seen = new Set();           // goals start expanded the first time they are shown
 const COLORS = ['#E0B25A', '#F2793A', '#F26D63', '#EE5D8C', '#8B7CF6', '#6FB1F0', '#2BC4E0', '#56CFB2', '#5FCB8B', '#9AA0A8'];
 
 export function goalUnits(g) {
@@ -81,6 +82,7 @@ function openGoal(g) {
 export default {
   render() {
     const goals = S().goals;
+    goals.forEach(g => { if (!seen.has(g.id)) { seen.add(g.id); ui.goalOpen.add(g.id); } });
     return `<div class="view-h"><h2>Goals</h2><button class="btn sm primary" data-act="goal.new">${icon('plus')} Goal</button></div>
       ${goals.length ? `<div class="goals">${goals.map(goalHtml).join('')}</div>`
         : `<div class="card empty" style="padding:48px 16px">No goals yet. A goal here is something with an end: break it into milestones and tasks, and send tasks to the board when it is time.<br><button class="btn primary" data-act="goal.new">${icon('plus')} Add a goal</button></div>`}`;

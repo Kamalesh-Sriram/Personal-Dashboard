@@ -64,7 +64,8 @@ self.addEventListener('push', event => {
       return;
     }
     // If the app is on screen it shows its own toast; a second copy is noise.
-    if (msg.kind !== 'timer' && await hasVisibleWindow()) return;
+    // (A test is always shown, or there would be no way to tell it worked.)
+    if (msg.kind === 'nudge' && await hasVisibleWindow()) return;
 
     await self.registration.showNotification(title, {
       body, tag, icon: ICON, badge: BADGE,

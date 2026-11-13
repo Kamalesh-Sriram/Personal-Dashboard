@@ -164,10 +164,10 @@ export async function testNotification() {
   try {
     await Sync.rest('POST', 'push_queue?on_conflict=user_id,dedupe_key', [{
       dedupe_key: 'test:' + Date.now(), send_at: new Date().toISOString(), expires_at: null, repeat_sec: null,
-      kind: 'nudge', title: 'Test notification', body: 'Notifications are working on this device.', tag: 'hq-test', ongoing: false, silent: false, data: {}
+      kind: 'test', title: 'Test notification', body: 'Notifications are working on this device.', tag: 'hq-test', ongoing: false, silent: false, data: {}
     }], 'resolution=merge-duplicates,return=minimal');
     flush();
-    toast('Test sent', 'Lock your screen or switch apps. It should arrive in a few seconds.', { ms: 8000 });
+    toast('Test sent', 'It should appear as a system notification in a few seconds.', { ms: 8000 });
   } catch (e) { toast('Test failed', e.message, { kind: 'bad', ms: 10000 }); }
 }
 const flush = async () => {

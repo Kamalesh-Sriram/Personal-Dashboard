@@ -222,6 +222,19 @@ async function boot() {
   setRefresh(() => scheduleRender('ui'));
   applyTheme();
   loadBgImage();
+  Sync.onLinkChoice(info => new Promise(resolve => {
+    let done = false;
+    const m = openModal({
+      title: 'Which dashboard should this device use?', cancel: '',
+      body: `<p class="muted">This device has “${esc(info.local)}”. Your account already has “${esc(info.remote)}”, last updated ${esc(new Date(info.updated).toLocaleString())}.</p>
+        <p class="hint">Pick the one with your real data. The other copy is replaced. After this, every device signed in to your account stays the same automatically.</p>`,
+      footer: `<button type="button" class="btn" data-pick="merge">Combine both</button>
+        <button type="button" class="btn" data-pick="local">Keep this device's</button>
+        <button type="button" class="btn primary" data-pick="remote">Use my account's</button>`,
+      onMount: el => el.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { done = true; m.close(); resolve(b.dataset.pick); })),
+      onClose: () => { if (!done) resolve(null); }
+    });
+  }));
   const landed = Sync.initSync();
   Sync.onStatus(() => renderTop());
 
@@ -233,6 +246,7 @@ async function boot() {
   onChange(kind => {
     if (kind === 'quota') { toast("Your browser's storage is full", 'That change could not be saved. Export a backup under Settings > Data.', { kind: 'bad', ms: 15000 }); return; }
     if (kind !== 'quiet') applyTheme();
+    if (kind === 'sync' && S().profile.onboarded && $('onb-root').firstChild) { $('onb-root').innerHTML = ''; dayStart(); }   // a dashboard arrived from the account
     if (kind === 'sync' || kind === 'replace') { E.invalidate(); if (S().profile.onboarded) announceSettlement(E.settlePending()); }
     if (kind !== 'quiet') scheduleRender(kind);
   });

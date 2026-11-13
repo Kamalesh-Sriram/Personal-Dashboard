@@ -31,9 +31,9 @@ export const HABIT_DIFF = {
   hard:    { label: 'Hard',    gain: 15, loss: 5,  days: 66 }
 };
 export const HABIT_LEVELS = [
-  { level: 1, name: 'Seedling', min: 0 },
-  { level: 2, name: 'Sprout', min: 200 },
-  { level: 3, name: 'Growing', min: 500 },
+  { level: 1, name: 'Starting', min: 0 },
+  { level: 2, name: 'Building', min: 200 },
+  { level: 3, name: 'Consistent', min: 500 },
   { level: 4, name: 'Established', min: 800 },
   { level: 5, name: 'Mastered', min: 1000 }
 ];

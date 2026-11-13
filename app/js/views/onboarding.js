@@ -4,6 +4,8 @@ import { S, save, starterContent } from '../store.js';
 import { applyTheme, ACCENTS } from '../theme.js';
 import { icon } from '../icons.js';
 import { esc, today } from '../util.js';
+import { toast } from '../ui.js';
+import * as Sync from '../sync.js';
 
 export function startOnboarding(done) {
   const root = document.getElementById('onb-root'), st = S(), s = st.settings;
@@ -72,6 +74,43 @@ export function startOnboarding(done) {
     if (ac) ac.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; s.accent = b.dataset.c; applyTheme(); render(); });
     const first = root.querySelector('#onb-name');
     if (first) first.focus();
+    // If this site has sync set up, a second device can sign in and skip all of this.
+    if (step === 0) Sync.config().then(cfg => {
+      const card = root.querySelector('.onb-card');
+      if (!cfg || step !== 0 || !card || card.querySelector('#onb-have')) return;
+      const b = document.createElement('button');
+      b.type = 'button'; b.id = 'onb-have'; b.className = 'btn ghost'; b.style.alignSelf = 'flex-start';
+      b.textContent = 'I already have a dashboard. Sign in';
+      b.addEventListener('click', signInScreen);
+      card.appendChild(b);
+    });
+  }
+  function signInScreen() {
+    root.innerHTML = `<div class="onb"><form class="onb-card" novalidate>
+        <div><div class="eyebrow">Welcome back</div><h1 class="onb-title">Sign in to load your dashboard.</h1></div>
+        <div class="field"><label>Email</label><input class="input" type="email" name="email" autocomplete="username" required></div>
+        <div class="field"><label>Password</label><input class="input" type="password" name="password" autocomplete="current-password" required></div>
+        <div class="row"><span class="grow"></span><button type="button" class="btn ghost" id="onb-back">Back</button>
+          <button type="submit" class="btn primary" style="height:46px;padding:0 22px">Sign in</button></div>
+      </form></div>`;
+    const form = root.querySelector('form');
+    root.querySelector('#onb-back').addEventListener('click', render);
+    form.elements.email.focus();
+    form.addEventListener('submit', async e => {
+      e.preventDefault();
+      const btn = form.querySelector('[type=submit]');
+      btn.disabled = true; btn.textContent = 'Signing in';
+      try {
+        await Sync.signIn(form.elements.email.value.trim(), form.elements.password.value);
+        if (!S().profile.onboarded) {             // signed in, but the account holds no dashboard yet
+          toast('You are signed in', 'There is no dashboard in your account yet, so set one up here.', { ms: 9000 });
+          render();
+        }
+      } catch (err) {
+        btn.disabled = false; btn.textContent = 'Sign in';
+        toast('That did not work', err.message, { kind: 'bad', ms: 9000 });
+      }
+    });
   }
   render();
 }

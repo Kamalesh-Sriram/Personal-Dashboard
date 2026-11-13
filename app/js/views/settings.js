@@ -191,7 +191,12 @@ function syncHtml() {
     ${sy.signedIn ? `<section class="card"><div class="card-h"><span class="eyebrow">Account</span><span class="pill ${sy.state === 'error' ? 'bad' : sy.state === 'idle' ? 'good' : ''}">${{ idle: 'Synced', syncing: 'Syncing…', error: 'Problem', offline: 'Offline', off: 'Off' }[sy.state]}</span></div>
         ${row('Signed in as', `Last synced: ${when}${sy.error ? ' · ' + esc(sy.error) : ''}`, `<b>${esc(sy.email)}</b>`)}
         <div class="row wrap" style="margin-top:12px"><button class="btn" data-act="sync.now">${icon('refresh')} Sync now</button><button class="btn" data-act="sync.password">Change password</button><button class="btn danger" data-act="sync.signOut">Sign out</button></div>
-        <p class="hint" style="margin-top:10px">Signing out leaves the data on this device untouched.</p></section>`
+        <p class="hint" style="margin-top:10px">Signing out leaves the data on this device untouched.</p></section>
+      <section class="card"><div class="card-h"><span class="eyebrow">If your devices show different things</span></div>
+        <p class="hint" style="margin-bottom:12px">Devices signed in to the same account stay the same by themselves. If one ever ends up with the wrong dashboard, pick the right copy here.</p>
+        ${row('This device has the right one', 'Sends this dashboard to your account. Every other device takes it on.', `<button class="btn" data-act="sync.useLocal">Use this device's everywhere</button>`)}
+        ${row('Another device has the right one', 'Replaces what is on this device with the dashboard in your account.', `<button class="btn" data-act="sync.useRemote">Load my account's here</button>`)}
+      </section>`
     : `<section class="card"><div class="card-h"><span class="eyebrow">1 · Your Supabase project</span></div>
         <p class="hint" style="margin-bottom:10px">If you added <span class="mono">SUPABASE_URL</span> and <span class="mono">SUPABASE_ANON_KEY</span> to your Netlify site, leave these blank: the site already knows them. Otherwise paste them here (per device).</p>
         <form data-synccfg class="form-row"><div class="field"><label>Project URL</label><input class="input" name="url" value="${esc(mc.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></div>
@@ -357,6 +362,8 @@ registerActions({
   'sync.forgot': () => { const c = creds(); if (!c || !c.email) { toast('Type your email address first'); return; } busy(() => Sync.resetPassword(c.email), 'Reset link sent: check your inbox'); },
   'sync.signOut': () => busy(() => Sync.signOut(), 'Signed out'),
   'sync.now': () => busy(() => Sync.pushNow()),
+  'sync.useLocal': async () => { if (await confirmDialog({ title: "Use this device's dashboard everywhere?", body: 'The dashboard in your account is replaced with this one. Other devices take it on the next time they sync.', ok: 'Use this one' })) busy(() => Sync.useThisDevice(), 'Your account now has this dashboard'); },
+  'sync.useRemote': async () => { if (await confirmDialog({ title: "Load your account's dashboard here?", body: 'What is on this device is replaced with the dashboard in your account.', ok: 'Load it', danger: true })) busy(() => Sync.useAccountCopy(), 'This device now has your account dashboard'); },
   'sync.password': newPasswordModal,
   'data.export': () => {
     const a = document.createElement('a');

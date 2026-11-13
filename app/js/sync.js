@@ -124,10 +124,10 @@ export async function token() {
 }
 
 /** Authenticated PostgREST call. */
-export async function rest(method, path, body, prefer) {
+export async function rest(method, path, body, prefer, keepalive = false) {
   const cfg = await config(), tok = await token();
   const res = await fetch(`${cfg.url}/rest/v1/${path}`, {
-    method, keepalive: method !== 'GET',
+    method, keepalive,
     headers: { apikey: cfg.key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: prefer || 'return=minimal' },
     body: body === undefined ? undefined : JSON.stringify(body)
   });
@@ -138,24 +138,73 @@ export async function rest(method, path, body, prefer) {
 /* ── the document ── */
 const uidq = () => `user_id=eq.${local.session.user.id}`;
 
+async function fetchRemote() {
+  const rows = await (await rest('GET', `dashboards?select=state,updated_at&${uidq()}`, undefined, 'return=representation')).json();
+  return rows.length && rows[0].state && typeof rows[0].state === 'object' ? rows[0] : null;
+}
+function adopt(next) { applying = true; try { replaceState(next, 'sync'); } finally { applying = false; } }
+
+/* Linking. The first time a device meets an account, the two copies are
+   not merged blindly: a fresh device takes the account's dashboard, a full
+   device fills an empty account, and when both hold a real dashboard the
+   owner is asked which one to keep. After that, changes merge item by item. */
+const hasContent = st => !!(st && st.profile && st.profile.onboarded) &&
+  ((st.activities || []).length + (st.habits || []).length + (st.goals || []).length +
+   Object.values(st.cards || {}).reduce((n, l) => n + l.length, 0) + Object.keys(st.journal || {}).length) > 0;
+let chooser = async () => 'merge', askedThisLoad = false;
+export const onLinkChoice = fn => { chooser = fn; };
+const isLinked = () => !!local.session && local.linked === local.session.user.id;
+const markLinked = () => { local.linked = local.session.user.id; persist(); };
+/** Put this device's copy ahead of the account's, so it replaces it on the next upload. */
+function takeOver(remote) {
+  const mine = S();
+  mine._rev = Math.max(mine._rev || 0, (remote && remote._rev) || 0) + 1;
+  mine._at = Date.now(); mine._dev = DEVICE_ID;
+}
+
 async function pull() {
   const head = await (await rest('GET', `dashboards?select=updated_at&${uidq()}`, undefined, 'return=representation')).json();
-  if (!head.length) return 'empty';
-  if (head[0].updated_at === seenStamp) return 'same';
-  const rows = await (await rest('GET', `dashboards?select=state,updated_at&${uidq()}`, undefined, 'return=representation')).json();
-  if (!rows.length) return 'empty';
-  seenStamp = rows[0].updated_at;
-  const remote = rows[0].state;
-  if (!remote || typeof remote !== 'object') return 'empty';
-  const mine = S();
+  if (!head.length) { markLinked(); return 'empty'; }
+  if (isLinked() && head[0].updated_at === seenStamp) return 'same';
+  const row = await fetchRemote();
+  if (!row) { markLinked(); return 'empty'; }
+  seenStamp = row.updated_at;
+  const remote = row.state, mine = S();
+  if (!isLinked()) {
+    let choice;
+    if (!hasContent(mine)) choice = 'remote';
+    else if (!hasContent(remote)) choice = 'local';
+    else {
+      if (askedThisLoad) return 'wait';
+      askedThisLoad = true;
+      choice = await chooser({ local: mine.profile.name || 'Dashboard', remote: (remote.profile || {}).name || 'Dashboard', updated: row.updated_at });
+      if (!choice) return 'wait';
+    }
+    markLinked();
+    if (choice === 'remote') { adopt(remote); dirty = false; return 'adopted'; }
+    if (choice === 'local') { takeOver(remote); return 'merged'; }
+  }
   if (remote._rev === mine._rev && remote._at === mine._at) return 'same';
-  const merged = mergeStates(mine, remote, DEVICE_ID);
-  applying = true;
-  try { replaceState(merged, 'sync'); } finally { applying = false; }
+  adopt(mergeStates(mine, remote, DEVICE_ID));
   // If the merge holds anything the cloud copy does not, it must go back up.
   // Compared in a canonical form: key order differs between merges, and a
   // naive string compare would have two devices re-pushing to each other forever.
   return canon(S()) !== canon(remote) ? 'merged' : 'adopted';
+}
+/** Make this device's dashboard the one every device uses. */
+export async function useThisDevice() {
+  const row = await fetchRemote();
+  takeOver(row && row.state); markLinked();
+  await push();
+  lastSync = Date.now(); setState('idle');
+}
+/** Replace this device's dashboard with the one in the account. */
+export async function useAccountCopy() {
+  const row = await fetchRemote();
+  if (!row) throw new Error('There is no dashboard in your account yet.');
+  seenStamp = row.updated_at; markLinked();
+  adopt(row.state); dirty = false;
+  lastSync = Date.now(); setState('idle');
 }
 const canon = s => JSON.stringify(s, (k, v) => {
   if (k === '_rev' || k === '_at' || k === '_dev') return undefined;
@@ -163,27 +212,34 @@ const canon = s => JSON.stringify(s, (k, v) => {
   return v;
 });
 
-async function push() {
+async function push(leaving = false) {
   const doc = S(), stamp = new Date().toISOString();
-  await rest('POST', 'dashboards?on_conflict=user_id', { user_id: local.session.user.id, state: doc, rev: doc._rev || 0, updated_at: stamp }, 'resolution=merge-duplicates,return=minimal');
+  const payload = { user_id: local.session.user.id, state: doc, rev: doc._rev || 0, updated_at: stamp };
+  // "keepalive" lets a request finish after the page closes, but browsers
+  // refuse it for bodies over 64 KB. A real dashboard is bigger than that,
+  // so it is only used for a small one that is being sent on the way out.
+  const keepalive = leaving && JSON.stringify(payload).length < 60000;
+  await rest('POST', 'dashboards?on_conflict=user_id', payload, 'resolution=merge-duplicates,return=minimal', keepalive);
   seenStamp = stamp;
   dirty = false;
 }
 
 let busy = false, again = false;
 /** Pull, merge, and push back if needed. Single-flight. */
-async function cycle(wantPush) {
+async function cycle(wantPush, leaving = false) {
   if (!signedIn()) return;
   if (busy) { again = again || wantPush; return; }
   busy = true;
   setState('syncing');
   try {
     const r = await pull();
-    if (wantPush || dirty || r === 'empty' || r === 'merged') await push();
+    // a device still on the welcome screens has nothing worth uploading
+    if (r !== 'wait' && S().profile.onboarded && (wantPush || dirty || r === 'empty' || r === 'merged')) await push(leaving);
     lastSync = Date.now();
     setState('idle');
   } catch (e) {
-    setState(navigator.onLine === false ? 'offline' : 'error', e.message);
+    const unreachable = /Failed to fetch|NetworkError|Load failed/i.test(e.message);
+    setState(navigator.onLine === false ? 'offline' : 'error', unreachable ? 'Could not reach your sync project. It will try again.' : e.message);
   } finally {
     busy = false;
     if (again) { again = false; cycle(true); }
@@ -227,10 +283,10 @@ export function initSync() {
   });
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'visible') cycle(false);
-    else if (dirty && signedIn()) cycle(true);        // leaving: get it out now (fetch keepalive)
+    else if (dirty && signedIn()) cycle(true, true);      // leaving: send it now
   });
   window.addEventListener('online', () => cycle(false));
-  window.addEventListener('pagehide', () => { if (dirty && signedIn()) cycle(true); });
+  window.addEventListener('pagehide', () => { if (dirty && signedIn()) cycle(true, true); });
   setInterval(() => { if (document.visibilityState === 'visible') cycle(false); }, POLL_MS);
 
   start();

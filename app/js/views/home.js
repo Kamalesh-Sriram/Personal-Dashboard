@@ -85,7 +85,7 @@ function lockHtml() {
       ? `<button class="lockin running" data-act="focus.show"><span class="lockin-t">${icon('zap')} ${esc(E.label(running))} · <span id="home-run">${fmtTimer(Date.now() - running.lastStart)}</span></span>
            <span class="lockin-s">Tap to open the focus view</span></button>`
       : `<button class="lockin" data-act="lock.in"><span class="lockin-t">${icon('lock')} ${esc(L().lockIn)}</span>
-           <span class="lockin-s">${sel ? `${esc(sel.text.slice(0, 60))} · timed as ${esc(E.label(act))}` : `No task picked. Time goes to ${esc(E.label(act))}.`}</span></button>`}
+           <span class="lockin-s">${sel ? `${esc(sel.text.slice(0, 60))} · ${esc(E.label(act))}` : esc(E.label(act))}</span></button>`}
     <div class="card-h" style="margin:16px 0 8px"><span class="eyebrow">Top tasks</span>
       <button class="btn sm ghost" data-act="nav.go" data-tab="board">${cards.length > TOP_TASKS ? `${cards.length - TOP_TASKS} more on the board` : 'Open the board'}</button></div>
     <div class="tasks">${rows || `<div class="empty" style="padding:10px 0 6px">No tasks for today yet.</div>`}</div>

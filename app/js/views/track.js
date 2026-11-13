@@ -15,7 +15,7 @@ const minOf = ts => { const d = new Date(ts); return d.getHours() * 60 + d.getMi
 
 function tileHtml(a) {
   const t = today(), ms = E.actMsOn(a, t), run = a.isRunning;
-  return `<div class="tile ${run ? 'run' : ''}" style="--c:${safeColor(a.color)}">
+  return `<div class="tile ${run ? 'run' : ''}" data-id="${esc(a.id)}" style="--c:${safeColor(a.color)}">
     <button class="tile-main" data-act="activity.toggle" data-id="${esc(a.id)}" aria-pressed="${run}" title="${run ? 'Stop' : 'Start'} ${esc(a.name)}">
       ${a.emoji ? `<span class="tile-e">${esc(a.emoji)}</span>` : ''}
       <span class="tile-n ell">${esc(a.name)}</span>
@@ -34,7 +34,61 @@ function tilesHtml() {
     const rate = Math.round(S().settings.xp.perHour * E.TIERS[k].mult * 10) / 10;
     return `<div class="tier"><div class="tier-h"><span class="eyebrow">${E.TIERS[k].label}</span><span class="tiny dim">${rate} XP per hour</span></div>
       <div class="tiles">${list.map(tileHtml).join('')}</div></div>`;
-  }).join('');
+  }).join('') + (acts.length > 1 ? '<div class="tiny dim" style="margin-top:12px">Drag a block to move it.</div>' : '');
+}
+
+/* ── drag to reorder (mouse + touch), no library ──
+   The tile moves through the grid as you drag, so what you see when you
+   let go is the order you get. A tile stays inside its own XP group. */
+let sort = null, sortPend = null, sortTimer = null, sortedAt = 0;
+function sortBegin(el) {
+  sort = { el, box: el.parentNode, moved: false };
+  el.classList.add('dragging'); sort.box.classList.add('sorting');
+}
+function sortMove(x, y) {
+  const over = (document.elementFromPoint(x, y) || document.body).closest('.tile');
+  if (!over || over === sort.el || over.parentNode !== sort.box) return;
+  const list = [...sort.box.children];
+  sort.box.insertBefore(sort.el, list.indexOf(sort.el) < list.indexOf(over) ? over.nextSibling : over);
+  sort.moved = true;
+}
+function sortEnd(commit) {
+  clearTimeout(sortTimer); sortPend = null;
+  const s = sort; sort = null;
+  if (!s) return;
+  s.el.classList.remove('dragging'); s.box.classList.remove('sorting');
+  sortedAt = Date.now();                                   // the click that ends a drag must not start a timer
+  if (!s.moved) return;
+  if (!commit || !document.contains(s.box)) { refresh(); return; }
+  const ids = [...s.box.querySelectorAll('.tile')].map(t => t.dataset.id);
+  const st = S(), moved = new Set(ids), byId = new Map(st.activities.map(a => [a.id, a]));
+  let i = 0;                                               // the group's slots in the full list are refilled in the new order
+  st.activities = st.activities.map(a => (moved.has(a.id) ? byId.get(ids[i++]) : a));
+  save();
+}
+window.addEventListener('mousemove', e => {
+  if (sort) { e.preventDefault(); sortMove(e.clientX, e.clientY); return; }
+  if (sortPend && Math.hypot(e.clientX - sortPend.x, e.clientY - sortPend.y) > 6) { sortBegin(sortPend.el); sortPend = null; }
+});
+window.addEventListener('mouseup', () => { sortPend = null; if (sort) sortEnd(true); });
+function wireSort(box) {
+  const tileAt = e => (e.target.closest('.tile-edit') ? null : e.target.closest('.tile'));
+  box.addEventListener('mousedown', e => { const el = e.button === 0 && tileAt(e); if (el) sortPend = { el, x: e.clientX, y: e.clientY }; });
+  box.addEventListener('touchstart', e => {
+    const el = e.touches.length === 1 && tileAt(e); if (!el) return;
+    const t = e.touches[0]; sortPend = { el, x: t.clientX, y: t.clientY };
+    clearTimeout(sortTimer);
+    sortTimer = setTimeout(() => { if (sortPend) { sortBegin(sortPend.el); sortPend = null; if (navigator.vibrate) navigator.vibrate(12); } }, 320);
+  }, { passive: true });
+  box.addEventListener('touchmove', e => {
+    const t = e.touches[0];
+    if (sort) { e.preventDefault(); sortMove(t.clientX, t.clientY); return; }
+    if (sortPend && Math.hypot(t.clientX - sortPend.x, t.clientY - sortPend.y) > 10) { sortPend = null; clearTimeout(sortTimer); }   // it was a scroll
+  }, { passive: false });
+  box.addEventListener('touchend', () => sortEnd(true));
+  box.addEventListener('touchcancel', () => sortEnd(false));
+  box.addEventListener('contextmenu', e => { if (sort) e.preventDefault(); });
+  box.addEventListener('click', e => { if (Date.now() - sortedAt < 350) { e.stopPropagation(); e.preventDefault(); } }, true);
 }
 
 function dayData(date) {
@@ -73,12 +127,13 @@ function sessionsHtml(date) {
   if (!rows.length) return `<div class="empty">${date === today() ? "You haven't tracked anything yet today." : 'Nothing was tracked on this day.'}</div>`;
   if (ui.sessView === 'timeline') return timelineHtml(date, rows);
   return `<div class="sess-list">${rows.map(({ a, s }) => {
-    const tier = E.tierOf(a), f = s.cardId ? E.findCard(s.cardId) : null;
+    const tier = E.tierOf(a), fc = s.cardId ? E.findCard(s.cardId) : null, gt = fc ? null : E.findGoalTask(s.taskId);
+    const what = fc ? fc.card.text : gt ? gt.t.name : '';
     const pips = s.live ? '<span class="tiny dim">running</span>' : `<span class="rate" role="group" aria-label="Focus rating">${[1, 2, 3, 4, 5].map(n =>
       `<button class="${s.eff != null && s.eff * 5 >= n - 0.01 ? 'on' : ''}" data-act="session.rate" data-id="${esc(a.id)}" data-start="${s.start}" data-v="${n}" title="Focus ${n}/5" aria-label="Rate ${n} of 5"></button>`).join('')}</span>`;
     return `<div class="sess" style="--c:${safeColor(a.color)}">
       ${a.emoji ? `<span class="sess-e">${esc(a.emoji)}</span>` : ''}
-      <div class="grow"><div class="ell"><b>${esc(a.name)}</b>${f ? ` <span class="dim">· ${esc(f.card.text)}</span>` : ''}</div>
+      <div class="grow"><div class="ell"><b>${esc(a.name)}</b>${what ? ` <span class="dim">· ${esc(what)}</span>` : ''}</div>
         <div class="tiny dim">${fmtClock(s.start, h24())} to ${s.live ? 'now' : fmtClock(s.end, h24())}${s.manual ? ' · logged by hand' : ''}</div></div>
       <span class="pill tiny-pill ${tier === 'deep' ? 'good' : tier === 'upkeep' ? 'warn' : ''}">${E.TIERS[tier].label}</span>
       ${pips}
@@ -168,7 +223,7 @@ function openSession(a, s) {
       if (overlap) { toast('That overlaps another session', 'Adjust the times, or edit the other one first.', { kind: 'bad', ms: 5000 }); return false; }
       if (s) { a.sessions = a.sessions.filter(x => x !== s); tombstone('s:' + s.start); touch(a); }
       const eff = d.eff === '' ? (s ? s.eff : null) : Math.max(1, Math.min(5, parseInt(d.eff))) / 5;
-      target.sessions.push({ date: d.date, start, end, dur: end - start, eff, manual: isNew || !!(s && s.manual), ...(s && s.cardId ? { cardId: s.cardId } : {}) });
+      target.sessions.push({ date: d.date, start, end, dur: end - start, eff, manual: isNew || !!(s && s.manual), ...(s && s.cardId ? { cardId: s.cardId } : {}), ...(s && s.taskId ? { taskId: s.taskId } : {}) });
       target.sessions.sort((x, y) => x.start - y.start);
       delete S().tomb['s:' + start];
       touch(target); E.invalidate(); save();
@@ -187,11 +242,11 @@ export default {
         <button class="btn sm ghost" data-act="session.new">${icon('clock')} Log time by hand</button>
         <button class="btn sm primary" data-act="activity.new">${icon('plus')} Activity</button></div>
       ${run ? `<div class="run-bar" style="--c:${safeColor(run.color)}">${run.emoji ? `<span class="tile-e">${esc(run.emoji)}</span>` : ''}<div class="grow"><b>${esc(run.name)}</b>
-          <div class="tiny dim">started ${fmtClock(run.lastStart, h24())}${run.runCardId && E.findCard(run.runCardId) ? ' · ' + esc(E.findCard(run.runCardId).card.text) : ''}</div></div>
+          <div class="tiny dim">started ${fmtClock(run.lastStart, h24())}${E.runningTaskName(run) ? ' · ' + esc(E.runningTaskName(run)) : ''}</div></div>
           <b class="num run-t" data-live-run>${fmtTimer(Date.now() - run.lastStart)}</b>
           <button class="btn primary" data-act="track.stop">${icon('stop')} Stop</button></div>` : ''}
       <div class="track">
-        <section class="card">${tilesHtml()}</section>
+        <section class="card" id="track-tiles">${tilesHtml()}</section>
         <section class="card"><div class="card-h"><span class="eyebrow">${isToday ? 'Today' : fmtDate(date)} · 24 hours</span>
             <button class="icon-btn sm" data-act="track.day" data-d="-1" aria-label="Previous day">${icon('left')}</button>
             <button class="btn sm ghost" data-act="track.day" data-d="0" ${isToday ? 'disabled' : ''}>Today</button>
@@ -201,6 +256,10 @@ export default {
       <section class="card" style="margin-top:var(--gap)"><div class="card-h"><span class="eyebrow">Sessions · ${isToday ? 'today' : fmtDate(date)}</span>
           ${segHtml('track.view', [['list', 'List'], ['timeline', 'Timeline']], ui.sessView)}</div>
         ${sessionsHtml(date)}</section>`;
+  },
+  mount(root) {
+    const box = root.querySelector('#track-tiles');
+    if (box) wireSort(box);
   },
   tick(root) {
     const run = E.runningActivity();

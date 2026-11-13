@@ -240,10 +240,13 @@ function buildPlan() {
   if (cfg.timer) {
     if (running) {
       const end = new Date(); end.setHours(0, w.end, 0, 0);
-      add({ dedupe_key: `timer:${t}`, send_at: new Date().toISOString(), repeat_sec: 120, kind: 'timer', ongoing: true, silent: true, tag: 'hq-timer',
+      // The task if there is one, otherwise the activity. The function that
+      // sends it adds how long it has been running, since only it knows the time.
+      const task = E.runningTaskName(running);
+      add({ dedupe_key: `timer:${t}`, send_at: new Date().toISOString(), repeat_sec: 55, kind: 'timer', ongoing: true, silent: true, tag: 'hq-timer',
             expires_at: new Date(Math.min(running.lastStart + E.MAX_RUN_MS, Math.max(end.getTime(), Date.now() + 3600000))).toISOString(),
-            title: `${E.label(running)}`, data: { started_at: running.lastStart, tz: Intl.DateTimeFormat().resolvedOptions().timeZone } });
-      pinned({ name: running.name, lastStart: running.lastStart });
+            title: (task || E.label(running)).slice(0, 120), data: { started_at: running.lastStart, sub: task ? E.label(running) : '' } });
+      pinned({ name: task || running.name, lastStart: running.lastStart });
     } else {
       const prior = pinned();
       if (prior) {
@@ -258,7 +261,7 @@ let lastPrint = '';
 function fingerprint() {
   const st = S(), t = today(), r = E.runningActivity();
   return [t, st.game.campaign.on, st.settings.window.start, st.settings.window.end, st.settings.nudgeMins, JSON.stringify(st.settings.notify),
-    r ? r.id + '@' + r.lastStart : '-', E.hasMission(t), E.isRest(t), st.game.notif.debrief === t,
+    r ? r.id + '@' + r.lastStart + '@' + E.runningTaskName(r) : '-', E.hasMission(t), E.isRest(t), st.game.notif.debrief === t,
     E.habitsDue(t).filter(h => h.history[t] !== 'done').length, Math.round(E.dayXP(t) / 25),
     (st.subs || []).map(x => x.id + ':' + x.anchor + ':' + (x.remind !== false)).join(',')].join('|');
 }

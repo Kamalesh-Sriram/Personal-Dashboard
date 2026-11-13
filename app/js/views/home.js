@@ -97,15 +97,15 @@ function lockHtml() {
 
 /* ── logbook ── */
 function logbookHtml() {
-  const lb = E.logStatus(), x = S().settings.xp;
-  const item = (ok, label, act, ico, hint) => `<button class="log-item ${ok ? 'ok' : ''}" data-act="${act}" title="${esc(hint)}">${icon(ok ? 'check' : ico)}<span>${label}</span></button>`;
+  const lb = E.logStatus(), x = S().settings.xp, day = S().days[today()] || {};
+  const item = (ok, label, act, ico, hint, val = '') => `<button class="log-item ${ok ? 'ok' : ''}" data-act="${act}" title="${esc(hint)}">${icon(ok ? 'check' : ico)}<span>${label}</span>${val ? `<i>${esc(val)}</i>` : ''}</button>`;
   return `<div class="card-h" style="margin-bottom:10px"><span class="eyebrow">Logbook</span>
       <span class="pill ${lb.complete ? 'good' : ''}" title="Each entry you fill in earns ${x.log} XP.">${lb.count} of 4</span>
       ${lb.chain ? `<span class="streak ${lb.chain >= 7 ? 'hot' : ''}" title="${lb.chain} days in a row with a full logbook">${icon('flame')}${lb.chain}</span>` : ''}</div>
     <div class="logbook">
-      ${item(lb.sleep, 'Sleep', 'log.sleep', 'bed', "Log last night's sleep")}
+      ${item(lb.sleep, 'Sleep', 'log.sleep', 'bed', "Log last night's sleep", lb.sleep && day.sleep && day.sleep.hrs ? day.sleep.hrs + 'h' : '')}
       ${item(lb.rated, lb.unrated ? `${lb.unrated} to rate` : 'Sessions rated', 'home.rate', 'gauge', 'Rate how focused each session was')}
-      ${item(lb.efficacy, 'Efficacy', 'log.efficacy', 'goals', 'Rate how well the day went')}
+      ${item(lb.efficacy, 'Efficacy', 'log.efficacy', 'goals', 'Rate how well the day went', lb.efficacy && day.efficacy != null ? day.efficacy + '%' : '')}
       ${item(lb.journal, 'Debrief', 'debrief.open', 'note', 'Write up the day')}
     </div>`;
 }

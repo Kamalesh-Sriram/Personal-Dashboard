@@ -72,7 +72,8 @@ self.addEventListener('push', event => {
       renotify: msg.kind !== 'timer',          // a refreshed timer must not buzz every time
       silent: !!msg.silent,
       requireInteraction: !!msg.ongoing,
-      timestamp: Date.now(),
+      // a running timer is dated from its start, so a phone shows its age and keeps it current
+      timestamp: msg.kind === 'timer' && Number(msg.started) > 0 ? Number(msg.started) : Date.now(),
       data: { kind: msg.kind, url: './' }
     });
   })());

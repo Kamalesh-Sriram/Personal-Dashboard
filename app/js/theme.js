@@ -111,17 +111,28 @@ export async function loadBgImage() {
 }
 export const hasBgImage = () => !!bgUrl;
 
-/** Downscale to at most 2400px and store as JPEG. */
+/** The stored copy is as sharp as this screen can show, up to 4K. Anything
+ *  finer is thrown away by the display, and a huge bitmap behind a blur
+ *  makes scrolling stutter on a phone. */
+function bgTargetPx() {
+  const longest = Math.max(screen.width || 0, screen.height || 0) * (window.devicePixelRatio || 1);
+  return Math.round(Math.min(3840, Math.max(2560, longest * 1.25)));
+}
 export async function setBgImage(file) {
   if (!file || !/^image\/(jpeg|png|webp|avif|gif)$/.test(file.type)) throw new Error('Choose a JPG, PNG or WebP image.');
-  if (file.size > 25 * 1024 * 1024) throw new Error('That image is over 25 MB. Pick a smaller one.');
-  const bmp = await createImageBitmap(file);
-  const scale = Math.min(1, 2400 / Math.max(bmp.width, bmp.height));
+  if (file.size > 150 * 1024 * 1024) throw new Error('That file is over 150 MB. Export a smaller copy and try again.');
+  let bmp;
+  try { bmp = await createImageBitmap(file); }
+  catch { throw new Error('This device could not open that image. It may be too large for its memory. Try a smaller copy.'); }
+  const scale = Math.min(1, bgTargetPx() / Math.max(bmp.width, bmp.height));
   const canvas = document.createElement('canvas');
   canvas.width = Math.round(bmp.width * scale);
   canvas.height = Math.round(bmp.height * scale);
-  canvas.getContext('2d').drawImage(bmp, 0, 0, canvas.width, canvas.height);
-  const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.86));
+  const ctx = canvas.getContext('2d');
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(bmp, 0, 0, canvas.width, canvas.height);
+  if (bmp.close) bmp.close();
+  const blob = await new Promise(r => canvas.toBlob(r, 'image/jpeg', 0.92));
   if (!blob) throw new Error('This browser could not process that image.');
   await kv('readwrite', s => s.put(blob, 'bg'));
   await loadBgImage();

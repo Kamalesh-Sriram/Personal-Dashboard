@@ -35,10 +35,11 @@ export function fmtDur(ms) {
   if (m > 0) return `${m}m`;
   return `${s}s`;
 }
+/** A running clock: mm:ss for the first hour, hh:mm:ss after it. */
 export function fmtTimer(ms) {
   const s = Math.max(0, Math.floor(ms / 1000));
   const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  return h > 0 ? `${h}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
+  return h > 0 ? `${pad(h)}:${pad(m)}:${pad(sec)}` : `${pad(m)}:${pad(sec)}`;
 }
 export function fmtMins(m) {
   if (m === null || m === undefined) return '-';

@@ -52,13 +52,14 @@ function memo(key, fn) {
 }
 function index() {
   if (_idx) return _idx;
-  const byDate = new Map(), byCard = new Map();
+  const byDate = new Map(), byCard = new Map(), byTask = new Map();
   S().activities.forEach(a => (a.sessions || []).forEach(s => {
     if (!byDate.has(s.date)) byDate.set(s.date, []);
     byDate.get(s.date).push({ a, s });
     if (s.cardId) byCard.set(s.cardId, (byCard.get(s.cardId) || 0) + s.dur);
+    if (s.taskId) { if (!byTask.has(s.taskId)) byTask.set(s.taskId, []); byTask.get(s.taskId).push(s); }
   }));
-  _idx = { byDate, byCard };
+  _idx = { byDate, byCard, byTask };
   return _idx;
 }
 
@@ -90,7 +91,7 @@ export function sessionsOn(date, includeRunning = true) {
     if (a) {
       const start = Math.max(a.lastStart, parseYmd(date).getTime());
       const dur = clamp(Date.now() - start, 0, MAX_RUN_MS);
-      out.push({ a, s: { date, start, end: start + dur, dur, eff: null, live: true, cardId: a.runCardId || null } });
+      out.push({ a, s: { date, start, end: start + dur, dur, eff: null, live: true, cardId: a.runCardId || null, taskId: a.runTaskId || null } });
     }
   }
   return out.sort((x, y) => x.s.start - y.s.start);
@@ -105,6 +106,42 @@ export function cardMs(cardId) {
   const a = runningActivity();
   if (a && a.runCardId === cardId) ms += clamp(Date.now() - a.lastStart, 0, MAX_RUN_MS);
   return ms;
+}
+
+/** Time logged against a goal task. `since` (a YYYY-MM-DD date) limits it
+ *  to sessions on or after that day. A running timer counts as it goes. */
+export function taskMs(taskId, since = null) {
+  let ms = 0;
+  (index().byTask.get(taskId) || []).forEach(s => { if (!since || s.date >= since) ms += s.dur; });
+  const a = runningActivity();
+  if (a && a.runTaskId === taskId) ms += clamp(Date.now() - a.lastStart, 0, MAX_RUN_MS);
+  return ms;
+}
+export function findGoalTask(id) {
+  if (!id) return null;
+  for (const g of S().goals) for (const m of g.milestones || []) {
+    if (m.id === id) return { g, m, t: m };          // a milestone with no tasks of its own is timed as one
+    const t = (m.tasks || []).find(x => x.id === id);
+    if (t) return { g, m, t };
+  }
+  return null;
+}
+/** Tick a goal task (or a bare milestone) off. Returns true if it changed. */
+export function completeGoalTask(id) {
+  const f = findGoalTask(id);
+  if (!f || f.t.done) return false;
+  f.t.done = true;
+  f.m.done = (f.m.tasks || []).length ? f.m.tasks.every(x => x.done) : true;
+  touch(f.g);
+  return true;
+}
+/** What a running timer is for, in words: the board task, else the goal task, else nothing. */
+export function runningTaskName(a = runningActivity()) {
+  if (!a) return '';
+  const f = a.runCardId ? findCard(a.runCardId) : null;
+  if (f) return f.card.text;
+  const g = findGoalTask(a.runTaskId);
+  return g ? g.t.name : '';
 }
 
 /** Duration-weighted mean of the sessions that were rated (0..1), or null. */
@@ -159,8 +196,8 @@ function recordSpan(a, start, end, extra = {}) {
   return kept;
 }
 function stopOne(a, at = Date.now()) {
-  const start = a.lastStart, extra = a.runCardId ? { cardId: a.runCardId } : {};
-  a.isRunning = false; a.lastStart = 0; a.runCardId = null;
+  const start = a.lastStart, extra = { ...(a.runCardId ? { cardId: a.runCardId } : {}), ...(a.runTaskId ? { taskId: a.runTaskId } : {}) };
+  a.isRunning = false; a.lastStart = 0; a.runCardId = null; a.runTaskId = null;
   touch(a);
   return recordSpan(a, start, Math.min(at, start + MAX_RUN_MS), extra);
 }
@@ -172,13 +209,15 @@ export function stopRunning() {
   invalidate(); save();
   return { activity: a, kept };
 }
-/** Start an activity (stopping any other first). `cardId` links the time to a board task. */
-export function startActivity(id, { cardId = null } = {}) {
+/** Start an activity (stopping any other first). `cardId` links the time
+ *  to a board task, `taskId` to a task inside a goal. */
+export function startActivity(id, { cardId = null, taskId = null } = {}) {
   const a = S().activities.find(x => x.id === id);
   if (!a) return null;
   S().activities.forEach(o => { if (o.isRunning && o !== a) stopOne(o); });
   if (!a.isRunning) { a.isRunning = true; a.lastStart = Date.now(); }
   a.runCardId = cardId;
+  a.runTaskId = taskId;
   touch(a);
   invalidate(); save();
   return a;
@@ -219,7 +258,13 @@ export function focusActivity(create = false) {
 export function activityForCard(card, create = false) {
   const st = S();
   const tag = card && st.tags.find(t => t.id === card.tagId);
-  return (tag && st.activities.find(a => a.id === tag.activityId)) || focusActivity(create);
+  if (tag) { const a = st.activities.find(x => x.id === tag.activityId); if (a) return a; }
+  const from = card && card.goalTask ? findGoalTask(card.goalTask) : null;     // sent over from a goal
+  return from ? activityForGoal(from.g, create) : focusActivity(create);
+}
+/** A goal can name the activity its time is logged under. */
+export function activityForGoal(g, create = false) {
+  return (g && S().activities.find(a => a.id === g.activityId)) || focusActivity(create);
 }
 
 /* ══════════════════════ BOARD ══════════════════════ */
@@ -238,7 +283,10 @@ export function moveCard(id, toCol, toIndex = null) {
   const st = S();
   st.cards[f.col].splice(f.index, 1);
   const dest = st.cards[toCol] || (st.cards[toCol] = []);
-  if (toCol === 'done') { if (!f.card.doneAt) f.card.doneAt = today(); } else delete f.card.doneAt;
+  if (toCol === 'done') {
+    if (!f.card.doneAt) f.card.doneAt = today();
+    completeGoalTask(f.card.goalTask);                   // it came from a goal: tick it there too
+  } else delete f.card.doneAt;
   dest.splice(toIndex === null ? dest.length : clamp(toIndex, 0, dest.length), 0, touch(f.card));
   invalidate(); save();
 }

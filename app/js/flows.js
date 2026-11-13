@@ -32,7 +32,7 @@ function stopAndRate() {
 }
 
 /* ══════════════════════ LOCK IN ══════════════════════ */
-let focusInt = null, focusCardId = null, focusStart = 0;
+let focusInt = null, focusCardId = null, focusTaskId = null, focusStart = 0;
 
 function pickCard(id) {
   const st = S();
@@ -48,16 +48,19 @@ function renderFocus() {
   const f = focusCardId ? E.findCard(focusCardId) : null;
   const card = f ? f.card : null;
   const tag = card && S().tags.find(t => t.id === card.tagId);
+  const gt = E.findGoalTask(focusTaskId);
+  const title = card ? card.text : gt ? gt.t.name : '';
   const subs = card && card.subs && card.subs.length ? `<div class="focus-subs">${card.subs.map(s =>
     `<button class="focus-sub ${s.done ? 'done' : ''}" data-act="focus.sub" data-id="${esc(s.id)}"><span class="check sq ${s.done ? 'on' : ''}">${icon('check')}</span><span>${esc(s.t)}</span></button>`).join('')}</div>` : '';
   el.innerHTML = `<div class="focus-in">
       <div class="eyebrow">${a ? esc(E.label(a)) : 'Focus'}${tag && (!a || tag.name !== a.name) ? ' · ' + esc(tag.name) : ''}</div>
-      <div class="focus-task">${card ? esc(card.text) : 'No task picked. Just work.'}</div>
+      <div class="focus-task">${title ? esc(title) : 'No task picked. Just work.'}</div>
+      ${gt ? `<div class="muted" style="margin-top:-10px">${esc(gt.g.name)}${gt.t === gt.m ? '' : ' · ' + esc(gt.m.name)}</div>` : ''}
       <div class="focus-timer" id="focus-timer">00:00</div>
       <div class="muted" id="focus-hint"></div>
       ${subs}
       <div class="row wrap" style="justify-content:center;gap:10px">
-        ${card ? `<button class="btn primary" data-act="focus.done">${icon('check')} I'm done with this task</button>` : ''}
+        ${title ? `<button class="btn primary" data-act="focus.done">${icon('check')} I'm done with this task</button>` : ''}
         <button class="btn" data-act="focus.stop" id="focus-stop" disabled>${icon('stop')} Stop</button>
         <button class="btn ghost" data-act="focus.hide" id="focus-hide" disabled>Keep the timer running and hide this</button>
       </div>
@@ -88,13 +91,17 @@ function closeFocus() {
 }
 export const focusOpen = () => document.getElementById('focus').classList.contains('open');
 
-function lockIn(cardId) {
-  const card = pickCard(cardId);
-  const a = card ? E.activityForCard(card, true) : E.focusActivity(true);
+function lockIn(cardId, taskId = null) {
+  // started from a goal: no board card, the time goes to that goal task
+  const gt = taskId ? E.findGoalTask(taskId) : null;
+  const card = gt ? null : pickCard(cardId);
+  const a = gt ? E.activityForGoal(gt.g, true) : card ? E.activityForCard(card, true) : E.focusActivity(true);
   focusCardId = card ? card.id : null;
-  E.startActivity(a.id, { cardId: focusCardId });
+  focusTaskId = gt ? gt.t.id : card && E.findGoalTask(card.goalTask) ? card.goalTask : null;
+  E.startActivity(a.id, { cardId: focusCardId, taskId: focusTaskId });
   openFocus();
 }
+const completeGoalTask = id => { if (E.completeGoalTask(id)) save(); };
 function bailCheck() {
   if (Date.now() - focusStart < 5 * 60000) {
     const n = E.logFriction();
@@ -309,11 +316,11 @@ function openEfficacy(date = today()) {
 }
 
 registerActions({
-  'lock.in': d => lockIn(d.card || null),
-  'focus.done': () => { const id = focusCardId; closeFocus(); stopAndRate(); if (id) completeCard(id); toast('Task done', 'Start another block soon to keep your combo.', { kind: 'good', ms: 4500 }); },
+  'lock.in': d => lockIn(d.card || null, d.task || null),
+  'focus.done': () => { const id = focusCardId, task = focusTaskId; closeFocus(); stopAndRate(); if (id) completeCard(id); else if (task) completeGoalTask(task); toast('Task done', 'Start another block soon to keep your combo.', { kind: 'good', ms: 4500 }); },
   'focus.stop': () => { bailCheck(); closeFocus(); stopAndRate(); },
   'focus.hide': () => closeFocus(),
-  'focus.show': () => { const a = E.runningActivity(); if (a) { focusCardId = a.runCardId || null; openFocus(); focusStart = Date.now() - E.LOCK_MIN_MS; tickFocus(); } },
+  'focus.show': () => { const a = E.runningActivity(); if (a) { focusCardId = a.runCardId || null; focusTaskId = a.runTaskId || null; openFocus(); focusStart = Date.now() - E.LOCK_MIN_MS; tickFocus(); } },
   'focus.sub': d => {
     const f = focusCardId && E.findCard(focusCardId);
     const s = f && (f.card.subs || []).find(x => x.id === d.id);

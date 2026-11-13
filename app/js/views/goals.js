@@ -1,12 +1,13 @@
 /* GOALS: a goal breaks into milestones, a milestone into tasks. Progress
-   is counted in the smallest units there are. */
+   is counted in the smallest units there are, and any task can be timed,
+   so a milestone and a goal show the hours that actually went into them. */
 import { S, save, touch, tombstone } from '../store.js';
+import * as E from '../engine.js';
 import { registerActions, openModal, closeModal, confirmDialog, toast } from '../ui.js';
 import { icon } from '../icons.js';
-import { esc, today, uid, fmtDate, safeColor, daysBetween } from '../util.js';
+import { esc, today, addDays, uid, fmtDate, fmtDur, safeColor, daysBetween } from '../util.js';
 import { ui, refresh } from '../bus.js';
 
-const seen = new Set();           // goals start expanded the first time they are shown
 const COLORS = ['#E0B25A', '#F2793A', '#F26D63', '#EE5D8C', '#8B7CF6', '#6FB1F0', '#2BC4E0', '#56CFB2', '#5FCB8B', '#9AA0A8'];
 
 export function goalUnits(g) {
@@ -25,55 +26,133 @@ const find = d => {
 };
 const commit = g => { touch(g); save(); };
 
+/* ── time: a task's own, a milestone's tasks added up, a goal's milestones added up ── */
+const msMs = (m, since) => E.taskMs(m.id, since) + (m.tasks || []).reduce((n, t) => n + E.taskMs(t.id, since), 0);
+const goalMs = (g, since) => (g.milestones || []).reduce((n, m) => n + msMs(m, since), 0);
+const weekStart = () => addDays(today(), -6);
+const spent = ms => (ms >= 1000 ? fmtDur(ms) : '');
+/** Each time on screen names what it measures, so the clock can refresh it in place. */
+function timeFor(key) {
+  const [kind, id] = key.split(':');
+  if (kind === 'all') return S().goals.reduce((n, g) => n + goalMs(g), 0);
+  if (kind === 'week') return S().goals.reduce((n, g) => n + goalMs(g, weekStart()), 0);
+  if (kind === 't') return E.taskMs(id);
+  for (const g of S().goals) {
+    if (kind === 'g' && g.id === id) return goalMs(g);
+    if (kind === 'm') { const m = (g.milestones || []).find(x => x.id === id); if (m) return msMs(m); }
+  }
+  return 0;
+}
+const timeEl = (key, cls = 'g-time') => `<span class="${cls}" data-tm="${esc(key)}">${spent(timeFor(key))}</span>`;
+
+/** Start or stop the timer for one task. */
+function timerBtn(id, name) {
+  const run = E.runningActivity(), live = !!run && run.runTaskId === id;
+  return live
+    ? `<button class="icon-btn sm keep live" data-act="track.stop" title="Stop the timer" aria-label="Stop the timer">${icon('stop')}</button>`
+    : `<button class="icon-btn sm keep" data-act="lock.in" data-task="${esc(id)}" title="Start a timer for this" aria-label="Start a timer for ${esc(name)}">${icon('play')}</button>`;
+}
+
 function goalHtml(g) {
   const u = goalUnits(g), open = ui.goalOpen.has(g.id);
   const dl = g.deadline ? daysBetween(today(), g.deadline) : null;
-  const ms = (g.milestones || []).map(m => {
+  const run = E.runningActivity(), liveId = run ? run.runTaskId : null;
+  const n = (g.milestones || []).length;
+  const ms = !open ? '' : (g.milestones || []).map(m => {
     const mo = ui.goalOpen.has(m.id), ts = m.tasks || [], d = msDone(m);
-    return `<div class="ms ${d ? 'done' : ''}">
+    return `<div class="ms ${d ? 'done' : ''} ${liveId === m.id ? 'live' : ''}">
       <div class="row">
         <button class="check sq ${d ? 'on' : ''}" data-act="goal.msToggle" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-pressed="${d}" aria-label="Toggle milestone">${icon('check')}</button>
         <button class="ms-n grow ell" data-act="goal.open" data-id="${esc(m.id)}" aria-expanded="${mo}">${esc(m.name)}</button>
-        <span class="tiny dim">${ts.length ? `${ts.filter(t => t.done).length}/${ts.length}` : ''}</span>
+        ${timeEl('m:' + m.id)}
+        ${ts.length ? `<span class="tiny dim">${ts.filter(t => t.done).length}/${ts.length}</span>` : (d ? '' : timerBtn(m.id, m.name))}
         <button class="icon-btn sm" data-act="goal.msEdit" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Rename milestone">${icon('edit')}</button>
         <button class="icon-btn sm" data-act="goal.msDel" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Delete milestone">${icon('x')}</button>
       </div>
-      ${mo ? `<div class="ms-tasks">${ts.map(t => `<div class="row ${t.done ? 'tdone' : ''}">
+      ${mo ? `<div class="ms-tasks">${ts.map(t => `<div class="row ${t.done ? 'tdone' : ''} ${liveId === t.id ? 'live' : ''}">
           <button class="check sq ${t.done ? 'on' : ''}" data-act="goal.taskToggle" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" aria-pressed="${!!t.done}" aria-label="Toggle task">${icon('check')}</button>
           <span class="grow">${esc(t.name)}</span>
+          ${timeEl('t:' + t.id)}
+          ${t.done ? '' : timerBtn(t.id, t.name)}
           <button class="icon-btn sm" data-act="goal.toBoard" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" title="Send to the board's Today column" aria-label="Send to board">${icon('board')}</button>
           <button class="icon-btn sm" data-act="goal.taskDel" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" aria-label="Delete task">${icon('x')}</button></div>`).join('')}
-        <form class="row" data-addtask data-goal="${esc(g.id)}" data-ms="${esc(m.id)}"><input class="input" name="name" placeholder="Add a task…" maxlength="160" data-fk="t-${esc(m.id)}" aria-label="Add a task"><button class="btn sm" type="submit" aria-label="Add">${icon('plus')}</button></form></div>` : ''}
+        <form class="row" data-addtask data-goal="${esc(g.id)}" data-ms="${esc(m.id)}"><input class="input" name="name" placeholder="Add a task" maxlength="160" data-fk="t-${esc(m.id)}" aria-label="Add a task"><button class="btn sm" type="submit" aria-label="Add">${icon('plus')}</button></form></div>` : ''}
     </div>`;
   }).join('');
-  return `<article class="card goal" style="--c:${safeColor(g.color)}">
+  return `<article class="card goal ${open ? 'open' : ''}" style="--c:${safeColor(g.color)}">
     <div class="row">
-      <button class="goal-n grow" data-act="goal.open" data-id="${esc(g.id)}" aria-expanded="${open}"><span class="dot" style="background:var(--c)"></span><span class="ell">${esc(g.name)}</span></button>
+      <button class="goal-n grow" data-act="goal.open" data-id="${esc(g.id)}" aria-expanded="${open}"><span class="dot" style="background:var(--c)"></span><span class="ell">${esc(g.name)}</span><span class="goal-chev">${icon('down')}</span></button>
       ${dl !== null ? `<span class="pill ${dl < 0 ? 'bad' : dl <= 7 ? 'warn' : ''}">${dl < 0 ? Math.abs(dl) + 'd overdue' : dl === 0 ? 'due today' : dl + 'd left'}</span>` : ''}
       <b class="num" style="font-size:20px">${u.pct}%</b>
       <button class="icon-btn sm" data-act="goal.edit" data-id="${esc(g.id)}" aria-label="Edit goal">${icon('edit')}</button>
     </div>
     <div class="bar" style="margin-top:12px"><i style="width:${u.pct}%;background:var(--c)"></i></div>
-    <div class="tiny dim" style="margin-top:6px">${u.done} of ${u.tot} done · ${(g.milestones || []).length} milestone${(g.milestones || []).length === 1 ? '' : 's'}${g.deadline ? ' · due ' + fmtDate(g.deadline, { day: 'numeric', month: 'short', year: 'numeric' }) : ''}</div>
+    <div class="goal-meta"><span>${u.done} of ${u.tot} done</span><span>${n} milestone${n === 1 ? '' : 's'}</span>${g.deadline ? `<span>due ${fmtDate(g.deadline, { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}${timeEl('g:' + g.id, 'goal-spent')}</div>
     ${open ? `<div class="goal-body">${ms || '<div class="empty" style="padding:8px 0">No milestones yet.</div>'}
-      <form class="row" data-addms data-goal="${esc(g.id)}"><input class="input" name="name" placeholder="Add a milestone…" maxlength="120" data-fk="m-${esc(g.id)}" aria-label="Add a milestone"><button class="btn sm" type="submit">${icon('plus')} Milestone</button></form></div>` : ''}
+      <form class="row" data-addms data-goal="${esc(g.id)}"><input class="input" name="name" placeholder="Add a milestone" maxlength="120" data-fk="m-${esc(g.id)}" aria-label="Add a milestone"><button class="btn sm" type="submit">${icon('plus')} Milestone</button></form></div>` : ''}
   </article>`;
 }
 
+/* ── the side panel: where all of it stands, and where the hours went ── */
+function nextUp(g) {
+  for (const m of g.milestones || []) {
+    if (msDone(m)) continue;
+    const ts = m.tasks || [];
+    if (!ts.length) return { id: m.id, name: m.name, under: '' };
+    const t = ts.find(x => !x.done);
+    if (t) return { id: t.id, name: t.name, under: m.name };
+  }
+  return null;
+}
+function sideHtml() {
+  const goals = S().goals;
+  let tot = 0, done = 0;
+  goals.forEach(g => { const u = goalUnits(g); tot += u.tot; done += u.done; });
+  const pct = tot ? Math.round(done / tot * 100) : 0;
+  const times = goals.map(g => ({ g, ms: goalMs(g) })), top = Math.max(1, ...times.map(x => x.ms)), any = times.some(x => x.ms >= 1000);
+  const next = goals.map(g => ({ g, n: nextUp(g) })).filter(x => x.n).slice(0, 5);
+  return `<section class="card" aria-label="Overview">
+      <div class="card-h"><span class="eyebrow">Overview</span><span class="tiny dim">${goals.length} goal${goals.length === 1 ? '' : 's'}</span></div>
+      <div class="gs-top"><b class="num">${pct}%</b><span>${done} of ${tot} done</span></div>
+      <div class="bar"><i style="width:${pct}%"></i></div>
+      <div class="mini-stats"><div><b class="num" data-tm="all:">${spent(timeFor('all:')) || '0m'}</b><span>Time spent</span></div>
+        <div><b class="num" data-tm="week:">${spent(timeFor('week:')) || '0m'}</b><span>Last 7 days</span></div></div>
+    </section>
+    <section class="card" aria-label="Time spent">
+      <div class="card-h"><span class="eyebrow">Time spent</span></div>
+      ${any ? `<div class="gs-times">${times.map(({ g, ms }) => `<div class="gs-time" style="--c:${safeColor(g.color)}">
+          <div class="row"><span class="dot" style="background:var(--c)"></span><span class="grow ell">${esc(g.name)}</span><b data-tm="g:${esc(g.id)}">${spent(ms) || '-'}</b></div>
+          <div class="bar thin"><i data-tw="${esc(g.id)}" style="width:${(ms / top * 100).toFixed(1)}%;background:var(--c)"></i></div></div>`).join('')}</div>`
+        : `<div class="empty" style="padding:6px 0 2px">Nothing timed yet. Press play on a task and its time adds up here.</div>`}
+    </section>
+    ${next.length ? `<section class="card" aria-label="Next up">
+      <div class="card-h"><span class="eyebrow">Next up</span></div>
+      <div class="list">${next.map(({ g, n }) => `<div class="li gs-next"><span class="dot" style="background:${safeColor(g.color)}"></span>
+          <div class="grow"><div class="ell">${esc(n.name)}</div><div class="tiny dim ell">${esc(g.name)}${n.under ? ' · ' + esc(n.under) : ''}</div></div>
+          ${timerBtn(n.id, n.name)}</div>`).join('')}</div>
+    </section>` : ''}`;
+}
+
 function openGoal(g) {
-  const cur = g || { name: '', deadline: '', color: COLORS[S().goals.length % COLORS.length] };
+  const st = S(), cur = g || { name: '', deadline: '', color: COLORS[st.goals.length % COLORS.length], activityId: '' };
   let color = cur.color;
+  const acts = st.activities.filter(a => !E.isEscape(a));
   openModal({
     title: g ? 'Edit goal' : 'New goal', submit: g ? 'Save' : 'Add goal',
     left: g ? `<button type="button" class="btn danger" data-act="goal.delete" data-id="${esc(g.id)}">${icon('trash')} Delete</button>` : '',
     body: `<div class="field"><label>Goal</label><input class="input" name="name" value="${esc(cur.name)}" maxlength="120" required autofocus></div>
       <div class="field"><label>Deadline (optional)</label><input class="input" type="date" name="deadline" value="${esc(cur.deadline || '')}"></div>
+      <div class="field"><label>Activity</label><select class="input" name="activityId">
+          <option value="">${esc(E.label(E.focusActivity()))} (default)</option>
+          ${acts.map(a => `<option value="${esc(a.id)}" ${a.id === cur.activityId ? 'selected' : ''}>${esc(E.label(a))}</option>`).join('')}</select>
+        <div class="hint">Time on this goal's tasks is logged under this activity on the Track tab.</div></div>
       <div class="field"><label>Colour</label><div class="swatches" id="g-c">${COLORS.map(c => `<button type="button" class="swatch sm ${c === color ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div></div>`,
     onMount: el => el.querySelector('#g-c').addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (!b) return; color = b.dataset.c; el.querySelectorAll('.swatch').forEach(x => x.classList.toggle('on', x === b)); }),
     onSubmit: d => {
       const name = d.name.trim(); if (!name) return false;
-      if (g) { Object.assign(g, { name, deadline: d.deadline || null, color }); touch(g); }
-      else { const n = touch({ id: uid(), name, deadline: d.deadline || null, color, milestones: [] }); S().goals.push(n); ui.goalOpen.add(n.id); }
+      const fields = { name, deadline: d.deadline || null, color, activityId: d.activityId || null };
+      if (g) { Object.assign(g, fields); touch(g); }
+      else { const n = touch({ id: uid(), ...fields, milestones: [] }); S().goals.push(n); ui.goalOpen.add(n.id); }
       save();
     }
   });
@@ -81,11 +160,10 @@ function openGoal(g) {
 
 export default {
   render() {
-    const goals = S().goals;
-    goals.forEach(g => { if (!seen.has(g.id)) { seen.add(g.id); ui.goalOpen.add(g.id); } });
+    const goals = S().goals;                 // every goal starts closed; opening one is remembered until the page reloads
     return `<div class="view-h"><h2>Goals</h2><button class="btn sm primary" data-act="goal.new">${icon('plus')} Goal</button></div>
-      ${goals.length ? `<div class="goals">${goals.map(goalHtml).join('')}</div>`
-        : `<div class="card empty" style="padding:48px 16px">No goals yet. A goal here is something with an end: break it into milestones and tasks, and send tasks to the board when it is time.<br><button class="btn primary" data-act="goal.new">${icon('plus')} Add a goal</button></div>`}`;
+      ${goals.length ? `<div class="goals-wrap"><div class="goals">${goals.map(goalHtml).join('')}</div><aside class="goals-side">${sideHtml()}</aside></div>`
+        : `<div class="card empty" style="padding:48px 16px">No goals yet. A goal here is something with an end: break it into milestones and tasks, time the work, and send tasks to the board when it is time.<br><button class="btn primary" data-act="goal.new">${icon('plus')} Add a goal</button></div>`}`;
   },
   mount(root) {
     root.querySelectorAll('form[data-addms], form[data-addtask]').forEach(f => f.addEventListener('submit', e => {
@@ -98,6 +176,15 @@ export default {
       f.elements.name.value = '';
       commit(g);
     }));
+  },
+  /** While a goal task is being timed, its numbers count up in place. */
+  tick(root) {
+    const run = E.runningActivity();
+    if (!run || !run.runTaskId) return;
+    root.querySelectorAll('[data-tm]').forEach(el => {
+      const txt = spent(timeFor(el.dataset.tm)) || (el.tagName === 'B' ? '0m' : '');
+      if (el.textContent !== txt) el.textContent = txt;
+    });
   }
 };
 
@@ -107,7 +194,7 @@ registerActions({
   'goal.open': d => { ui.goalOpen.has(d.id) ? ui.goalOpen.delete(d.id) : ui.goalOpen.add(d.id); refresh(); },
   'goal.delete': async d => {
     const st = S(), g = st.goals.find(x => x.id === d.id); if (!g) return;
-    if (!(await confirmDialog({ title: `Delete “${g.name}”?`, body: 'Its milestones and tasks go with it.', ok: 'Delete', danger: true }))) return;
+    if (!(await confirmDialog({ title: `Delete “${g.name}”?`, body: 'Its milestones and tasks go with it. The time you logged stays on the Track tab.', ok: 'Delete', danger: true }))) return;
     st.goals = st.goals.filter(x => x !== g); tombstone(g.id); closeModal(); save();
   },
   'goal.msToggle': d => {
@@ -130,7 +217,8 @@ registerActions({
   'goal.taskDel': d => { const { g, m, t } = find(d); if (!t) return; m.tasks = m.tasks.filter(x => x !== t); commit(g); },
   'goal.toBoard': d => {
     const { g, t } = find(d); if (!t) return;
-    S().cards.today.push(touch({ id: uid(), text: t.name, tagId: null, subs: [], notes: `From goal: ${g.name}` }));
+    // the card remembers where it came from, so time on it counts toward this task
+    S().cards.today.push(touch({ id: uid(), text: t.name, tagId: null, subs: [], notes: `From goal: ${g.name}`, goalTask: t.id }));
     save();
     toast('Added to Today', t.name, { kind: 'good', ms: 3500 });
   }

@@ -14,20 +14,22 @@ import { env, db, pushConfigured } from './auth.mjs';
 
 const BATCH = 50;
 
-function elapsedLabel(startedAt) {
-  const mins = Math.floor((Date.now() - startedAt) / 60000);
-  if (mins < 1) return 'just started';
+export function elapsedLabel(startedAt, now = Date.now()) {
+  const mins = Math.floor((now - startedAt) / 60000);
+  if (mins < 1) return 'under a minute';
   const h = Math.floor(mins / 60), m = mins % 60;
   if (!h) return `${m} minute${m === 1 ? '' : 's'}`;
-  return m ? `${h}h ${m}m` : `${h} hour${h === 1 ? '' : 's'}`;
+  return m ? `${h}h ${String(m).padStart(2, '0')}m` : `${h} hour${h === 1 ? '' : 's'}`;
 }
-/** A timer row carries a template: the elapsed time is only true at send time. */
-function render(row) {
+/** A timer row carries a template: the elapsed time is only true at send
+ *  time. The title is the task, or the activity when there is no task; the
+ *  body says how long it has run, led by the activity when the title is a task. */
+export function render(row, now = Date.now()) {
   if (row.kind !== 'timer') return { title: row.title, body: row.body };
-  const started = Number(row.data && row.data.started_at) || Date.now();
-  let at = '';
-  try { at = new Date(started).toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: (row.data && row.data.tz) || 'UTC' }); } catch { /* unknown zone */ }
-  return { title: row.title, body: `Running ${elapsedLabel(started)}${at ? ', started ' + at : ''}` };
+  const data = row.data || {}, started = Number(data.started_at) || now;
+  const sub = typeof data.sub === 'string' ? data.sub.slice(0, 80) : '';
+  const ran = elapsedLabel(started, now);
+  return { title: row.title, body: sub ? `${sub} · running for ${ran}` : `Running for ${ran}`, started };
 }
 
 export async function drain() {
@@ -58,8 +60,8 @@ export async function drain() {
       result.expired++;
       continue;
     }
-    const { title, body } = render(row);
-    const payload = JSON.stringify({ title, body, tag: row.tag, kind: row.kind, ongoing: row.ongoing, silent: row.silent });
+    const { title, body, started } = render(row);
+    const payload = JSON.stringify({ title, body, tag: row.tag, kind: row.kind, ongoing: row.ongoing, silent: row.silent, ...(started ? { started } : {}) });
     const mine = byUser.get(row.user_id) || [];
     let anyOk = false, lastError = null;
 

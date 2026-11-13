@@ -50,7 +50,7 @@ export function mergeSessions(a, b, tomb) {
 function mergeActivity(p, s, tomb) {
   const newer = newerOf(p, s), older = newer === p ? s : p;
   return { ...older, ...newer, sessions: mergeSessions(newer.sessions, older.sessions, tomb),
-           isRunning: !!newer.isRunning, lastStart: newer.lastStart || 0, runCardId: newer.runCardId || null };
+           isRunning: !!newer.isRunning, lastStart: newer.lastStart || 0, runCardId: newer.runCardId || null, runTaskId: newer.runTaskId || null };
 }
 /** History is unioned; today's entry belongs to the copy touched last, so
  *  un-checking a habit is not undone by the other device. */

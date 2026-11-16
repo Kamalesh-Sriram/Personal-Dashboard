@@ -18,6 +18,9 @@ import { focusOpen, stopAndRate } from './flows.js';
 import { initNotify, nudgeTick, notify, pushState, enableNotifications, testNotification } from './notify.js';
 import * as Sync from './sync.js';
 import { startOnboarding } from './views/onboarding.js';
+import * as fx from './fx.js';
+import { dragging } from './drag.js';
+import { finishLink } from './fin.js';
 
 const $ = id => document.getElementById(id);
 const isDrawer = () => S().settings.sidebar === 'hidden' || matchMedia('(max-width: 760px)').matches;
@@ -54,13 +57,12 @@ function statusInfo() {
   const w = E.winMinutes(), n = E.nowMinutes();
   if (n < w.start) return { cls: '', text: 'Before hours' };
   if (n > w.end) return { cls: '', text: 'Day closed' };
-  const left = Math.max(0, w.end - n);
-  return { cls: 'live', text: `Live · ${Math.floor(left / 60)}h ${pad(Math.floor(left % 60))}m left` };
+  return { cls: 'live', text: 'Live' };
 }
 function clockText() {
   const d = new Date();
-  if (S().settings.clock24) return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
-  return `${d.getHours() % 12 || 12}:${pad(d.getMinutes())} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
+  if (S().settings.clock24) return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  return `${d.getHours() % 12 || 12}:${pad(d.getMinutes())}:${pad(d.getSeconds())} ${d.getHours() < 12 ? 'AM' : 'PM'}`;
 }
 let lastStatusCls = null;
 function renderTop() {
@@ -93,46 +95,65 @@ function renderStrip() {
 }
 
 /* ── view rendering ── */
-function renderView() {
+/** `entering` is true when a tab has just been opened: its panels rise in.
+ *  On every other redraw, anything that changed place glides there. */
+function renderView(entering = false) {
   const root = $('view'), view = VIEWS[ui.tab] || VIEWS.home;
-  // keep inner scroll positions and the focused field across a re-render
-  const scrolls = {};
+  // keep inner scroll positions, the focused field and unsaved typing across a re-render
+  const scrolls = {}, typed = {};
   root.querySelectorAll('[data-scroll]').forEach(el => { scrolls[el.dataset.scroll] = [el.scrollLeft, el.scrollTop]; });
+  if (!entering) root.querySelectorAll('input[data-fk], textarea[data-fk]').forEach(el => { if (el.value !== el.defaultValue) typed[el.dataset.fk] = el.value; });
   const ae = document.activeElement;
   const fk = ae && root.contains(ae) && ae.dataset ? ae.dataset.fk : null;
+  const before = entering ? null : fx.snapshot(root);
   root.className = 'view' + (view.wide ? ' wide' : '');
   root.innerHTML = view.render();
   if (view.mount) view.mount(root);
   Object.keys(scrolls).forEach(k => { const el = root.querySelector(`[data-scroll="${CSS.escape(k)}"]`); if (el) { el.scrollLeft = scrolls[k][0]; el.scrollTop = scrolls[k][1]; } });
+  Object.keys(typed).forEach(k => { const el = root.querySelector(`[data-fk="${CSS.escape(k)}"]`); if (el && el.value === el.defaultValue) el.value = typed[k]; });
   if (fk) {
     const el = root.querySelector(`[data-fk="${CSS.escape(fk)}"]`);
     if (el) { el.focus(); try { el.setSelectionRange(el.value.length, el.value.length); } catch { /* not a text field */ } }
   }
+  fx.afterRender(root);
+  if (entering) fx.enter(root); else fx.glide(root, before, { hold: ui.flipHold || 0 });
+  ui.flipHold = 0;
 }
-function renderAll() { renderSide(); renderTop(); renderStrip(); renderView(); }
+function renderAll(entering = false) { renderSide(); renderTop(); renderStrip(); renderView(entering); }
 
-let queued = false, deferred = false;
+let queued = false, deferred = false, pressing = false;
 function scheduleRender(kind) {
+  const remote = kind === 'sync' || kind === 'replace';
   // A change arriving from another device must not yank a view out from
   // under someone typing in it; it is applied when they leave the field.
   const ae = document.activeElement;
-  if ((kind === 'sync' || kind === 'replace') && ae && $('view').contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.value) { deferred = true; return; }
+  if (remote && ae && $('view').contains(ae) && /^(INPUT|TEXTAREA)$/.test(ae.tagName) && ae.value) { deferred = true; return; }
+  // Nor may it replace a button between the press and the release: the
+  // click would land on nothing and whatever was being added would be lost.
+  if (remote && (pressing || dragging())) { deferred = true; return; }
   if (queued) return;
   queued = true;
   requestAnimationFrame(() => { queued = false; deferred = false; renderAll(); });
 }
-document.addEventListener('focusout', () => { if (deferred) setTimeout(() => { if (deferred) scheduleRender('ui'); }, 0); });
+const flushDeferred = () => setTimeout(() => { if (deferred && !pressing) scheduleRender('ui'); }, 80);
+document.addEventListener('pointerdown', () => { pressing = true; }, true);
+['pointerup', 'pointercancel'].forEach(t => document.addEventListener(t, () => { pressing = false; if (deferred) flushDeferred(); }, true));
+// Leaving a field by pressing a button fires this before the click: wait for
+// the click to be delivered (see above) before redrawing.
+document.addEventListener('focusout', () => { if (deferred && !pressing) flushDeferred(); });
 
 function route() {
   const raw = (location.hash.replace(/^#\/?/, '') || 'home').split('/')[0];
   const tab = VIEWS[raw] ? raw : 'home';
-  const changed = tab !== ui.tab;
+  const changed = tab !== ui.tab || firstRoute;
+  firstRoute = false;
   ui.tab = tab;
   if (isDrawer()) ui.drawer = false;
   deferred = false;
-  renderAll();
+  renderAll(changed);
   if (changed) window.scrollTo(0, 0);
 }
+let firstRoute = true;
 
 /* ── time ── */
 function tick() {
@@ -150,7 +171,17 @@ function announceSettlement(r) {
     const d = r.settled[r.settled.length - 1];
     const body = d.v === 'R' ? 'Nothing was scored.'
       : `You scored ${d.x} XP and ${L.shadow} scored ${d.s}.` + (d.ex != null ? ` You finished ${d.ex}% of your mission.` : '');
-    toast(`${fmtDate(d.date)}: ${d.v === 'R' ? 'rest day' : d.v === 'W' ? 'you won' : 'you lost'}`, body, { kind: d.v === 'W' ? 'good' : '', ms: 12000 });
+    toast(`${fmtDate(d.date)}: ${d.v === 'R' ? 'rest day' : d.v === 'W' ? 'you won' : 'you lost'}`, body, { kind: d.v === 'W' ? 'good' : '', ms: 12000, sound: d.v === 'W' ? 'win' : '' });
+  }
+  // The last day of a month has just been scored: say how the month went, once.
+  const last = r.settled[r.settled.length - 1].date.slice(0, 7);
+  if (st.settings.modules.shadow && last < today().slice(0, 7) && st.game.notif.month !== last) {
+    st.game.notif.month = last; saveQuiet();
+    const b = E.monthBoard(last);
+    if (b.w + b.l > 0) {
+      const name = new Date(+last.slice(0, 4), +last.slice(5) - 1, 1).toLocaleDateString(undefined, { month: 'long' });
+      notify(`${name}: ${b.w} won, ${b.l} lost`, b.result === 'won' ? 'You won the month. A new one starts today.' : b.result === 'lost' ? `${L.shadow} won the month. A new one starts today, level again.` : 'The month ended level. A new one starts today.', { kind: b.result === 'won' ? 'good' : '' });
+    }
   }
   if (st.settings.modules.rank && before.name !== after.name) {
     notify(after.at > before.at ? `You've been promoted to ${after.name}` : `You've dropped to ${after.name}`, `Your ${L.rep.toLowerCase()} is now ${Math.round(r.repAfter)}.`, { kind: after.at > before.at ? 'good' : 'bad' });
@@ -251,10 +282,19 @@ async function boot() {
     if (kind !== 'quiet') scheduleRender(kind);
   });
   window.addEventListener('hashchange', route);
+  const stick = () => $('top').classList.toggle('stuck', window.scrollY > 6);
+  window.addEventListener('scroll', stick, { passive: true }); stick();
   matchMedia('(max-width: 760px)').addEventListener('change', () => renderSide());
   route();
 
   if (!S().profile.onboarded) startOnboarding(() => { dayStart(); renderAll(); });
+  if (/[?&]state=/.test(location.search)) {
+    finishLink().then(r => {
+      if (!r) return;
+      if (r.ok) toast('Bank linked', `${r.accounts} account${r.accounts === 1 ? '' : 's'} connected. Press Sync on the Finance tab to read your transactions.`, { kind: 'good', ms: 12000 });
+      else toast('The bank link was not completed', r.error, { kind: 'bad', ms: 15000 });
+    });
+  }
   if (landed === 'recovery') VIEWS.settings.newPasswordModal();
   if (landed === 'confirmed') toast('Your email is confirmed', "You're signed in and sync is on.", { kind: 'good' });
 

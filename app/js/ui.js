@@ -7,6 +7,7 @@
    ══════════════════════════════════════════════════════════════════════ */
 import { esc } from './util.js';
 import { icon } from './icons.js';
+import * as fx from './fx.js';
 
 const actions = {};
 /** Register handlers: { 'habit.toggle': (dataset, event, element) => … } */
@@ -20,6 +21,7 @@ export function initDelegation() {
     const fn = actions[el.dataset.act];
     if (!fn) return;
     if (el.tagName === 'A') e.preventDefault();
+    fx.onAction(el);                 // a box being ticked gets its flourish, whatever the action is
     fn(el.dataset, e, el);
   });
   const onField = attr => e => {
@@ -36,14 +38,16 @@ export function initDelegation() {
 }
 
 /* ── toasts ── */
-export function toast(title, body = '', { ms = 7000, kind = '', buttons = [] } = {}) {
+export function toast(title, body = '', { ms = 7000, kind = '', buttons = [], sound = '' } = {}) {
   const host = document.getElementById('toasts');
   if (!host) return () => {};
+  if (sound) fx.sound(sound);
   const el = document.createElement('div');
   el.className = 'toast ' + kind;
   el.innerHTML = `<div class="toast-t">${esc(title)}</div>${body ? `<div class="toast-b">${esc(body)}</div>` : ''}` +
     (buttons.length ? `<div class="toast-a">${buttons.map((b, i) => `<button class="btn sm" data-i="${i}">${esc(b.label)}</button>`).join('')}</div>` : '');
-  const kill = () => el.remove();
+  // leaves the way it came in, then goes
+  const kill = () => { if (!el.isConnected || el.classList.contains('out')) return; el.classList.add('out'); setTimeout(() => el.remove(), fx.motion() === 'off' ? 0 : 160); };
   el.addEventListener('click', e => {
     const b = e.target.closest('button[data-i]');
     if (b) buttons[+b.dataset.i].run();
@@ -96,7 +100,8 @@ export function closeModal(entry) {
   const e = entry && stack.includes(entry) ? entry : stack[stack.length - 1];
   if (!e) return;
   stack.splice(stack.indexOf(e), 1);
-  e.back.remove();
+  if (fx.motion() === 'off') e.back.remove();
+  else { e.back.classList.add('out'); e.back.style.pointerEvents = 'none'; setTimeout(() => e.back.remove(), 140); }
   if (e.onClose) e.onClose();
   if (e.restore && e.restore.focus && document.contains(e.restore)) e.restore.focus();
 }

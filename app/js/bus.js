@@ -14,7 +14,9 @@ export const ui = {
   goalOpen: new Set(),
   journalDate: null,
   journalQuery: '',
-  settingsTab: 'look'
+  settingsTab: 'look',
+  gymQuery: '', gymAll: false,          // Gym: exercise search, show the full list
+  finMonth: null, finView: 'month', finQuery: '', finCat: ''   // Finance
 };
 
 let _refresh = () => {};

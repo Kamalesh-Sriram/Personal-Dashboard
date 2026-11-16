@@ -4,8 +4,40 @@ export const pad = n => String(n).padStart(2, '0');
 
 /** Local calendar date as YYYY-MM-DD. All day keys in the app use this. */
 export const ymd = d => `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-export const today = () => ymd(new Date());
 export const parseYmd = s => new Date(s + 'T00:00:00');
+
+/* When does a day begin?  Normally at midnight. If the working hours run
+   past midnight (07:00 to 01:00, say) the day has to as well, or the last
+   hour of work would be scored as tomorrow's. The day then turns over
+   halfway between the end of one window and the start of the next (04:00
+   in that example), and until then it is still "today".
+
+   Everything that maps a moment to a day goes through the helpers below,
+   so there is exactly one definition. The store keeps the offset in step
+   with the settings. */
+let _off = 0;                                   // ms after midnight at which the day turns over
+export const setDayOffset = min => { _off = clamp(Math.round(min) || 0, 0, 12 * 60) * 60000; };
+export const dayOffsetMin = () => _off / 60000;
+/** Minutes after midnight at which the day should turn over for these hours. */
+export function dayOffsetFor(win) {
+  const s = hmToMin(win && win.start), e = hmToMin(win && win.end);
+  if (e === 0 || e >= s) return 0;                               // ends the same calendar day it starts
+  return Math.max(e, Math.floor((e + (s - e) / 2) / 30) * 30);
+}
+/** The day a moment belongs to, as YYYY-MM-DD. */
+export const dateOf = ts => ymd(new Date(ts - _off));
+export const today = () => dateOf(Date.now());
+/** The first and one-past-the-last instant of a day. */
+export const dayStartTs = date => { const d = parseYmd(date); d.setMinutes(_off / 60000); return d.getTime(); };
+export const dayEndTs = date => dayStartTs(addDays(date, 1));
+/** Minutes since the midnight that opened `date`. After midnight on a late
+ *  day this runs past 1440: 00:30 is minute 1470 of the day before. */
+export function minOfDay(ts, date) {
+  const d = new Date(ts), m = d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60, cal = ymd(d);
+  return cal === date ? m : m + 1440 * daysBetween(date, cal);
+}
+/** A clock time as minutes into the current kind of day ("00:30" on a late day is 1470). */
+export const clockToDayMin = hm => { const m = hmToMin(hm); return m < _off / 60000 ? m + 1440 : m; };
 
 /** Whole calendar days, never milliseconds: adding 86,400,000 ms across a
  *  daylight-saving boundary lands an hour short and rolls the date back. */

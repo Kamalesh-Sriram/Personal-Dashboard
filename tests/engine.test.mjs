@@ -1,7 +1,7 @@
 /* Engine and merge tests. No browser needed:  npm test  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { defaultState, _setStateForTests, S } from '../app/js/store.js';
+import { defaultState, _setStateForTests, S, resyncClock } from '../app/js/store.js';
 import * as E from '../app/js/engine.js';
 import { mergeStates } from '../app/js/merge.js';
 import { today, addDays, parseYmd, ymd, deepClone } from '../app/js/util.js';
@@ -256,4 +256,84 @@ test('merge: merging twice changes nothing more (two devices settle instead of p
   const strip = s => { const { _rev, _at, _dev, ...rest } = s; return rest; };
   const canon = o => JSON.stringify(o, (k, v) => (v && typeof v === 'object' && !Array.isArray(v) ? Object.keys(v).sort().reduce((a, key) => { a[key] = v[key]; return a; }, {}) : v));
   assert.equal(canon(strip(twice)), canon(strip(once)));
+});
+
+test('the month has its own record, and says how many more days win it', () => {
+  const month = T.slice(0, 7), first = month + '-01';
+  fresh(st => { st.game.start = addDays(first, -5); st.game.days[addDays(first, -1)] = { v: 'W', x: 10, s: 5 }; });   // last month's win is not counted
+  let b = E.monthBoard(month);
+  assert.equal(b.w + b.l, 0);
+  assert.equal(b.days.length, new Date(+month.slice(0, 4), +month.slice(5), 0).getDate());
+  assert.equal(b.days.find(d => d.date === T).v, 'T');
+  assert.equal(b.need, Math.floor(b.open / 2) + 1);
+  if (T > first) {
+    fresh(st => { st.game.start = first; st.game.days[first] = { v: 'L', x: 1, s: 5 }; });
+    b = E.monthBoard(month);
+    assert.equal(b.l, 1);
+    assert.equal(b.need, Math.floor((1 + b.open) / 2) + 1);
+  }
+});
+
+test('the brief and the debrief follow the window until given their own times', () => {
+  const st = fresh(s => { s.settings.window = { start: '07:00', end: '23:00' }; });
+  assert.equal(E.briefMin(), 7 * 60);
+  assert.equal(E.debriefMin(), 22 * 60 + 30);
+  st.settings.notify.briefAt = '06:15'; st.settings.notify.debriefAt = '21:00';
+  assert.equal(E.briefMin(), 6 * 60 + 15);
+  assert.equal(E.debriefMin(), 21 * 60);
+});
+
+test('time on a goal task adds up on the task, and a card sent from a goal counts toward it', () => {
+  const st = fresh(s => {
+    s.activities.push(activity('thesis'));
+    s.goals.push({ id: 'g1', name: 'Thesis', color: '#8B7CF6', activityId: 'thesis', milestones: [{ id: 'm1', name: 'Draft', done: false, tasks: [{ id: 'k1', name: 'Intro', done: false }, { id: 'k2', name: 'Method', done: false }] }] });
+    s.activities[0].sessions.push(session(Y, 9, 0, 10, 0, { taskId: 'k1' }), session(Y, 11, 0, 11, 30, { taskId: 'k2' }), session(Y, 12, 0, 13, 0));
+  });
+  assert.equal(E.taskMs('k1'), 3600000);
+  assert.equal(E.taskMs('k2'), 1800000);
+  assert.equal(E.taskMs('k1', T), 0);                                  // nothing since today
+  assert.equal(E.activityForGoal(st.goals[0]).id, 'thesis');
+  st.cards.today.push({ id: 'c1', text: 'Intro', tagId: null, subs: [], goalTask: 'k1' });
+  assert.equal(E.activityForCard(st.cards.today[0]).id, 'thesis');
+  E.moveCard('c1', 'done');
+  assert.equal(st.goals[0].milestones[0].tasks[0].done, true);          // finishing the card ticks the goal task
+  assert.equal(st.goals[0].milestones[0].done, false);
+});
+
+test('working hours that run past midnight take the day with them', async () => {
+  const U = await import('../app/js/util.js');
+  assert.equal(U.dayOffsetFor({ start: '07:00', end: '23:00' }), 0);
+  assert.equal(U.dayOffsetFor({ start: '07:00', end: '00:00' }), 0);
+  assert.equal(U.dayOffsetFor({ start: '07:00', end: '01:00' }), 240);            // halfway between 01:00 and 07:00
+  const st = fresh(s => { s.settings.window = { start: '07:00', end: '01:00' }; s.activities.push(activity('work')); });
+  resyncClock();                                                                  // the app does this on every save
+  assert.equal(U.dayOffsetMin(), 240);
+  const w = E.winMinutes();
+  assert.equal(w.end, 25 * 60); assert.equal(w.total, 18 * 60);
+  const D = '2026-03-10', late = at(D, 24, 30), early = at(D, 27, 0), morning = at(D, 28, 0);
+  assert.equal(U.dateOf(late), D);                                                // 00:30 still belongs to the 10th
+  assert.equal(U.dateOf(early), D);                                               // so does 03:00
+  assert.equal(U.dateOf(morning), '2026-03-11');                                  // 04:00 opens the 11th
+  assert.equal(U.minOfDay(late, D), 1470);
+  assert.equal(U.clockToDayMin('00:30'), 1470);
+  assert.equal(U.clockToDayMin('20:00'), 1200);
+  assert.equal(U.dayEndTs(D), morning);
+  st.settings.notify.debriefAt = '00:30';
+  assert.equal(E.debriefMin(), 1470);
+  fresh();                                                                        // back to a midnight day for the other tests
+  assert.equal(U.dayOffsetMin(), 0);
+});
+
+test('a task can name its own activity, ahead of its tag', () => {
+  const st = fresh(s => {
+    s.activities.push(activity('thesis'), activity('gym'));
+    s.tags.push({ id: 'tg', name: 'Thesis', color: '#8AB4F8', activityId: 'thesis' });
+  });
+  const card = { id: 'c1', text: 'x', tagId: 'tg', subs: [] };
+  assert.equal(E.activityForCard(card).id, 'thesis');
+  card.activityId = 'gym';
+  assert.equal(E.activityForCard(card).id, 'gym');
+  card.activityId = 'gone';                                                       // a deleted activity falls back to the tag
+  assert.equal(E.activityForCard(card).id, 'thesis');
+  void st;
 });

@@ -3,15 +3,18 @@ import { S, save, saveQuiet, replaceState, normalize, defaultState, DEFAULT_XP, 
 import * as E from '../engine.js';
 import { registerActions, openModal, confirmDialog, toast, switchHtml, segHtml } from '../ui.js';
 import { icon } from '../icons.js';
-import { esc, today, addDays, uid, safeColor, clamp, deepClone } from '../util.js';
+import { esc, today, addDays, uid, safeColor, clamp, deepClone, dayOffsetMin, fmtMinOfDay } from '../util.js';
 import { ui, refresh } from '../bus.js';
 import { applyTheme, ACCENTS, setBgImage, clearBgImage, hasBgImage } from '../theme.js';
 import { TAB_META } from './tabs.js';
 import * as Sync from '../sync.js';
+import * as fx from '../fx.js';
+import { idbGet, idbSet } from '../idb.js';
 import { pushState, enableNotifications, testNotification } from '../notify.js';
 
 const TABS = [['look', 'Look'], ['layout', 'Layout'], ['day', 'Day & scoring'], ['game', 'Game'], ['notify', 'Notifications'], ['sync', 'Sync'], ['data', 'Data'], ['about', 'About']];
 const set = () => S().settings;
+const minToHm = m => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(Math.round(m % 60)).padStart(2, '0');
 
 /* ── small builders ── */
 const row = (title, hint, control) => `<div class="set-row"><div class="grow"><div class="set-t">${title}</div>${hint ? `<div class="hint">${hint}</div>` : ''}</div><div class="set-c">${control}</div></div>`;
@@ -43,7 +46,12 @@ function lookHtml() {
       ${row('Typeface', 'Classic is the look of the earlier versions (Rajdhani, Inter, JetBrains Mono) and loads from Google Fonts. The other four are already on your device, so nothing is fetched.', seg('settings.font', [['classic', 'Classic'], ['system', 'System'], ['rounded', 'Rounded'], ['serif', 'Serif'], ['mono', 'Mono']], s.font))}
       ${row('Corners', '', seg('settings.corners', [['soft', 'Soft'], ['sharp', 'Sharp']], s.corners))}
       ${row('Density', 'Compact fits more on screen.', seg('settings.density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], s.density))}
-      ${row('Reduce motion', 'Turns off the few transitions there are.', toggle('settings.reduceMotion', s.reduceMotion))}
+    </section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Motion and sound</span></div>
+      ${row('Motion', 'Full: panels rise in when a tab opens, ticks draw themselves, things glide to their new place. Subtle keeps the fades and drops the rest. The "reduce motion" setting of your device always wins.', seg('settings.motion', [['full', 'Full'], ['subtle', 'Subtle'], ['off', 'Off']], s.reduceMotion ? 'off' : (s.motion || 'full')))}
+      ${row('Sounds', 'A soft tick for a box, two notes for a finished task, a chord for the big moments. Made in the browser: no audio files are loaded.', `<div class="row">${toggle('settings.sound.on', s.sound.on)}<button class="btn sm" data-act="set.soundTry">Try it</button></div>`)}
+      ${s.sound.on ? row('Volume', '', range('settings.sound.volume', s.sound.volume, 5, 100, '%')) : ''}
+      ${row('Vibration', 'A short buzz on a tick or a drag. Android only: iPhones do not allow it from a website.', toggle('settings.haptics', s.haptics))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Background image</span></div>
       ${row('Image', 'Stays on this device only: it is never uploaded or synced. Location data in the photo is stripped.',
@@ -72,8 +80,8 @@ function dayHtml() {
   const s = set(), x = s.xp;
   const xpRow = (k, label, hint, min, max, step = 1) => row(label, hint, num('settings.xp.' + k, x[k], min, max, step));
   return `<section class="card"><div class="card-h"><span class="eyebrow">Your day</span></div>
-      ${row('Productive window', 'The hours you intend to be working. The rival paces himself across it, and start delay is measured from its opening.',
-        `<div class="row"><input class="input" type="time" value="${esc(s.window.start)}" data-change="set.text" data-path="settings.window.start" aria-label="Window start"><span>to</span><input class="input" type="time" value="${esc(s.window.end)}" data-change="set.text" data-path="settings.window.end" aria-label="Window end"></div>`)}
+      ${row('Productive window', `The hours you intend to be working. The rival paces himself across it, and start delay is measured from its opening. ${dayOffsetMin() ? `These hours run past midnight, so your day does too: a new day starts at ${fmtMinOfDay(dayOffsetMin(), s.clock24)}, and anything before that still counts for the day before.` : 'For a day that runs past midnight, set an end time earlier than the start, for example 07:00 to 01:00.'}`,
+        `<div class="row"><input class="input" type="time" value="${esc(s.window.start)}" data-change="set.window" data-path="settings.window.start" aria-label="Window start"><span>to</span><input class="input" type="time" value="${esc(s.window.end)}" data-change="set.window" data-path="settings.window.end" aria-label="Window end"></div>`)}
       ${row('24-hour clock', '', toggle('settings.clock24', s.clock24))}
       ${row('Empty the Done column each morning', 'Yesterday\'s finished tasks are removed from the board at the start of each day. The day they were finished keeps the credit.', toggle('settings.autoClearDone', s.autoClearDone))}
       ${row('Target focus hours a day', 'A full day at target is what the scale is drawn against. It is a reference, not the bar you are judged by.', num('settings.targets.hours', s.targets.hours, 1, 16, 0.5))}
@@ -159,10 +167,12 @@ function notifyHtml() {
       ${row('…after this many idle minutes', '', num('settings.nudgeMins', s.nudgeMins, 10, 240, 5))}
       ${row('When he passes you', 'Once a day, at the moment his pace overtakes your XP.', toggle('settings.notify.overtake', n.overtake))}
       ${row('Habits still open', '', `<div class="row">${toggle('settings.notify.habits', n.habits)}<input class="input" type="time" value="${esc(n.habitsAt)}" data-change="set.text" data-path="settings.notify.habitsAt" aria-label="Habit reminder time"></div>`)}
-      ${row('Morning brief', 'Opens near the start of your window, and reminds you if no mission is declared three hours in.', toggle('settings.notify.brief', n.brief))}
-      ${row('Night debrief', 'Thirty minutes before your window closes.', toggle('settings.notify.debrief', n.debrief))}
+      ${row('Morning brief', `Opens at this time, or the first time you open the app in the two hours after it. If no mission is set three hours later, you get a reminder. ${n.briefAt ? 'Clear the time to go back to the start of your window.' : 'It follows the start of your window until you pick a time.'}`,
+        `<div class="row">${toggle('settings.notify.brief', n.brief)}<input class="input" type="time" value="${minToHm(E.briefMin())}" data-change="set.time" data-path="settings.notify.briefAt" aria-label="Morning brief time"></div>`)}
+      ${row('Night debrief', `Opens at this time. ${n.debriefAt ? 'Clear the time to go back to 30 minutes before your window closes.' : 'It stays 30 minutes before your window closes until you pick a time.'}`,
+        `<div class="row">${toggle('settings.notify.debrief', n.debrief)}<input class="input" type="time" value="${minToHm(E.debriefMin())}" data-change="set.time" data-path="settings.notify.debriefAt" aria-label="Night debrief time"></div>`)}
       ${row('Subscription payments', 'The day before, at 10:00.', toggle('settings.notify.subs', n.subs))}
-      ${row('Running timer', 'Keeps a notification showing what is running and for how long. Refreshes every couple of minutes; it cannot tick live.', toggle('settings.notify.timer', n.timer))}
+      ${row('Running timer', 'Keeps a notification showing what is running and for how long. It refreshes about once a minute and cannot tick live.', toggle('settings.notify.timer', n.timer))}
     </section>
     ${linesHtml()}`;
 }
@@ -213,7 +223,7 @@ function dataHtml() {
   const hasV4 = (() => { try { return !!localStorage.getItem('commandCenterV2'); } catch { return false; } })();
   let size = 0; try { size = (localStorage.getItem(LS_KEY) || '').length; } catch { /* ignore */ }
   return `<section class="card"><div class="card-h"><span class="eyebrow">Backup</span><span class="tiny dim">${(size / 1024).toFixed(0)} KB stored on this device</span></div>
-      ${row('Export', 'Downloads everything as one JSON file. Keep it somewhere safe: it is the whole dashboard.', `<button class="btn" data-act="data.export">${icon('download')} Export backup</button>`)}
+      ${row('Export', 'Downloads everything as one JSON file, including gym history and transactions stored on this device. Keep it somewhere safe: it is the whole dashboard.', `<button class="btn" data-act="data.export">${icon('download')} Export backup</button>`)}
       ${row('Import', 'Replaces what is on this device with a backup file.', `<label class="btn">${icon('upload')} Import backup<input type="file" accept="application/json,.json" data-change="data.import" hidden></label>`)}
       ${hasV4 ? row('Bring over v4 data', 'A version 4 dashboard was found in this browser. Imports its activities and sessions, habits and history, board, goals, subscriptions and journal. The scoreboard starts fresh.', `<button class="btn" data-act="data.importV4">Import from v4</button>`) : ''}
     </section>
@@ -311,9 +321,20 @@ registerActions({
     if (/labels\./.test(d.path)) v = v.trim() || getPath(d.path);
     setPath(d.path, v); save();
   },
+  // Changing the hours can move where the day turns over. If that puts "today"
+  // back onto a day that was already closed, it is opened again.
+  'set.window': (d, e, el) => {
+    if (!/^\d\d:\d\d$/.test(el.value)) return;
+    const before = today();
+    setPath(d.path, el.value); E.invalidate(); save();
+    if (today() < before) E.reopenDay(today());
+  },
+  // an optional time: emptied, it goes back to following the window
+  'set.time': (d, e, el) => { setPath(d.path, /^\d\d:\d\d$/.test(el.value) ? el.value : null); E.invalidate(); save(); },
   'set.num': (d, e, el) => { const v = clamp(parseFloat(el.value), +el.min, +el.max); if (!isFinite(v)) return; setPath(d.path, v); E.invalidate(); save(); },
   'set.toggle': d => { setPath(d.path, !getPath(d.path)); E.invalidate(); save(); },
-  'set.pick': d => { setPath(d.path, d.v); save(); },
+  'set.pick': d => { setPath(d.path, d.v); if (d.path === 'settings.motion') S().settings.reduceMotion = false; save(); },
+  'set.soundTry': () => { fx.sound('tick', { force: true }); setTimeout(() => fx.sound('done', { force: true }), 420); setTimeout(() => fx.sound('win', { force: true }), 950); },
   'set.range': (d, e, el) => {                        // live preview while dragging; saved on release
     setPath(d.path, +el.value);
     const out = document.querySelector(`[data-out="${d.path}"]`); if (out) out.textContent = el.value + out.textContent.replace(/^[\d.]+/, '');
@@ -365,9 +386,11 @@ registerActions({
   'sync.useLocal': async () => { if (await confirmDialog({ title: "Use this device's dashboard everywhere?", body: 'The dashboard in your account is replaced with this one. Other devices take it on the next time they sync.', ok: 'Use this one' })) busy(() => Sync.useThisDevice(), 'Your account now has this dashboard'); },
   'sync.useRemote': async () => { if (await confirmDialog({ title: "Load your account's dashboard here?", body: 'What is on this device is replaced with the dashboard in your account.', ok: 'Load it', danger: true })) busy(() => Sync.useAccountCopy(), 'This device now has your account dashboard'); },
   'sync.password': newPasswordModal,
-  'data.export': () => {
+  'data.export': async () => {
+    // gym history and transactions live outside the dashboard document, so they are added here
+    const extras = { gym: await idbGet('gym'), fin: await idbGet('fin') };
     const a = document.createElement('a');
-    a.href = URL.createObjectURL(new Blob([JSON.stringify(S(), null, 1)], { type: 'application/json' }));
+    a.href = URL.createObjectURL(new Blob([JSON.stringify({ ...S(), _extras: extras }, null, 1)], { type: 'application/json' }));
     a.download = `dashboard-backup-${today()}.json`; a.click();
     setTimeout(() => URL.revokeObjectURL(a.href), 5000);
   },
@@ -379,9 +402,11 @@ registerActions({
       const doc = JSON.parse(await file.text());
       if (!doc || typeof doc !== 'object' || doc.v !== 5 || !doc.settings || !doc.game) throw new Error('This is not a version 5 backup file.');
       if (!(await confirmDialog({ title: 'Replace this device\'s data?', body: `The backup “${(doc.profile && doc.profile.name) || 'Dashboard'}” replaces everything currently here.`, ok: 'Replace', danger: true }))) return;
+      const extras = doc._extras || null; delete doc._extras;
       const next = normalize(doc); next._rev = Math.max(next._rev || 0, S()._rev || 0) + 1; next._at = Date.now();
       replaceState(next, 'replace');
-      toast('Backup imported', '', { kind: 'good' });
+      if (extras) { for (const k of ['gym', 'fin']) { if (extras[k] && typeof extras[k] === 'object') await idbSet(k, extras[k]); } }
+      toast('Backup imported', extras ? 'Reload the page to see the gym and finance data it carried.' : '', { kind: 'good', ms: extras ? 9000 : 5000 });
     } catch (err) { toast('Import failed', err.message, { kind: 'bad', ms: 9000 }); }
   },
   'data.importV4': async () => { if (await confirmDialog({ title: 'Import from v4?', body: 'Activities, habits, the board, goals, subscriptions and the journal on this device are replaced with the v4 ones. Appearance settings are kept.', ok: 'Import' })) importV4(); },

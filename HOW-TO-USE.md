@@ -175,10 +175,13 @@ The tabs live in the strip on the left. Press the arrows at the top of the strip
 
 ### Home
 
-Everything for today on one page: your main goals, you against the rival, the mission, the Lock in button with your top three tasks, habits, and the logbook.
+Everything for today on one page: your main goals, you against the rival, the mission, the Lock in button with your top three tasks, how many habits are left, and the logbook.
 
-- **Top tasks** are the first three in the board's Today column. Click one to select it. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
+- **Top tasks** are the first three in the board's Today column. Drag them to reorder. Click one to select it. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
 - Press the question mark on the dial card for today's numbers: where your XP came from and how the rival's target was set.
+- **Main goals** are the lasting ones. Write them out each morning; yesterday's show faintly as a prompt. Press **Add goal** for another line.
+- **The month's record** sits under the dial: one cell per day, green for a day you won, red for one you lost, blue for a rest day. The line under it says how many more days you need to win the month. The record starts again on the 1st. Press it to open the calendar.
+- **Day left** is the first block under the two cards: how much of the working day you set is left, as time and as a share.
 - **Rest day** (top of the dial card) marks today as not scored. See [rest days](#rest-days).
 - The **logbook** has four entries: sleep, session ratings, efficacy, and the debrief. Each one you fill in earns a little XP. Tap any of them to fill it in.
 
@@ -189,6 +192,7 @@ Everything for today on one page: your main goals, you against the rival, the mi
 A kanban board. Drag tasks between columns. On a phone, press and hold a task, then drag.
 
 - **Tags** colour the task and decide where its time goes. Open **Tags** to link each tag to an activity. When you lock in on a task tagged "Thesis", the Thesis timer runs, not the general one.
+- **Activity.** A task can also name its own activity, which wins over its tag's. Leave it on "Follow the tag" for the usual behaviour.
 - **Steps.** Open a task and add steps. The task shows a progress bar. Click the bar to tick steps off without opening the task.
 - **Duplicate.** Open a task and press **Duplicate**. A new task opens with the same name, tag, estimate, deadline, notes and steps, ready to edit.
 - **Columns** can be renamed, recoloured, reordered, added and removed.
@@ -199,6 +203,8 @@ A kanban board. Drag tasks between columns. On a phone, press and hold a task, t
 ![The Track tab](docs/images/track.jpg)
 
 - Click an activity to start its timer. Click it again to stop. Only one runs at a time.
+- While a timer runs, a ribbon at the top shows what is running, when it started and for how long. Press anywhere on it to stop.
+- Drag an activity to reorder it within its group. On a phone, press and hold first.
 - The **24-hour ring** shows your day at a glance: each arc is a session, the lighter band is your working hours, the line is now. "Largest gap" is the longest stretch of your working hours with nothing logged.
 - Switch the session list to **Timeline** for a strip view with one lane per kind of activity.
 - Click any session to correct its times. Use **Log time by hand** for something you forgot to track.
@@ -211,17 +217,106 @@ Each activity has a weight: **Deep** earns full XP, **Upkeep** half, **Tracked**
 ![The Habits tab](docs/images/habits.jpg)
 
 - Each habit shows its **streak** and its **XP level** in full view, and what checking it today will earn.
+- A habit you tick moves down to **Done today**. Drag a habit to change the order within its section. On a phone, press and hold first.
 - The **clean-sweep chain** counts consecutive days on which you did every habit that was due. Each day in the chain adds to the bonus.
 - The **habit map** at the top shows all habits together. Press the calendar icon on a habit for its own map. Click any past day on a habit's own map to correct it.
 - Longer streaks multiply the XP of a check-off: 1.1x from 7 days, 1.25x from 14, 1.5x from 21, 1.75x from 30, 2x from 66.
 
 ### Goals
 
-A goal breaks into milestones, and a milestone into tasks. Progress is counted across all of them. Press the board icon next to a task to send it to today's list.
+A goal breaks into milestones, and a milestone into tasks. Progress is counted across all of them. Goals start closed; press one to open it. Drag goals, milestones or tasks to put them in order.
+
+- **Time.** Press play on a task to time it. The time shows on the task, adds up on its milestone, and adds up again on the goal. A milestone with no tasks can be timed directly.
+- **Activity.** Edit a goal to choose which activity its time is logged under, so gym work is not counted as deep work.
+- **Send to the board.** Press the board icon next to a task to put it in today's list. Time on that card counts toward the goal task, and finishing the card ticks the task off.
+- The panel on the right shows overall progress, time spent in total and in the last 7 days, time per goal, and the next open task of each goal.
 
 ### Calendar
 
-The month at a glance: a dot for each day's result, its XP, focused hours and sleep. Open any day to see the detail, log sleep, mark it as a rest day, or pin an emoji to it.
+The month at a glance. Days you won are green, days you lost are red, rest days are blue, each with its XP, focused hours and sleep. The bar at the top is the month's record and what it takes to win it. Open any day to see the detail, log sleep, mark it as a rest day, or pin an emoji to it.
+
+### Gym
+
+Your training history, and what to try next time.
+
+- **Next session** lists your regular lifts with a suggestion each. The rule is double progression: stay at a weight and add reps until every set reaches the top of your rep range, then add weight and start again from fewer reps. Three sessions without progress at one weight and it suggests backing off by a tenth for a week.
+- Press any exercise for its chart (an estimated one-rep max from your best set of the day), your records and your last sessions.
+- **Last 12 weeks** shows weekly volume and how many workouts each week had.
+
+The history is stored on the device, not in your synced dashboard. With Hevy connected, each device reads it from Hevy.
+
+#### Get your workouts in: a file (two minutes, nothing to set up)
+
+1. In Hevy, open **Profile > Settings > Export & Import Data > Export Workouts** and save the CSV file. In Strong, it is **Settings > Export Data**.
+2. On the Gym tab, press **Import file** and choose that file.
+
+The file is read on your device and stays there. Import a newer export any time: workouts already here are skipped.
+
+#### Get your workouts in: Hevy sync (about five minutes, once)
+
+You need Hevy Pro (the API key is a Pro feature) and sync turned on in the dashboard (section 5).
+
+1. **Copy your Hevy API key.** On a computer, sign in at hevy.com, open **Settings**, then **Developer**, and copy the key shown there. Treat it like a password.
+2. **Give the key to your site.** In Netlify, open your site (Netlify now calls it a project), then **Project configuration > Environment variables** (on older accounts: Site configuration). Press **Add a variable**, choose **Add a single variable**, and fill in:
+   - Key: `HEVY_API_KEY`
+   - Value: the key you copied
+
+   Press **Create variable**.
+3. **Redeploy**, so the site picks the key up. If your site is connected to GitHub: **Deploys > Trigger deploy > Deploy site**. If you deploy from your computer: run `netlify deploy --prod` in the project folder.
+4. **Sync.** Open the dashboard, sign in under Settings > Sync if you are not already, open the **Gym** tab and press **Sync now**. The first sync reads your whole history, ten workouts at a time, so a long history takes a minute. After that it only asks Hevy for what changed, each time you open the tab.
+
+If the Gym tab still shows the setup steps, press **Check again**. "Hevy rejected the API key" means the key was pasted wrongly or Hevy Pro has lapsed.
+
+### Finance
+
+Where your money goes, by month and by year.
+
+- **Categories.** Each transaction is sorted into a category by the merchant's name. When one is wrong, pick the right category in the list. You are then asked whether to do the same for everything from that merchant: press **Always** and a rule is saved. Rules you make come before the built-in guesses, and a category you chose by hand is never changed by a rule.
+- Transfers and savings are left out of both spending and income.
+- Press a category under **Where it went** to filter the list. Switch between **Month** and **Year** at the top right.
+- The cog opens categories, your rules, linked banks and the option to remove all transactions.
+
+With sync on, your transactions are kept in your own database as well as on the device, so every device shows the same. Without sync they stay on the device you imported them on.
+
+#### Get your transactions in: a statement file (works with any bank)
+
+1. On your bank's website, download your transactions for the period you want.
+   - **ABN AMRO:** Internet Banking > your account > **Download transactions** (Mutaties downloaden). Choose TXT, XLS or CAMT.053.
+   - **Revolut:** the account > **Statement** > choose **Excel (CSV)** and the period.
+   - **Any other bank:** choose CSV if it is offered, or CAMT.053.
+2. On the Finance tab, press **Import file** and choose the file.
+
+ABN AMRO's TXT, Revolut's CSV and CAMT.053 are read as they are. For another bank's CSV the columns are recognised by their names; if they are not, you are asked once which column is the date, the amount and the description. Importing the same file twice adds nothing.
+
+#### Get your transactions in: link your bank (about fifteen minutes, once)
+
+This uses [Enable Banking](https://enablebanking.com), a licensed provider that connects to most European banks. Access is read-only: it can list your accounts and read transactions, and it cannot move money. Their terms allow private individuals to use it with their own accounts; check the current terms when you sign up.
+
+You need sync turned on in the dashboard (section 5).
+
+1. **Add the finance tables to your database.** In Supabase, open your project, then **SQL Editor > New query**. Paste the whole of [`supabase/schema.sql`](supabase/schema.sql) from this repository and press **Run**. It is safe to run again: it adds the `transactions` and `bank_links` tables and leaves everything else alone.
+2. **Make an Enable Banking account.** Go to enablebanking.com/sign-in, enter your email, and open the link they send you. That signs you in to their Control Panel.
+3. **Register an application.** In the Control Panel open **API applications** in the top menu and fill in **Add a new application**:
+   - Environment: **Production**
+   - Private key: leave the default (your browser generates it)
+   - Application name: anything, for example "My dashboard"
+   - Redirect URLs: your site's address with a slash at the end, for example `https://your-site.netlify.app/`
+
+   Press **Register**. A file ending in `.pem` is saved to your downloads. Its name, without `.pem`, is your **application id**. The file itself is your **private key**: keep it private.
+4. **Activate it with your own accounts.** The new application shows as **Inactive**. Press **Activate by linking accounts**, choose your bank and approve on your bank's own page. Do this for each bank you want. The application then shows as **Active**. It can only read the accounts you linked this way, which is what keeps it in the free, personal mode.
+5. **Give the two values to your site.** In Netlify: **Project configuration > Environment variables > Add a variable > Add a single variable**, twice:
+   - Key `ENABLEBANKING_APP_ID`, value: the application id
+   - Key `ENABLEBANKING_PRIVATE_KEY`, value: open the `.pem` file in a text editor (Notepad, TextEdit) and paste everything in it, including the lines that begin with `-----BEGIN` and `-----END`
+6. **Redeploy**, as in step 3 of the Hevy instructions above.
+7. **Link the bank in the dashboard.** Open the **Finance** tab, press **Link a bank**, choose your country and bank, and press **Continue to your bank**. Approve on your bank's page. You come back to the dashboard with a message that the bank is linked.
+8. **Read your transactions.** Press **Sync** on the Finance tab. The first read goes back up to a year, as far as your bank allows. After that the tab reads new transactions when you open it, at most every six hours.
+
+Good to know:
+
+- Banks ask you to approve again about every 180 days. The Finance tab tells you when a link has expired; press **Link a bank** again.
+- Yes, you approve at your bank twice in total: once to activate the application (step 4) and once from the dashboard (step 7). That is how Enable Banking's personal mode works.
+- If your bank is not in the list, statement files still give you the same tab.
+- To stop: the cog on the Finance tab > **Unlink**. That ends the session at the bank as well.
 
 ### Subscriptions
 
@@ -267,6 +362,10 @@ Three rules keep him fair:
 
 For your first three days he has no history, so he runs at 60% of a full target day. Press the question mark on the dial card to see today's numbers.
 
+### Days that run past midnight
+
+If you work late, set an end time earlier than the start under **Settings > Day & scoring**, for example 07:00 to 01:00. The day then runs with your hours. It turns over halfway between the end of one window and the start of the next (04:00 in that example), and until then it is still the same day: XP, habits, the mission and the win or loss all belong to it. Days already scored keep their numbers. Use the same version of the dashboard on all your devices, or they will disagree about which day a late session belongs to.
+
 ### Rest days
 
 A rest day is not scored at all. No win, no loss, no reputation change, and habit streaks freeze instead of breaking. You get one in any seven days unless you change the allowance under **Settings > Game**. You can also mark a past day as rest from the Calendar.
@@ -295,11 +394,11 @@ Start and end campaigns under **Settings > Game**. Ending one archives the resul
 
 | Where | What you can change |
 |---|---|
-| **Settings > Look** | Dashboard name. Light, dark or system. Accent colour (any colour). Typeface. Corners. Density. A background image, with sliders for dimming, blur and panel opacity. |
+| **Settings > Look** | Dashboard name. Light, dark or system. Accent colour (any colour). Typeface. Corners. Density. Motion (full, subtle or off), sounds and their volume, vibration. A background image, with sliders for dimming, blur and panel opacity. |
 | **Settings > Layout** | Sidebar as an icon strip or fully hidden. Which tabs show, and in what order. |
-| **Settings > Day & scoring** | Working hours. Daily targets. Every XP value. Weekly check-in categories. |
+| **Settings > Day & scoring** | Working hours, including hours that run past midnight. Daily targets. Every XP value. Weekly check-in categories. |
 | **Settings > Game** | Turn the rival, missions and rank on or off. Rename the rival, the Lock in button, the mission panel, rank and reputation. Edit the rank ladder. The rival's edge and voice. Rest day allowance. Campaigns. |
-| **Settings > Notifications** | Which reminders are sent and when. Every sentence they use. |
+| **Settings > Notifications** | Which reminders are sent and when, including the times of the morning brief and the night debrief. Every sentence they use. |
 
 The background image stays on the device you chose it on. It is never uploaded. The dimming and panel opacity have lower limits so text stays readable on any photo.
 

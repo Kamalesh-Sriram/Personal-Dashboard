@@ -4,18 +4,21 @@ import { S, save, touch, tombstone } from '../store.js';
 import * as E from '../engine.js';
 import { registerActions, openModal, closeModal, confirmDialog, segHtml, toast } from '../ui.js';
 import { icon } from '../icons.js';
-import { esc, today, addDays, uid, fmtDur, fmtTimer, fmtClock, fmtMinOfDay, fmtDate, safeColor, parseYmd, pad } from '../util.js';
+import { esc, today, addDays, uid, fmtDur, fmtTimer, fmtClock, fmtMinOfDay, fmtDate, safeColor, parseYmd, pad, minOfDay, dayOffsetMin, dayEndTs, hmToMin } from '../util.js';
 import { ui, refresh } from '../bus.js';
 import { dayRing } from '../charts.js';
+import { makeSortable, reorderWithin } from '../drag.js';
 
 const COLORS = ['#E0B25A', '#F2793A', '#F26D63', '#EE5D8C', '#8B7CF6', '#6FB1F0', '#2BC4E0', '#56CFB2', '#5FCB8B', '#A3C94F', '#C9A27A', '#9AA0A8'];
 const viewDate = () => ui.trackDate || today();
 const h24 = () => S().settings.clock24;
-const minOf = ts => { const d = new Date(ts); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; };
+/** Minutes into the day a session belongs to. A late day runs past 1440. */
+const minOf = (ts, date) => minOfDay(ts, date);
+const dayLen = () => 1440 + dayOffsetMin();
 
 function tileHtml(a) {
   const t = today(), ms = E.actMsOn(a, t), run = a.isRunning;
-  return `<div class="tile ${run ? 'run' : ''}" data-id="${esc(a.id)}" style="--c:${safeColor(a.color)}">
+  return `<div class="tile ${run ? 'run' : ''}" data-id="${esc(a.id)}" data-flip="a-${esc(a.id)}" style="--c:${safeColor(a.color)}">
     <button class="tile-main" data-act="activity.toggle" data-id="${esc(a.id)}" aria-pressed="${run}" title="${run ? 'Stop' : 'Start'} ${esc(a.name)}">
       ${a.emoji ? `<span class="tile-e">${esc(a.emoji)}</span>` : ''}
       <span class="tile-n ell">${esc(a.name)}</span>
@@ -34,66 +37,24 @@ function tilesHtml() {
     const rate = Math.round(S().settings.xp.perHour * E.TIERS[k].mult * 10) / 10;
     return `<div class="tier"><div class="tier-h"><span class="eyebrow">${E.TIERS[k].label}</span><span class="tiny dim">${rate} XP per hour</span></div>
       <div class="tiles">${list.map(tileHtml).join('')}</div></div>`;
-  }).join('') + (acts.length > 1 ? '<div class="tiny dim" style="margin-top:12px">Drag a block to move it.</div>' : '');
+  }).join('') + (acts.length > 1 ? `<div class="tiny dim" style="margin-top:12px">${matchMedia('(hover: none)').matches ? 'Press and hold a block, then drag to move it.' : 'Drag a block to move it.'}</div>` : '');
 }
 
-/* ── drag to reorder (mouse + touch), no library ──
-   The tile moves through the grid as you drag, so what you see when you
-   let go is the order you get. A tile stays inside its own XP group. */
-let sort = null, sortPend = null, sortTimer = null, sortedAt = 0;
-function sortBegin(el) {
-  sort = { el, box: el.parentNode, moved: false };
-  el.classList.add('dragging'); sort.box.classList.add('sorting');
-}
-function sortMove(x, y) {
-  const over = (document.elementFromPoint(x, y) || document.body).closest('.tile');
-  if (!over || over === sort.el || over.parentNode !== sort.box) return;
-  const list = [...sort.box.children];
-  sort.box.insertBefore(sort.el, list.indexOf(sort.el) < list.indexOf(over) ? over.nextSibling : over);
-  sort.moved = true;
-}
-function sortEnd(commit) {
-  clearTimeout(sortTimer); sortPend = null;
-  const s = sort; sort = null;
-  if (!s) return;
-  s.el.classList.remove('dragging'); s.box.classList.remove('sorting');
-  sortedAt = Date.now();                                   // the click that ends a drag must not start a timer
-  if (!s.moved) return;
-  if (!commit || !document.contains(s.box)) { refresh(); return; }
-  const ids = [...s.box.querySelectorAll('.tile')].map(t => t.dataset.id);
-  const st = S(), moved = new Set(ids), byId = new Map(st.activities.map(a => [a.id, a]));
-  let i = 0;                                               // the group's slots in the full list are refilled in the new order
-  st.activities = st.activities.map(a => (moved.has(a.id) ? byId.get(ids[i++]) : a));
-  save();
-}
-window.addEventListener('mousemove', e => {
-  if (sort) { e.preventDefault(); sortMove(e.clientX, e.clientY); return; }
-  if (sortPend && Math.hypot(e.clientX - sortPend.x, e.clientY - sortPend.y) > 6) { sortBegin(sortPend.el); sortPend = null; }
-});
-window.addEventListener('mouseup', () => { sortPend = null; if (sort) sortEnd(true); });
+/* ── drag to reorder: a tile stays inside its own XP group ── */
 function wireSort(box) {
-  const tileAt = e => (e.target.closest('.tile-edit') ? null : e.target.closest('.tile'));
-  box.addEventListener('mousedown', e => { const el = e.button === 0 && tileAt(e); if (el) sortPend = { el, x: e.clientX, y: e.clientY }; });
-  box.addEventListener('touchstart', e => {
-    const el = e.touches.length === 1 && tileAt(e); if (!el) return;
-    const t = e.touches[0]; sortPend = { el, x: t.clientX, y: t.clientY };
-    clearTimeout(sortTimer);
-    sortTimer = setTimeout(() => { if (sortPend) { sortBegin(sortPend.el); sortPend = null; if (navigator.vibrate) navigator.vibrate(12); } }, 320);
-  }, { passive: true });
-  box.addEventListener('touchmove', e => {
-    const t = e.touches[0];
-    if (sort) { e.preventDefault(); sortMove(t.clientX, t.clientY); return; }
-    if (sortPend && Math.hypot(t.clientX - sortPend.x, t.clientY - sortPend.y) > 10) { sortPend = null; clearTimeout(sortTimer); }   // it was a scroll
-  }, { passive: false });
-  box.addEventListener('touchend', () => sortEnd(true));
-  box.addEventListener('touchcancel', () => sortEnd(false));
-  box.addEventListener('contextmenu', e => { if (sort) e.preventDefault(); });
-  box.addEventListener('click', e => { if (Date.now() - sortedAt < 350) { e.stopPropagation(); e.preventDefault(); } }, true);
+  makeSortable(box, {
+    item: '.tile', container: '.tiles', grid: true, ignore: '.tile-edit',
+    onDrop({ to }) {
+      const st = S();
+      st.activities = reorderWithin(st.activities, [...to.querySelectorAll('.tile')].map(t => t.dataset.id));
+      save();
+    }
+  });
 }
 
 function dayData(date) {
   const w = E.winMinutes(), rows = E.sessionsOn(date);
-  const spans = rows.map(({ s }) => [minOf(s.start), Math.min(1440, minOf(s.start) + s.dur / 60000)]).sort((a, b) => a[0] - b[0]);
+  const spans = rows.map(({ s }) => [minOf(s.start, date), Math.min(dayLen(), minOf(s.start, date) + s.dur / 60000)]).sort((a, b) => a[0] - b[0]);
   // largest untracked stretch inside the productive window: the honest number
   let cursor = w.start, biggest = 0, at = w.start;
   spans.forEach(([s0, s1]) => {
@@ -109,7 +70,7 @@ function dayData(date) {
 function ringHtmlFor(date) {
   const { w, rows, biggest, at } = dayData(date);
   const sessions = rows.map(({ a, s }) => {
-    const m0 = minOf(s.start), m1 = Math.min(1440, m0 + s.dur / 60000), tier = E.tierOf(a);
+    const m0 = minOf(s.start, date), m1 = Math.min(dayLen(), m0 + s.dur / 60000), tier = E.tierOf(a);
     return { startMin: m0, endMin: m1, color: a.color, opacity: tier === 'deep' ? 1 : tier === 'upkeep' ? 0.75 : 0.45,
       title: `${a.name} · ${fmtMinOfDay(m0, h24())}-${fmtMinOfDay(m1, h24())} · ${fmtDur(s.dur)}`, act: s.live ? '' : 'session.edit', id: a.id, start: s.start };
   });
@@ -146,14 +107,14 @@ function sessionsHtml(date) {
 /** Linear strip, one lane per tier, zoomed to the hours that matter. */
 function timelineHtml(date, rows) {
   const w = E.winMinutes();
-  const lo = Math.floor(Math.min(w.start, ...rows.map(r => minOf(r.s.start))) / 60) * 60;
-  const hi = Math.ceil(Math.max(w.end, ...rows.map(r => minOf(r.s.start) + r.s.dur / 60000)) / 60) * 60;
-  const span = Math.max(60, Math.min(1440, hi) - lo), pct = m => ((m - lo) / span * 100).toFixed(3);
+  const lo = Math.floor(Math.min(w.start, ...rows.map(r => minOf(r.s.start, date))) / 60) * 60;
+  const hi = Math.ceil(Math.max(w.end, ...rows.map(r => minOf(r.s.start, date) + r.s.dur / 60000)) / 60) * 60;
+  const span = Math.max(60, Math.min(dayLen(), hi) - lo), pct = m => ((m - lo) / span * 100).toFixed(3);
   let grid = '';
   const step = span > 14 * 60 ? 180 : span > 7 * 60 ? 120 : 60;
   for (let m = Math.ceil(lo / step) * step; m <= lo + span; m += step) grid += `<i style="left:${pct(m)}%"><span>${fmtMinOfDay(m, h24())}</span></i>`;
   const lane = k => `<div class="tl-lane"><span class="tl-l">${E.TIERS[k].label}</span><div class="tl-track">
-      ${rows.filter(r => E.tierOf(r.a) === k).map(({ a, s }) => { const m0 = minOf(s.start), m1 = Math.min(1440, m0 + s.dur / 60000);
+      ${rows.filter(r => E.tierOf(r.a) === k).map(({ a, s }) => { const m0 = minOf(s.start, date), m1 = Math.min(dayLen(), m0 + s.dur / 60000);
         return `<button class="tl-b" style="left:${pct(m0)}%;width:${Math.max(0.5, (m1 - m0) / span * 100).toFixed(3)}%;background:${safeColor(a.color)}"
           ${s.live ? '' : `data-act="session.edit" data-id="${esc(a.id)}" data-start="${s.start}"`} title="${esc(a.name)} · ${fmtMinOfDay(m0, h24())}-${fmtMinOfDay(m1, h24())} · ${fmtDur(s.dur)}">${m1 - m0 >= span / 22 ? esc(a.emoji || '') : ''}</button>`; }).join('')}
     </div></div>`;
@@ -210,13 +171,15 @@ function openSession(a, s) {
         <div class="field"><label>Start</label><input class="input" type="time" name="start" value="${s ? hm(s.start) : hm(now - 30 * 60000)}" required></div>
         <div class="field"><label>End</label><input class="input" type="time" name="end" value="${s ? hm(s.end) : hm(now)}" required></div>
         <div class="field"><label>Focus (1-5)</label><input class="input" type="number" name="eff" min="1" max="5" value="${s && s.eff != null ? Math.round(s.eff * 5) : ''}" placeholder="-"></div>
-      </div><div class="hint">If the end is earlier than the start, the session is taken to run past midnight and is cut at 24:00.</div>`,
+      </div><div class="hint">If the end is earlier than the start, the session is taken to run to the end of that day.${dayOffsetMin() ? ` Your days run until ${fmtMinOfDay(dayOffsetMin(), h24())}, so a time before that belongs to the night of the date you pick.` : ''}</div>`,
     onSubmit: d => {
       const target = st.activities.find(x => x.id === d.act);
       if (!target || !d.date || !d.start || !d.end) return false;
-      const start = new Date(`${d.date}T${d.start}:00`).getTime();
-      let end = new Date(`${d.date}T${d.end}:00`).getTime();
-      if (end <= start) end = parseYmd(addDays(d.date, 1)).getTime();
+      // on a late day, a time after midnight belongs to the night of the date picked
+      const at = hm => new Date(`${hmToMin(hm) < dayOffsetMin() ? addDays(d.date, 1) : d.date}T${hm}:00`).getTime();
+      const start = at(d.start);
+      let end = at(d.end);
+      if (end <= start) end = dayEndTs(d.date);
       end = Math.min(end, Date.now());
       if (end - start < E.MIN_SESSION_MS) { toast('That session is in the future or has no length', '', { kind: 'bad', ms: 4000 }); return false; }
       const overlap = E.sessionsOn(d.date, false).some(x => x.s !== s && start < x.s.end && end > x.s.start);
@@ -241,10 +204,12 @@ export default {
     return `<div class="view-h"><h2>Track</h2>
         <button class="btn sm ghost" data-act="session.new">${icon('clock')} Log time by hand</button>
         <button class="btn sm primary" data-act="activity.new">${icon('plus')} Activity</button></div>
-      ${run ? `<div class="run-bar" style="--c:${safeColor(run.color)}">${run.emoji ? `<span class="tile-e">${esc(run.emoji)}</span>` : ''}<div class="grow"><b>${esc(run.name)}</b>
-          <div class="tiny dim">started ${fmtClock(run.lastStart, h24())}${E.runningTaskName(run) ? ' · ' + esc(E.runningTaskName(run)) : ''}</div></div>
-          <b class="num run-t" data-live-run>${fmtTimer(Date.now() - run.lastStart)}</b>
-          <button class="btn primary" data-act="track.stop">${icon('stop')} Stop</button></div>` : ''}
+      ${run ? `<button class="run-bar" data-act="track.stop" style="--c:${safeColor(run.color)}" aria-label="Stop ${esc(run.name)}">
+          ${run.emoji ? `<span class="tile-e">${esc(run.emoji)}</span>` : ''}
+          <span class="run-main"><b class="run-n ell">${esc(run.name)}</b>
+            <span class="run-s ell">Started ${fmtClock(run.lastStart, h24())}${E.runningTaskName(run) ? ' · ' + esc(E.runningTaskName(run)) : ''}</span></span>
+          <span class="run-side"><b class="num run-t" data-live-run>${fmtTimer(Date.now() - run.lastStart)}</b>
+            <span class="run-hint">Press anywhere to stop</span></span></button>` : ''}
       <div class="track">
         <section class="card" id="track-tiles">${tilesHtml()}</section>
         <section class="card"><div class="card-h"><span class="eyebrow">${isToday ? 'Today' : fmtDate(date)} · 24 hours</span>

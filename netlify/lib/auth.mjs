@@ -48,6 +48,7 @@ export function db(cfg) {
   };
   return {
     select: path => call('GET', path),
+    insert: (path, body, prefer = 'return=minimal') => call('POST', path, body, { Prefer: prefer }),
     upsert: (path, body) => call('POST', path, body, { Prefer: 'resolution=merge-duplicates,return=minimal' }),
     patch: (path, body) => call('PATCH', path, body, { Prefer: 'return=minimal' }),
     remove: path => call('DELETE', path, undefined, { Prefer: 'return=minimal' })

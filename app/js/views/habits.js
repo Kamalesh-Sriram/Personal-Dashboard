@@ -5,6 +5,7 @@ import { registerActions, openModal, closeModal, confirmDialog, ringHtml } from 
 import { icon } from '../icons.js';
 import { esc, today, addDays, uid, fmtDate, safeColor, parseYmd, clamp } from '../util.js';
 import { ui, refresh } from '../bus.js';
+import { makeSortable, reorderWithin } from '../drag.js';
 
 const COLORS = ['#F0A44B', '#F26D63', '#EE5D8C', '#8B7CF6', '#6FB1F0', '#2BC4E0', '#56CFB2', '#5FCB8B', '#E0B25A', '#9AA0A8'];
 const WEEKS = 18;
@@ -69,7 +70,7 @@ function habitHtml(h, dueToday) {
   const gained = s.doneToday ? Math.round(diff.gain * s.bonus) : 0;
   const toNext = s.milestone ? s.milestone - s.streak : null;
   const openMap = ui.habOpen.has(h.id);
-  return `<article class="hab ${s.doneToday ? 'done' : ''} ${dueToday ? '' : 'off'}" style="--c:${safeColor(h.color)}">
+  return `<article class="hab ${s.doneToday ? 'done' : ''} ${dueToday ? '' : 'off'}" data-id="${esc(h.id)}" data-flip="h-${esc(h.id)}" style="--c:${safeColor(h.color)}">
     <button class="check lg ${s.doneToday ? 'on' : ''}" data-act="habit.toggle" data-id="${esc(h.id)}" ${dueToday ? '' : 'disabled title="Not due today"'} aria-pressed="${s.doneToday}" aria-label="${esc(h.name)}">${icon('check')}</button>
     <div class="hab-main">
       <div class="hab-n">${esc(E.label(h))}</div>
@@ -162,10 +163,24 @@ function openHabit(h) {
 
 export default {
   // the newest weeks are on the right: start there when the map has to scroll
-  mount(root) { root.querySelectorAll('.heat').forEach(el => { el.scrollLeft = el.scrollWidth; }); },
+  mount(root) {
+    root.querySelectorAll('.heat').forEach(el => { el.scrollLeft = el.scrollWidth; });
+    // drag a habit to reorder it inside its own section
+    const lists = root.querySelector('#hab-lists');
+    if (lists) makeSortable(lists, {
+      item: '.hab', container: '.habs',
+      onDrop({ to }) {
+        const st = S();
+        st.habits = reorderWithin(st.habits, [...to.querySelectorAll(':scope > .hab')].map(el => el.dataset.id));
+        save();
+      }
+    });
+  },
   render() {
     const st = S(), t = today();
     const due = st.habits.filter(h => E.isHabitDueOn(h, t)), off = st.habits.filter(h => !E.isHabitDueOn(h, t));
+    // a habit that has been ticked moves down to its own section, out of the way of what is left
+    const todo = due.filter(h => h.history[t] !== 'done'), done = due.filter(h => h.history[t] === 'done');
     if (!st.habits.length) return `<div class="view-h"><h2>Habits</h2></div>
       <div class="card empty" style="padding:48px 16px">No habits yet. Start with one or two you can actually keep.<br><button class="btn primary" data-act="habit.new">${icon('plus')} Add a habit</button></div>`;
     return `<div class="view-h"><h2>Habits</h2><button class="btn sm primary" data-act="habit.new">${icon('plus')} Habit</button></div>
@@ -173,8 +188,12 @@ export default {
       <section class="card" style="margin:var(--gap) 0"><div class="card-h"><span class="eyebrow">Habit map · all habits · last ${WEEKS} weeks</span>
         <span class="heat-legend tiny dim">none <i class="hc"></i><i class="hc" style="background:color-mix(in srgb, var(--accent) 45%, var(--card-3))"></i><i class="hc full" style="background:var(--accent)"></i> all · <i class="hc rest"></i> rest</span></div>
         ${overallMap()}</section>
-      <div class="habs">${due.map(h => habitHtml(h, true)).join('')}</div>
-      ${off.length ? `<div class="eyebrow" style="margin:22px 0 10px">Not due today</div><div class="habs">${off.map(h => habitHtml(h, false)).join('')}</div>` : ''}`;
+      <div id="hab-lists">
+        ${todo.length ? `<div class="habs">${todo.map(h => habitHtml(h, true)).join('')}</div>`
+          : due.length ? `<div class="card empty hab-clear">${icon('check')} Every habit due today is done.</div>` : ''}
+        ${done.length ? `<div class="eyebrow hab-sec">Done today · ${done.length}</div><div class="habs">${done.map(h => habitHtml(h, true)).join('')}</div>` : ''}
+        ${off.length ? `<div class="eyebrow hab-sec">Not due today</div><div class="habs">${off.map(h => habitHtml(h, false)).join('')}</div>` : ''}
+      </div>`;
   }
 };
 

@@ -48,7 +48,7 @@ export function applyTheme() {
   root.dataset.corners = s.corners;
   root.dataset.density = s.density;
   root.dataset.sidebar = s.sidebar;
-  root.dataset.motion = s.reduceMotion ? 'off' : 'on';
+  root.dataset.motion = s.reduceMotion ? 'off' : (s.motion || 'full');
 
   const accent = safeColor(s.accent, '#E0B25A');
   if (campaign) {                       // the stylesheet's campaign red must win

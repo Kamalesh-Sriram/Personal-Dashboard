@@ -9,10 +9,11 @@
                 advancing it, so an idle device can never out-rank the
                 one actually being used when two copies are merged.
    ══════════════════════════════════════════════════════════════════════ */
-import { today, uid, slug, deepClone } from './util.js';
+import { today, uid, slug, deepClone, setDayOffset, dayOffsetFor } from './util.js';
 import { mergeStates } from './merge.js';
+import { DEFAULT_CATS } from './fincalc.js';
 
-export const APP_VERSION = '5.0.1';
+export const APP_VERSION = '5.2.0';
 export const LS_KEY = 'hq.v5.state';
 const DEVICE_KEY = 'hq.v5.device';
 
@@ -51,7 +52,7 @@ export const DEFAULT_XP = {
   socialPerMin: 0.4, socialFreeMins: 20
 };
 
-export const ALL_TABS = ['home', 'board', 'track', 'habits', 'goals', 'calendar', 'subs', 'review'];
+export const ALL_TABS = ['home', 'board', 'track', 'habits', 'goals', 'calendar', 'gym', 'finance', 'subs', 'review'];
 
 export function defaultSettings() {
   return {
@@ -60,7 +61,10 @@ export function defaultSettings() {
     font: 'classic',           // classic | system | rounded | serif | mono
     corners: 'soft',            // soft | sharp
     density: 'comfortable',     // comfortable | compact
-    reduceMotion: false,
+    reduceMotion: false,        // from before 5.2: true still means motion off
+    motion: 'full',             // full | subtle | off
+    sound: { on: true, volume: 40 },
+    haptics: true,              // a short vibration on a tick, where the device has one
     bg: { on: false, dim: 60, blur: 0, glass: 78 },
     sidebar: 'rail',            // rail | hidden
     sidebarOpen: false,
@@ -100,6 +104,7 @@ export function defaultState() {
     activities: [],
     habits: [],
     goals: [],
+    finance: { cats: deepClone(DEFAULT_CATS), rules: [] },   // the transactions themselves are not in this document (see fin.js)
     subs: [],
     days: {},          // date -> { sleep:{start,end,hrs}, efficacy, emojis:[], rest, goals:[{t,done}], tasksArchived }
     journal: {},       // date -> { w, l, f, e, sm }
@@ -184,6 +189,9 @@ export function normalize(st) {
 
 /* ── the live document ── */
 let state = normalize(JSON.parse(lsGet(LS_KEY) || 'null'));
+/** The day's turnover follows the working hours (see util.js). */
+const syncClock = () => setDayOffset(dayOffsetFor(state.settings.window));
+syncClock();
 const listeners = new Set();
 
 export const S = () => state;
@@ -197,6 +205,7 @@ const emit = kind => listeners.forEach(fn => { try { fn(kind); } catch (e) { con
 const MARK_KEY = 'hq.v5.mark';
 let lastMark = lsGet(MARK_KEY);
 function persist() {
+  syncClock();
   const mark = lsGet(MARK_KEY);
   if (mark && mark !== lastMark) {
     try { const other = JSON.parse(lsGet(LS_KEY) || 'null'); if (other) state = normalize(mergeStates(state, other, DEVICE_ID)); } catch { /* unreadable: ours stands */ }
@@ -213,6 +222,7 @@ export function adoptFromStorage() {
     const other = JSON.parse(lsGet(LS_KEY) || 'null');
     if (!other) return false;
     state = normalize(other);
+    syncClock();
     lastMark = mark;
     emit('replace');
     return true;
@@ -236,7 +246,9 @@ export function replaceState(next, kind = 'replace') {
   emit(kind);
 }
 /** Test hook: point the store at an in-memory document. */
-export function _setStateForTests(next) { state = normalize(next); return state; }
+export function _setStateForTests(next) { state = normalize(next); syncClock(); return state; }
+/** For code that changes the working hours and needs the new day at once. */
+export const resyncClock = syncClock;
 
 /** Stamp an item so a merge can tell which copy was edited last. */
 export const touch = o => { if (o) o._m = Date.now(); return o; };

@@ -1,6 +1,6 @@
 {
   "name": "personal-dashboard",
-  "version": "5.0.1",
+  "version": "5.2.0",
   "description": "A private, self-hosted personal dashboard: tasks, time tracking, habits, goals and a rival built from your own track record.",
   "private": true,
   "type": "module",
@@ -11,6 +11,7 @@
     "test": "node --test",
     "icons": "node tools/make-icons.mjs",
     "vapid": "node tools/generate-vapid.mjs",
-    "demo": "node tools/demo-state.mjs > demo-backup.json"
+    "demo": "node tools/demo-state.mjs > demo-backup.json",
+    "samples": "node tools/sample-files.mjs"
   }
 }

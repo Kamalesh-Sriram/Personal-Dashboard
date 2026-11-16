@@ -14,9 +14,11 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 - **Board.** A kanban board. Tasks carry a tag, estimate, deadline, notes and steps, and can be duplicated. A task's tag decides which activity its time is logged under.
 - **Track.** Activity timers, a 24-hour ring of your day, a timeline, and editable sessions.
 - **Habits.** Streaks and XP levels in plain sight, a clean-sweep chain for doing all of them, and habit maps.
-- **Goals, Calendar, Subscriptions, Review.** Milestones, a month view, recurring payments, and the week in numbers with a journal.
+- **Goals, Calendar, Subscriptions, Review.** Milestones with time tracking, a month view, recurring payments, and the week in numbers with a journal.
+- **Gym.** Progress per exercise and a suggestion for your next session, from Hevy or an export file.
+- **Finance.** Spending by category, month and year, from statement files of any bank or a read-only bank link.
 - **A game layer you can rename or switch off.** A rival that adapts to your last week, missions and execution, rank and reputation, rest days, and fixed-length campaigns with their own red theme.
-- **Yours to shape.** Light, dark or system theme, any accent colour, five typefaces, your own background image, renameable labels, editable notification wording, reorderable tabs.
+- **Yours to shape.** Light, dark or system theme, any accent colour, five typefaces, your own background image, renameable labels, editable notification wording, reorderable tabs, motion and sound you can turn down or off.
 
 | Board | Track |
 |---|---|

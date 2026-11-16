@@ -10,7 +10,7 @@
    numbers cannot drift between devices because there is nothing to drift.
    ══════════════════════════════════════════════════════════════════════ */
 import { S, save, saveQuiet, touch, tombstone, onChange } from './store.js';
-import { today, ymd, addDays, parseYmd, daysBetween, clamp, avg, hmToMin, uid, slug } from './util.js';
+import { today, ymd, addDays, parseYmd, daysBetween, clamp, avg, hmToMin, uid, slug, dateOf, dayStartTs, dayEndTs, minOfDay, clockToDayMin } from './util.js';
 
 /* ── constants ── */
 export const TIERS = {
@@ -69,10 +69,11 @@ export function winMinutes() {
   const w = S().settings.window;
   const start = hmToMin(w.start);
   let end = hmToMin(w.end);
-  if (end <= start) end = 24 * 60;
+  // an end before the start means the next morning: 07:00 to 01:00 is a 18-hour window ending at minute 1500
+  if (end <= start) end = end > 0 && end < start ? end + 24 * 60 : 24 * 60;
   return { start, end, total: end - start };
 }
-export function nowMinutes() { const d = new Date(); return d.getHours() * 60 + d.getMinutes() + d.getSeconds() / 60; }
+export function nowMinutes() { return minOfDay(Date.now(), today()); }
 
 /** Name with the owner's own icon in front, if they gave it one. */
 export const label = x => (x ? (x.emoji ? x.emoji + ' ' : '') + x.name : '');
@@ -89,7 +90,7 @@ export function sessionsOn(date, includeRunning = true) {
   if (includeRunning && date === today()) {
     const a = runningActivity();
     if (a) {
-      const start = Math.max(a.lastStart, parseYmd(date).getTime());
+      const start = Math.max(a.lastStart, dayStartTs(date));
       const dur = clamp(Date.now() - start, 0, MAX_RUN_MS);
       out.push({ a, s: { date, start, end: start + dur, dur, eff: null, live: true, cardId: a.runCardId || null, taskId: a.runTaskId || null } });
     }
@@ -156,8 +157,7 @@ export function efficiencyOn(date) {
 export function ttfbFor(date) {
   const starts = sessionsOn(date).filter(({ a }) => isDeep(a)).map(({ s }) => s.start);
   if (!starts.length) return null;
-  const first = new Date(Math.min(...starts));
-  return Math.max(0, Math.round(first.getHours() * 60 + first.getMinutes() - winMinutes().start));
+  return Math.max(0, Math.round(minOfDay(Math.min(...starts), date) - winMinutes().start));
 }
 
 /** Walk a day's sessions and work out the combo chain each one sat in.
@@ -182,15 +182,14 @@ export function comboWalk(date) {
 
 /* ══════════════════════ ACTIVITY TIMERS ══════════════════════ */
 
-/** Record [start, end) against an activity, split at midnight so each
- *  calendar day owns only its own time. */
+/** Record [start, end) against an activity, split where one day turns into
+ *  the next so each day owns only its own time. */
 function recordSpan(a, start, end, extra = {}) {
   if (!a.sessions) a.sessions = [];
   let kept = false, s = start;
   while (s < end) {
-    const dayEnd = new Date(s); dayEnd.setHours(24, 0, 0, 0);
-    const e = Math.min(end, dayEnd.getTime());
-    if (e - s >= MIN_SESSION_MS) { a.sessions.push({ date: ymd(new Date(s)), start: s, end: e, dur: e - s, eff: null, ...extra }); kept = true; }
+    const date = dateOf(s), e = Math.min(end, Math.max(s + 1, dayEndTs(date)));
+    if (e - s >= MIN_SESSION_MS) { a.sessions.push({ date, start: s, end: e, dur: e - s, eff: null, ...extra }); kept = true; }
     s = e;
   }
   return kept;
@@ -232,10 +231,9 @@ export function closeStaleTimers() {
   let changed = false;
   S().activities.forEach(a => {
     if (!a.isRunning || !a.lastStart) return;
-    const startDay = ymd(new Date(a.lastStart));
+    const startDay = dateOf(a.lastStart);
     if (startDay === today() && Date.now() - a.lastStart <= MAX_RUN_MS) return;
-    const endOfStartDay = new Date(a.lastStart); endOfStartDay.setHours(23, 59, 59, 999);
-    stopOne(a, Math.min(Date.now(), endOfStartDay.getTime()));
+    stopOne(a, Math.min(Date.now(), dayEndTs(startDay) - 1));
     changed = true;
   });
   if (changed) { invalidate(); save(); }
@@ -254,9 +252,12 @@ export function focusActivity(create = false) {
   }
   return a;
 }
-/** A task's tag decides which activity its time is logged under. */
+/** Where a task's time is logged: the activity set on the task itself,
+ *  else the one its tag is linked to, else its goal's, else the default. */
 export function activityForCard(card, create = false) {
   const st = S();
+  const own = card && card.activityId && st.activities.find(x => x.id === card.activityId);
+  if (own) return own;
   const tag = card && st.tags.find(t => t.id === card.tagId);
   if (tag) { const a = st.activities.find(x => x.id === tag.activityId); if (a) return a; }
   const from = card && card.goalTask ? findGoalTask(card.goalTask) : null;     // sent over from a goal
@@ -427,7 +428,7 @@ export function toggleHabit(id, date = today()) {
 }
 
 /** Fill in every due day that passed without a check-off. */
-export function processHabitMisses() {
+export function processHabitMisses() {   // "today" is the working day, which can run past midnight
   const st = S(), t = today();
   let d = st.lastActiveDay || t, changed = false, guard = 0;
   while (d < t && guard++ < 800) {
@@ -658,6 +659,51 @@ export function scoreboard() {
     return { rep, peak, w, l, r, streak };
   });
 }
+/** One calendar month of verdicts. The record you play for starts again on
+ *  the 1st, so a bad stretch is never more than a few weeks from a clean
+ *  slate, and "win the month" is always a number of days you can count.
+ *
+ *  Each day is W, L, R (rest), T (today, still open), '' (still to come)
+ *  or '-' (before the scoreboard started). */
+export function monthBoard(month = today().slice(0, 7)) {
+  return memo('month:' + month + ':' + today(), () => {
+    const g = S().game, t = today(), [y, mo] = month.split('-').map(Number);
+    const daysIn = new Date(y, mo, 0).getDate(), days = [];
+    let w = 0, l = 0, r = 0, open = 0;
+    for (let d = 1; d <= daysIn; d++) {
+      const date = `${month}-${String(d).padStart(2, '0')}`, s = g.days[date];
+      let v = '-';
+      if (s) v = s.v;
+      else if (date > t) v = '';
+      else if (isRest(date)) v = 'R';
+      else if (date === t) v = 'T';
+      if (v === 'W') w++; else if (v === 'L') l++; else if (v === 'R') r++; else if (v === 'T' || v === '') open++;
+      days.push({ date, v });
+    }
+    // more wins than losses once every open day is played
+    const need = Math.floor((w + l + open) / 2) + 1 - w;
+    return { month, days, w, l, r, open, need: Math.max(0, need), secured: need <= 0 && w > 0, outOfReach: need > open,
+             over: open === 0, result: w > l ? 'won' : w < l ? 'lost' : 'level' };
+  });
+}
+
+/** When the morning brief and the night debrief happen, in minutes of the
+ *  day. Left unset they follow the window: the brief as it opens, the
+ *  debrief half an hour before it closes. */
+export const briefMin = () => { const v = S().settings.notify.briefAt; return v ? clockToDayMin(v) : winMinutes().start; };
+export const debriefMin = () => { const v = S().settings.notify.debriefAt; return v ? clockToDayMin(v) : Math.max(0, winMinutes().end - 30); };
+
+/** The working hours changed and "today" moved back onto a day that had
+ *  already been closed (switching to late hours after midnight). Open it
+ *  again: drop its verdict and the misses that were written at midnight. */
+export function reopenDay(date) {
+  const st = S();
+  delete st.game.days[date];
+  st.habits.forEach(h => { if (h.history[date] === 'missed') { delete h.history[date]; touch(h); } });
+  st.lastActiveDay = date;
+  invalidate(); save();
+}
+
 export function rankFor(rep) {
   const ranks = [...S().settings.ranks].sort((a, b) => a.at - b.at);
   let cur = ranks[0], next = null;
@@ -879,7 +925,7 @@ export const VOICE_KINDS = [
   ['ahead', 'You are ahead of pace', 'Shown on Home while you lead.'],
   ['nomission', 'No mission declared', 'Sent three hours into the window if nothing was declared.'],
   ['morning', 'Morning brief', 'Shown at the top of the brief.'],
-  ['night', 'Debrief reminder', 'Sent thirty minutes before the window closes.'],
+  ['night', 'Debrief reminder', 'Sent at your debrief time.'],
   ['habits', 'Habits still open', 'Sent at the reminder time. {n} becomes the number left.'],
   ['escape', 'A break is requested early', 'Shown in the break challenge during a campaign.'],
   ['pb', 'A record is broken', 'Added to the new-record notification.'],

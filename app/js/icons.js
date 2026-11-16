@@ -48,7 +48,10 @@ const P = {
   note: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
   gauge: '<path d="M4 17a8.5 8.5 0 1 1 16 0"/><path d="m12 14 4-5"/>',
   snow: '<path d="M12 2v20M4 6l16 12M20 6 4 18"/>',
-  grip: '<path d="M9 6h0M15 6h0M9 12h0M15 12h0M9 18h0M15 18h0"/>'
+  grip: '<path d="M9 6h0M15 6h0M9 12h0M15 12h0M9 18h0M15 18h0"/>',
+  gym: '<path d="M6.5 6.5v11M3.5 9v6M17.5 6.5v11M20.5 9v6M6.5 12h11"/>',
+  wallet: '<path d="M4 7.5h14.5A1.5 1.5 0 0 1 20 9v9a1.5 1.5 0 0 1-1.5 1.5H5.5A1.5 1.5 0 0 1 4 18V6a1.5 1.5 0 0 1 1.5-1.5H16M16 13.5h.5"/>',
+  link: '<path d="M10 14a4 4 0 0 0 5.7 0l3-3a4 4 0 0 0-5.7-5.7l-1 1M14 10a4 4 0 0 0-5.7 0l-3 3a4 4 0 0 0 5.7 5.7l1-1"/>'
 };
 export function icon(name, cls = '') {
   return `<svg class="${cls}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${P[name] || ''}</svg>`;

@@ -106,7 +106,64 @@ create policy "queue: owner enqueues"  on public.push_queue for insert to authen
 create policy "queue: owner replans"   on public.push_queue for update to authenticated using (auth.uid() = user_id and sent_at is null) with check (auth.uid() = user_id);
 create policy "queue: owner withdraws" on public.push_queue for delete to authenticated using (auth.uid() = user_id and sent_at is null);
 
+-- ── finance: your transactions (optional; only for the Finance tab) ───
+-- One row per transaction, readable and writable only by its owner. Rows
+-- arrive from statement files you import and, if you link a bank, from the
+-- site's own bank function.
+create table if not exists public.transactions (
+  user_id    uuid not null default auth.uid() references auth.users (id) on delete cascade,
+  id         text not null,                    -- a hash of the content, so importing twice adds nothing
+  booked     date not null,
+  amount     numeric(14, 2) not null,          -- money out is negative
+  currency   text not null default 'EUR',
+  name       text not null default '',
+  memo       text not null default '',
+  account    text not null default '',
+  category   text not null default '',
+  manual     boolean not null default false,   -- true once you chose the category yourself
+  source     text not null default 'file',     -- file | bank
+  updated_at timestamptz not null default now(),
+  primary key (user_id, id),
+  constraint transactions_id_len   check (char_length(id) <= 80),
+  constraint transactions_name_len check (char_length(name) <= 200),
+  constraint transactions_memo_len check (char_length(memo) <= 500)
+);
+create index if not exists transactions_user_updated_idx on public.transactions (user_id, updated_at);
+
+alter table public.transactions enable row level security;
+
+drop policy if exists "transactions: owner reads"   on public.transactions;
+drop policy if exists "transactions: owner inserts" on public.transactions;
+drop policy if exists "transactions: owner updates" on public.transactions;
+drop policy if exists "transactions: owner deletes" on public.transactions;
+
+create policy "transactions: owner reads"   on public.transactions for select to authenticated using (auth.uid() = user_id);
+create policy "transactions: owner inserts" on public.transactions for insert to authenticated with check (auth.uid() = user_id);
+create policy "transactions: owner updates" on public.transactions for update to authenticated using (auth.uid() = user_id) with check (auth.uid() = user_id);
+create policy "transactions: owner deletes" on public.transactions for delete to authenticated using (auth.uid() = user_id);
+
+-- ── finance: linked banks ─────────────────────────────────────────────
+-- A row here holds a read-only session with your bank. Like the push
+-- subscriptions, the browser gets NO access: RLS is on with no policies,
+-- and only the site's own bank function (service role) touches it.
+create table if not exists public.bank_links (
+  id          uuid primary key default gen_random_uuid(),
+  user_id     uuid not null references auth.users (id) on delete cascade,
+  aspsp       text not null,                   -- the bank's name
+  country     text not null,
+  status      text not null default 'pending', -- pending | active | expired
+  state       text,                            -- one-time value that ties the bank's answer to this attempt
+  session_id  text,
+  accounts    jsonb not null default '[]'::jsonb,
+  valid_until timestamptz,
+  last_sync   timestamptz,
+  last_error  text,
+  created_at  timestamptz not null default now()
+);
+create index if not exists bank_links_user_idx on public.bank_links (user_id);
+alter table public.bank_links enable row level security;
+
 -- ── nothing for visitors who are not signed in ────────────────────────
-revoke all on public.dashboards, public.push_subscriptions, public.push_queue from anon;
-grant select, insert, update, delete on public.dashboards, public.push_queue to authenticated;
-revoke all on public.push_subscriptions from authenticated;
+revoke all on public.dashboards, public.push_subscriptions, public.push_queue, public.transactions, public.bank_links from anon;
+grant select, insert, update, delete on public.dashboards, public.push_queue, public.transactions to authenticated;
+revoke all on public.push_subscriptions, public.bank_links from authenticated;

@@ -23,7 +23,7 @@
 import { S, save, saveQuiet, onChange, DEVICE_ID } from './store.js';
 import * as E from './engine.js';
 import { toast, runAction, modalOpen } from './ui.js';
-import { today, debounce, ymd } from './util.js';
+import { today, debounce, ymd, parseYmd, dateOf, minOfDay, clockToDayMin } from './util.js';
 import * as Sync from './sync.js';
 
 const hasNotif = typeof Notification !== 'undefined';
@@ -90,9 +90,12 @@ export function nudgeTick() {
   }
 
   if (st.settings.modules.mission && !rest) {
-    if (cfg.brief && inWindow && n.brief !== t && nowMin <= w.start + 120 && !modalOpen()) { n.brief = t; dirty = true; runAction('brief.open'); }
-    if (cfg.brief && inWindow && !E.hasMission(t) && n.nomission !== t && nowMin >= w.start + 180) { n.nomission = t; dirty = true; notify('No mission yet', E.voice('nomission') || 'Set one so the day has a target.', { tag: 'hq-mission' }); }
-    if (cfg.debrief && nowMin >= w.end - 30 && n.debrief !== t && !modalOpen()) { n.debrief = t; dirty = true; notify('Time to close the day', E.voice('night') || 'Write up the day and plan tomorrow.', { tag: 'hq-debrief' }); runAction('debrief.open'); }
+    // The brief opens the first time the app is on screen within two hours of its
+    // time; later than that it would interrupt the work it was meant to start.
+    const bAt = E.briefMin(), dAt = E.debriefMin();
+    if (cfg.brief && n.brief !== t && nowMin >= bAt && nowMin <= bAt + 120 && nowMin < dAt && !modalOpen()) { n.brief = t; dirty = true; runAction('brief.open'); }
+    if (cfg.brief && !E.hasMission(t) && n.nomission !== t && nowMin >= bAt + 180 && nowMin < dAt) { n.nomission = t; dirty = true; notify('No mission yet', E.voice('nomission') || 'Set one so the day has a target.', { tag: 'hq-mission' }); }
+    if (cfg.debrief && nowMin >= dAt && n.debrief !== t && !modalOpen()) { n.debrief = t; dirty = true; notify('Time to close the day', E.voice('night') || 'Write up the day and plan tomorrow.', { tag: 'hq-debrief' }); runAction('debrief.open'); }
   }
   // A payment leaving tomorrow, said once, at 10:00 or the first time the app is open after that.
   if (cfg.subs && nowMin >= 10 * 60) {
@@ -107,7 +110,7 @@ export function nudgeTick() {
   }
   if (dirty) saveQuiet();
 }
-const hm = s => { const [h, m] = String(s || '20:00').split(':').map(Number); return h * 60 + (m || 0); };
+const hm = s => clockToDayMin(s || '20:00');
 
 /* ══════════════════════ WEB PUSH ══════════════════════ */
 function keyBytes(b64) {
@@ -182,7 +185,8 @@ function pinned(v) {
   } catch { /* ignore */ }
   return null;
 }
-const atMin = mins => { const d = new Date(); d.setHours(0, Math.round(mins), 0, 0); return d.toISOString(); };
+// minutes are counted from the midnight that opened the working day, so 1470 is 00:30 the next morning
+const atMin = mins => { const d = parseYmd(today()); d.setMinutes(Math.round(mins)); return d.toISOString(); };
 
 function buildPlan() {
   const st = S(), g = st.game, cfg = st.settings.notify, name = st.settings.labels.shadow;
@@ -201,8 +205,8 @@ function buildPlan() {
       for (let k = 1, n = 0; k <= 40 && n < 8; k++) {
         const when = new Date(base + k * step);
         if (when <= now) continue;
-        const m = when.getHours() * 60 + when.getMinutes();
-        if (ymd(when) !== t || m > w.end) break;
+        const m = minOfDay(when.getTime(), t);
+        if (dateOf(when.getTime()) !== t || m > w.end) break;
         if (m < w.start) continue;
         // keyed by the minute it is due, so a sent row is never reused
         add({ dedupe_key: `idle:${t}:${m}`, send_at: when.toISOString(), title: name, body: E.voice('idle') || 'Nothing is running right now.', tag: 'hq-idle' });
@@ -218,8 +222,10 @@ function buildPlan() {
       }
     }
     if (st.settings.modules.mission) {
-      if (cfg.brief && !E.hasMission(t) && nowMin < w.start + 180) add({ dedupe_key: `nomission:${t}`, send_at: atMin(w.start + 180), title: 'No mission yet', body: E.voice('nomission') || 'Set one so the day has a target.', tag: 'hq-mission' });
-      if (cfg.debrief && nowMin < w.end - 30 && g.notif.debrief !== t) add({ dedupe_key: `debrief:${t}`, send_at: atMin(w.end - 30), title: 'Time to close the day', body: E.voice('night') || 'Write up the day and plan tomorrow.', tag: 'hq-debrief' });
+      const bAt = E.briefMin(), dAt = E.debriefMin();
+      if (cfg.brief && !E.hasMission(t) && g.notif.brief !== t && nowMin < bAt) add({ dedupe_key: `brief:${t}`, send_at: atMin(bAt), title: 'Morning brief', body: E.voice('morning') || "Set today's mission.", tag: 'hq-mission' });
+      if (cfg.brief && !E.hasMission(t) && nowMin < bAt + 180 && bAt + 180 < dAt) add({ dedupe_key: `nomission:${t}`, send_at: atMin(bAt + 180), title: 'No mission yet', body: E.voice('nomission') || 'Set one so the day has a target.', tag: 'hq-mission' });
+      if (cfg.debrief && nowMin < dAt && g.notif.debrief !== t) add({ dedupe_key: `debrief:${t}`, send_at: atMin(dAt), title: 'Time to close the day', body: E.voice('night') || 'Write up the day and plan tomorrow.', tag: 'hq-debrief' });
     }
     if (cfg.habits && nowMin < hm(cfg.habitsAt)) {
       const open = E.habitsDue(t).filter(h => h.history[t] !== 'done').length;
@@ -239,7 +245,7 @@ function buildPlan() {
   }
   if (cfg.timer) {
     if (running) {
-      const end = new Date(); end.setHours(0, w.end, 0, 0);
+      const end = parseYmd(t); end.setMinutes(w.end);
       // The task if there is one, otherwise the activity. The function that
       // sends it adds how long it has been running, since only it knows the time.
       const task = E.runningTaskName(running);

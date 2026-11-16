@@ -7,7 +7,9 @@ import { icon } from '../icons.js';
 import { esc, today, addDays, fmtDur, fmtMins, fmtDate, fmtTimer, clamp, uid, safeColor, daysBetween } from '../util.js';
 import { ui, refresh } from '../bus.js';
 import { duelDial } from '../charts.js';
-import { L, objectiveRows } from '../flows.js';
+import { L, objectiveRows, monthHtml } from '../flows.js';
+import { makeSortable } from '../drag.js';
+import * as fx from '../fx.js';
 
 const tone = (ok, warn) => (ok ? 'good' : warn ? 'warn' : 'bad');
 
@@ -15,7 +17,7 @@ const tone = (ok, warn) => (ok ? 'good' : warn ? 'warn' : 'bad');
 function goalsHtml() {
   const t = today(), cur = E.dayGoals(t), prev = E.prevDayGoals(t), x = S().settings.xp;
   const written = cur.filter(g => g && g.t).length;
-  const n = Math.max(3, written + 1, prev.length);          // always one empty line to add another
+  const n = Math.max(3, written + 1, prev.length, ui.dgRows || 0);   // always one empty line, and more on request
   let rows = '';
   for (let i = 0; i < n; i++) {
     const g = cur[i] || { t: '' }, ghost = prev[i] ? prev[i].t : '';
@@ -23,7 +25,8 @@ function goalsHtml() {
   }
   const earned = E.goalXP(t);
   return `<div class="card-h"><span class="eyebrow">Main goals</span>
-      <span class="pill ${earned ? 'good' : ''}" title="Writing your goals out each day earns ${x.goal} XP each, for up to ${x.goalCap} goals.">${earned ? `+${earned} XP` : `+${x.goal} XP each`}</span></div>
+      <span class="pill ${earned ? 'good' : ''}" title="Writing your goals out each day earns ${x.goal} XP each, for up to ${x.goalCap} goals.">${earned ? `+${earned} XP` : `+${x.goal} XP each`}</span>
+      <button class="btn sm ghost" data-act="home.goalAdd" data-n="${n}" title="Add another goal">${icon('plus')} Add goal</button></div>
     <div class="dgs">${rows}</div>`;
 }
 
@@ -31,7 +34,7 @@ function goalsHtml() {
 function duelHtml() {
   const st = S(), t = today(), rest = E.isRest(t), show = st.settings.modules.shadow, name = esc(L().shadow);
   const sc = E.dayScore(t), him = E.shadowXP(t), pace = E.shadowPaceNow(), w = E.winMinutes();
-  const gap = sc.total - pace, sb = E.scoreboard(), c = sc.combo;
+  const gap = sc.total - pace;
   const sub = rest ? 'rest day' : show ? `${him} to beat` : '';
   const line = rest ? E.voice('rest') : E.voice(sc.total === 0 ? 'idle' : gap >= 0 ? 'ahead' : 'behind');
   const tier = rest ? 'rest' : sc.total === 0 ? 'idle' : gap >= 0 ? 'ahead' : 'behind';
@@ -42,11 +45,14 @@ function duelHtml() {
     <div class="dial-wrap">${duelDial({ you: sc.total, shadow: him, pace, dayFrac: (E.nowMinutes() - w.start) / w.total, showShadow: show, rest, sub })}</div>
     ${rest ? `<div class="pace tone-info">It's a rest day. Nothing is scored.</div>`
       : show ? `<div class="pace tone-${gap >= 0 ? 'good' : 'bad'}">${standing}</div><div class="small muted" style="text-align:center">${his}</div>` : ''}
-    ${show && duelHtml.line ? `<blockquote class="quote">${esc(duelHtml.line)}<cite>${name}</cite></blockquote>` : ''}
-    <div class="mini-stats">
-      ${show ? `<div><b class="num">${sb.w}</b><span>Days won</span></div><div><b class="num">${sb.l}</b><span>Days lost</span></div><div><b class="num">${sb.streak}</b><span>Win streak</span></div>` : ''}
-      <div title="Working in back-to-back blocks multiplies your XP. A gap of more than 10 minutes, or a break, resets it."><b class="num ${c.mult > 1 ? 'tone-good' : ''}">${c.mult.toFixed(1)}×</b><span>${c.chain > 1 ? c.chain + ' blocks in a row' : 'Combo'}</span></div>
-    </div>`;
+    ${show && duelHtml.line ? `<blockquote class="quote">${esc(duelHtml.line)}<cite>${name}</cite></blockquote>` : ''}`;
+}
+/** Streak and combo. Kept apart from the month's record above it, which is
+ *  a button and must not be redrawn every second under the pointer. */
+function statsHtml() {
+  const show = S().settings.modules.shadow, sb = E.scoreboard(), c = E.dayScore(today()).combo;
+  return `${show ? `<div><b class="num">${sb.streak}</b><span>Win streak</span></div>` : ''}
+      <div title="Working in back-to-back blocks multiplies your XP. A gap of more than 10 minutes, or a break, resets it."><b class="num ${c.mult > 1 ? 'tone-good' : ''}">${c.mult.toFixed(1)}×</b><span>${c.chain > 1 ? c.chain + ' blocks in a row' : 'Combo'}</span></div>`;
 }
 
 /* ── mission + lock in ── */
@@ -71,7 +77,7 @@ function lockHtml() {
   const rows = cards.slice(0, TOP_TASKS).map(c => {
     const tag = st.tags.find(x => x.id === c.tagId), isSel = sel && sel.id === c.id;
     const live = running && running.runCardId === c.id;
-    return `<div class="task ${tag ? 'tagged' : ''} ${isSel ? 'sel' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-act="home.select" data-id="${esc(c.id)}" role="button" tabindex="0" aria-pressed="${isSel}">
+    return `<div class="task ${tag ? 'tagged' : ''} ${isSel ? 'sel' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-act="home.select" data-id="${esc(c.id)}" data-flip="c-${esc(c.id)}" role="button" tabindex="0" aria-pressed="${isSel}">
       <button class="check" data-act="card.complete" data-id="${esc(c.id)}" title="Mark as done" aria-label="Mark as done">${icon('check')}</button>
       <div class="grow"><div class="task-t">${esc(c.text)}</div>
         <div class="task-m">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}
@@ -116,6 +122,11 @@ function hudHtml() {
   const ex = E.execScoreFor(t), e7 = E.exec7(), tt = E.ttfbFor(t), avgT = E.serviceRecord().ttfbAvg;
   const due = E.habitsDue(t), left = due.filter(h => h.history[t] !== 'done').length, sw = E.sweepStatus(), rest = E.isRest(t);
   const cells = [];
+  // how much of the working day you set is left, as time and as a share
+  const w = E.winMinutes(), now = E.nowMinutes(), leftMin = clamp(w.end - Math.max(now, w.start), 0, w.total), pct = Math.round(leftMin / w.total * 100);
+  cells.push(`<div class="hud-cell wide"><span class="eyebrow">Day left</span><b class="num">${fmtMins(Math.floor(leftMin))}<small>${pct}%</small></b>
+    <div class="bar thin"><i style="width:${pct}%"></i></div>
+    <span>${now < w.start ? `Your day starts in ${fmtMins(Math.ceil(w.start - now))}` : now >= w.end ? 'Your day is closed' : `of the ${fmtMins(w.total)} you set`}</span></div>`);
   // habits are a count here; the list lives on its own tab
   cells.push(`<button class="hud-cell" data-act="nav.go" data-tab="habits"><span class="eyebrow">Habits</span>
     <b class="num ${!due.length || rest ? 'tone-mute' : left ? '' : 'tone-good'}">${!due.length ? 'None due' : rest ? 'Rest day' : left ? left + ' left' : 'All done'}</b>
@@ -169,6 +180,8 @@ export default {
           <button class="btn sm ${rest ? 'primary' : 'ghost'}" data-act="rest.toggle" title="A rest day is not scored. You have ${b.left} of ${b.allowed} left this week.">${icon('moon')} ${rest ? 'Rest day on' : 'Rest day'}</button>
           ${st.settings.modules.shadow ? `<button class="icon-btn sm" data-act="home.shadowInfo" title="Today's numbers" aria-label="Today's numbers">${icon('help')}</button>` : ''}</div>
         <div id="home-duel">${duelHtml()}</div>
+        ${st.settings.modules.shadow ? monthHtml(t.slice(0, 7), { link: true }) : ''}
+        <div class="mini-stats" id="home-stats">${statsHtml()}</div>
       </section>
       <section class="card home-main" aria-label="Mission and tasks">${missionHtml()}<div id="home-lock">${lockHtml()}</div></section>
       <section class="hud" id="home-hud" aria-label="Standing">${hudHtml()}</section>
@@ -180,6 +193,12 @@ export default {
     </div>`;
   },
   mount(root) {
+    if (ui.dgFocus != null) { const el = root.querySelector(`.dg[data-i="${ui.dgFocus}"]`); ui.dgFocus = null; if (el) el.focus(); }
+    const tasks = root.querySelector('.tasks');
+    if (tasks) makeSortable(tasks, {
+      item: '.task', container: '.tasks',
+      onDrop({ el, index }) { E.moveCard(el.dataset.id, 'today', index); }
+    });
     const f = root.querySelector('[data-quickadd]');
     if (f) f.addEventListener('submit', e => {
       e.preventDefault();
@@ -191,8 +210,11 @@ export default {
     });
   },
   tick(root) {
+    // while Home is still opening, the dial is left alone so its fill can finish
     const duel = root.querySelector('#home-duel');
-    if (duel) duel.innerHTML = duelHtml();
+    if (duel && !root.classList.contains('entering')) duel.innerHTML = duelHtml();
+    const stats = root.querySelector('#home-stats');
+    if (stats) stats.innerHTML = statsHtml();
     const run = root.querySelector('#home-run'), a = E.runningActivity();
     if (run && a) run.textContent = fmtTimer(Date.now() - a.lastStart);
     if (new Date().getSeconds() % 15 === 0) { const hud = root.querySelector('#home-hud'); if (hud) hud.innerHTML = hudHtml(); }
@@ -202,12 +224,20 @@ export default {
 registerActions({
   'home.select': (d, e) => { if (e && e.target.closest('button')) return; ui.selCard = d.id; refresh(); },
   'home.goal': (d, e, el) => E.setDayGoal(today(), +d.i, { t: el.value.trim() }),
+  // Open one more line and put the cursor in it. If a line is already empty, use that one.
+  'home.goalAdd': d => {
+    const empty = [...document.querySelectorAll('.dgs .dg')].find(el => !el.value.trim());
+    if (empty) { empty.focus(); return; }
+    ui.dgRows = +d.n + 1; ui.dgFocus = +d.n; refresh();
+  },
   'home.rate': () => { ui.sessView = 'list'; location.hash = '#/track'; },
   'habit.toggle': (d, e, el) => {
     const gain = E.toggleHabit(d.id, d.date || today());
+    if (!d.date) ui.flipHold = 280;                        // let the tick finish drawing before the row slides to its new section
+    if (gain > 0 && el) fx.float(el, `+${gain} XP`);
     if (gain > 0 && (!d.date || d.date === today())) {
       const sw = E.sweepStatus();
-      if (sw.done && E.habitsDue(today()).length > 1) toast('Every habit done', `That's a ${sw.chain}-day sweep. You earned an extra ${sw.bonus} XP.`, { kind: 'good', ms: 5000 });
+      if (sw.done && E.habitsDue(today()).length > 1) toast('Every habit done', `That's a ${sw.chain}-day sweep. You earned an extra ${sw.bonus} XP.`, { kind: 'good', ms: 5000, sound: 'win' });
     }
     void el;
   },

@@ -127,6 +127,8 @@ export function mergeStates(local, remote, deviceId = '') {
   out.habits = mergeById(p.habits, s.habits, tomb, mergeHabit);
   out.goals = mergeById(p.goals, s.goals, tomb);
   out.subs = mergeById(p.subs, s.subs, tomb);
+  const pf = p.finance || {}, sf = s.finance || {};
+  out.finance = { ...sf, ...pf, cats: mergeById(pf.cats, sf.cats, tomb), rules: mergeById(pf.rules, sf.rules, tomb) };
   out.days = mergeMapDeep(p.days, s.days);
   out.journal = mergeMap(p.journal, s.journal);
   out.weekRatings = mergeMap(p.weekRatings, s.weekRatings);

@@ -10,9 +10,28 @@ import { icon } from './icons.js';
 import { esc, today, addDays, fmtTimer, fmtDur, fmtMins, fmtDate, hmToMin, clamp } from './util.js';
 import { ui, refresh } from './bus.js';
 import { notify } from './notify.js';
+import * as fx from './fx.js';
 
 export const L = () => S().settings.labels;
 const shadowName = () => L().shadow;
+
+/* ── the month's record: one cell per day, and what it takes to win it ── */
+export function monthHtml(month, { link = false } = {}) {
+  const b = E.monthBoard(month), cur = month === today().slice(0, 7), n = esc(shadowName());
+  const name = new Date(+month.slice(0, 4), +month.slice(5) - 1, 1).toLocaleDateString(undefined, { month: 'long' });
+  const title = { W: 'won', L: 'lost', R: 'rest day', T: 'today' };
+  const cells = b.days.map(d => `<i class="${d.v === '-' ? 'x' : d.v}" title="${esc(fmtDate(d.date, { day: 'numeric', month: 'short' }))}${title[d.v] ? ': ' + title[d.v] : ''}"></i>`).join('');
+  const days = k => `${k} day${k === 1 ? '' : 's'}`;
+  let line;
+  if (!cur || b.over) line = b.w + b.l === 0 ? 'No days were scored.' : b.result === 'won' ? 'You won the month.' : b.result === 'lost' ? `${n} won the month.` : 'The month ended level.';
+  else if (b.secured) line = `Month won. ${days(b.open)} left.`;
+  else if (b.outOfReach) line = `Out of reach this month. Best finish: ${b.w + b.open} wins.`;
+  else line = `${b.need}/${b.open} days needed to win.`;
+  const inner = `<div class="month-h"><span class="eyebrow">${esc(name)}</span><span class="month-rec"><b class="tone-good">${b.w}</b> won<span class="dim"> · </span><b class="tone-bad">${b.l}</b> lost${b.r ? `<span class="dim"> · ${b.r} rest</span>` : ''}</span></div>
+    <div class="month-days" style="--n:${b.days.length}">${cells}</div>
+    <div class="month-s">${line}</div>`;
+  return link ? `<button class="month" data-act="nav.go" data-tab="calendar" title="Open the calendar">${inner}</button>` : `<div class="month">${inner}</div>`;
+}
 
 /* ── session rating: quick, optional, never blocks ── */
 function offerRating(activity) {
@@ -26,6 +45,7 @@ function offerRating(activity) {
 function stopAndRate() {
   const r = E.stopRunning();
   if (!r) return null;
+  fx.sound('stop');
   if (!r.kept) toast('Not saved', 'That was under 15 seconds, so it was left out.', { ms: 3500 });
   else offerRating(r.activity);
   return r;
@@ -59,8 +79,8 @@ function renderFocus() {
       <div class="focus-timer" id="focus-timer">00:00</div>
       <div class="muted" id="focus-hint"></div>
       ${subs}
+      ${title ? `<button class="btn primary focus-done" data-act="focus.done">${icon('check')} Mark task as done</button>` : ''}
       <div class="row wrap" style="justify-content:center;gap:10px">
-        ${title ? `<button class="btn primary" data-act="focus.done">${icon('check')} I'm done with this task</button>` : ''}
         <button class="btn" data-act="focus.stop" id="focus-stop" disabled>${icon('stop')} Stop</button>
         <button class="btn ghost" data-act="focus.hide" id="focus-hide" disabled>Keep the timer running and hide this</button>
       </div>
@@ -99,6 +119,7 @@ function lockIn(cardId, taskId = null) {
   focusCardId = card ? card.id : null;
   focusTaskId = gt ? gt.t.id : card && E.findGoalTask(card.goalTask) ? card.goalTask : null;
   E.startActivity(a.id, { cardId: focusCardId, taskId: focusTaskId });
+  fx.sound('start');
   openFocus();
 }
 const completeGoalTask = id => { if (E.completeGoalTask(id)) save(); };
@@ -317,7 +338,7 @@ function openEfficacy(date = today()) {
 
 registerActions({
   'lock.in': d => lockIn(d.card || null, d.task || null),
-  'focus.done': () => { const id = focusCardId, task = focusTaskId; closeFocus(); stopAndRate(); if (id) completeCard(id); else if (task) completeGoalTask(task); toast('Task done', 'Start another block soon to keep your combo.', { kind: 'good', ms: 4500 }); },
+  'focus.done': () => { const id = focusCardId, task = focusTaskId; closeFocus(); stopAndRate(); if (id) completeCard(id); else if (task) completeGoalTask(task); fx.sound('done'); toast('Task done', 'Start another block soon to keep your combo.', { kind: 'good', ms: 4500 }); },
   'focus.stop': () => { bailCheck(); closeFocus(); stopAndRate(); },
   'focus.hide': () => closeFocus(),
   'focus.show': () => { const a = E.runningActivity(); if (a) { focusCardId = a.runCardId || null; focusTaskId = a.runTaskId || null; openFocus(); focusStart = Date.now() - E.LOCK_MIN_MS; tickFocus(); } },
@@ -334,10 +355,16 @@ registerActions({
     if (E.needsEscapeChallenge(a)) { escapeChallenge(a); return; }
     const prev = E.runningActivity();
     E.startActivity(a.id);
+    fx.sound('start');
     if (prev && prev !== a) offerRating(prev);
   },
   'track.stop': () => stopAndRate(),
-  'card.complete': d => completeCard(d.id),
+  'card.complete': (d, e, el) => {
+    // the round tick already had its flourish; the board's small button gets one here
+    if (el && !el.classList.contains('check')) { fx.burst(el); fx.sound('tick'); }
+    if (el) fx.float(el, `+${S().settings.xp.task} XP`);
+    completeCard(d.id);
+  },
   'brief.open': openBrief,
   'debrief.open': openDebrief,
   'mission.toggle': d => { toggleObjective(d.path); refreshDebrief(); },

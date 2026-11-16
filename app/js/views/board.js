@@ -7,6 +7,7 @@ import { icon } from '../icons.js';
 import { esc, today, uid, fmtDur, fmtMins, fmtDate, safeColor, daysBetween, addDays } from '../util.js';
 import { ui, refresh } from '../bus.js';
 import { L } from '../flows.js';
+import { makeSortable } from '../drag.js';
 
 const open = new Set();          // cards whose sub-tasks are expanded on the board
 /* The tag colours of the earlier versions. A new tag takes the next one
@@ -20,7 +21,7 @@ function cardHtml(c, colId) {
   const subs = c.subs || [], sd = subs.filter(s => s.done).length, ms = E.cardMs(c.id);
   const run = E.runningActivity(), live = run && run.runCardId === c.id;
   const dl = c.deadline ? daysBetween(today(), c.deadline) : null;
-  return `<article class="kcard ${tag ? 'tagged' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-card="${esc(c.id)}" data-act="card.edit" data-id="${esc(c.id)}" tabindex="0">
+  return `<article class="kcard ${tag ? 'tagged' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-card="${esc(c.id)}" data-flip="c-${esc(c.id)}" data-act="card.edit" data-id="${esc(c.id)}" tabindex="0">
     <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}<span class="grow"></span>
         ${colId !== 'done' ? `<button class="icon-btn sm" data-act="lock.in" data-card="${esc(c.id)}" title="${esc(L().lockIn)} on this task" aria-label="Start timer">${icon(live ? 'zap' : 'play')}</button>
         <button class="icon-btn sm" data-act="card.complete" data-id="${esc(c.id)}" title="Mark done" aria-label="Mark done">${icon('check')}</button>` : ''}</div>
@@ -60,7 +61,7 @@ function columnHtml(col) {
 /* ── card editor ── */
 function openCard({ card = null, col = 'today', draft = null }) {
   const st = S();
-  const c = draft || card || { text: '', tagId: '', est: '', deadline: '', notes: '', subs: [] };
+  const c = draft || card || { text: '', tagId: '', activityId: '', est: '', deadline: '', notes: '', subs: [] };
   const subs = (c.subs || []).map(s => ({ ...s }));
   const subsHtml = () => subs.map((s, i) => `<div class="row sub-row">
       <button type="button" class="check sq ${s.done ? 'on' : ''}" data-sub-toggle="${i}" aria-label="Toggle step">${icon('check')}</button>
@@ -73,6 +74,7 @@ function openCard({ card = null, col = 'today', draft = null }) {
     body: `<div class="field"><label>Task</label><input class="input" name="text" value="${esc(c.text)}" maxlength="200" required autofocus></div>
       <div class="form-row">
         <div class="field"><label>Tag</label><select class="input" name="tagId"><option value="">No tag</option>${st.tags.map(t => `<option value="${esc(t.id)}" ${t.id === c.tagId ? 'selected' : ''}>${esc(t.name)}</option>`).join('')}</select></div>
+        <div class="field"><label>Activity</label><select class="input" name="activityId"><option value="">Follow the tag</option>${st.activities.filter(a => !E.isEscape(a)).map(a => `<option value="${esc(a.id)}" ${a.id === c.activityId ? 'selected' : ''}>${esc(E.label(a))}</option>`).join('')}</select></div>
         <div class="field"><label>Column</label><select class="input" name="col">${st.columns.map(k => `<option value="${esc(k.id)}" ${k.id === col ? 'selected' : ''}>${esc(k.name)}</option>`).join('')}</select></div>
         <div class="field"><label>Estimate (min)</label><input class="input" type="number" name="est" min="0" max="6000" step="5" value="${c.est || ''}"></div>
         <div class="field"><label>Deadline</label><input class="input" type="date" name="deadline" value="${esc(c.deadline || '')}"></div>
@@ -84,10 +86,14 @@ function openCard({ card = null, col = 'today', draft = null }) {
     onMount: el => {
       const box = el.querySelector('#subs'), inp = el.querySelector('#sub-new'), tagSel = el.elements.tagId, logs = el.querySelector('#card-logs');
       const redraw = () => { box.innerHTML = subsHtml(); };
+      const actSel = el.elements.activityId;
       const logHint = () => {
-        const tag = st.tags.find(t => t.id === tagSel.value), a = (tag && st.activities.find(x => x.id === tag.activityId)) || E.focusActivity();
-        logs.textContent = `${L().lockIn} on this task logs time under ${E.label(a)}` + (tag && tag.activityId ? '' : ' (no tag link: the default)') + '.';
+        const own = st.activities.find(x => x.id === actSel.value), tag = st.tags.find(t => t.id === tagSel.value);
+        const linked = tag && st.activities.find(x => x.id === tag.activityId);
+        const a = own || linked || E.focusActivity();
+        logs.textContent = `${L().lockIn} on this task logs time under ${E.label(a)}` + (own ? ' (set on this task)' : linked ? ' (from its tag)' : ' (the default)') + '.';
       };
+      actSel.addEventListener('change', logHint);
       const add = () => { const t = inp.value.trim(); if (!t) return; subs.push({ id: uid(), t, done: false }); inp.value = ''; redraw(); inp.focus(); };
       el.querySelector('#sub-add').addEventListener('click', add);
       inp.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } });
@@ -102,7 +108,7 @@ function openCard({ card = null, col = 'today', draft = null }) {
     onSubmit: d => {
       const text = d.text.trim();
       if (!text) return false;
-      const fields = { text, tagId: d.tagId || null, est: Math.max(0, parseInt(d.est) || 0) || null, deadline: d.deadline || null, notes: d.notes.trim(), subs: subs.filter(s => s.t.trim()).map(s => ({ ...s, t: s.t.trim() })) };
+      const fields = { text, tagId: d.tagId || null, activityId: d.activityId || null, est: Math.max(0, parseInt(d.est) || 0) || null, deadline: d.deadline || null, notes: d.notes.trim(), subs: subs.filter(s => s.t.trim()).map(s => ({ ...s, t: s.t.trim() })) };
       if (card) {
         Object.assign(card, fields); touch(card);
         const f = E.findCard(card.id);
@@ -192,77 +198,17 @@ function openColumns() {
   });
 }
 
-/* ── drag and drop (mouse + touch), no library ── */
-let drag = null, suppressClick = 0;
-function dragBegin(cardEl, x, y) {
-  const r = cardEl.getBoundingClientRect();
-  const ghost = cardEl.cloneNode(true);
-  ghost.classList.add('kghost');
-  ghost.style.width = r.width + 'px';
-  document.body.appendChild(ghost);
-  const line = document.createElement('div'); line.className = 'drop-line';
-  cardEl.classList.add('dragging');
-  drag = { id: cardEl.dataset.card, el: cardEl, ghost, line, dx: x - r.left, dy: y - r.top, col: null, index: null };
-  dragMove(x, y);
-}
-function dragMove(x, y) {
-  if (!drag) return;
-  drag.ghost.style.transform = `translate(${x - drag.dx}px, ${y - drag.dy}px) rotate(1.5deg)`;
-  const board = document.querySelector('.board');
-  if (board) { const b = board.getBoundingClientRect(); if (x > b.right - 60) board.scrollLeft += 14; else if (x < b.left + 60) board.scrollLeft -= 14; }
-  const colEl = (document.elementFromPoint(x, y) || document.body).closest('.kcol');
-  if (!colEl) return;
-  const list = colEl.querySelector('.kcards');
-  if (y > list.getBoundingClientRect().bottom - 40) list.scrollTop += 12; else if (y < list.getBoundingClientRect().top + 40) list.scrollTop -= 12;
-  const cards = [...list.querySelectorAll('.kcard:not(.dragging)')];
-  let index = cards.findIndex(c => { const r = c.getBoundingClientRect(); return y < r.top + r.height / 2; });
-  if (index < 0) index = cards.length;
-  drag.col = colEl.dataset.col; drag.index = index;
-  if (cards[index]) list.insertBefore(drag.line, cards[index]); else list.appendChild(drag.line);
-}
-function dragEnd(commit) {
-  if (!drag) return;
-  const d = drag; drag = null;
-  d.ghost.remove(); d.line.remove(); d.el.classList.remove('dragging');
-  suppressClick = Date.now();
-  if (commit && d.col) {
-    const from = E.findCard(d.id);
-    if (from && (from.col !== d.col || from.index !== d.index)) {
-      // the Done column is shown sorted, so a position inside it means nothing
-      E.moveCard(d.id, d.col, d.col === 'done' ? null : d.index);
-    }
-  }
-}
+/* ── drag and drop: the shared engine (js/drag.js) does the moving ── */
 function wireDrag(board) {
-  let pend = null, timer = null;
-  board.addEventListener('mousedown', e => {
-    if (e.button !== 0 || e.target.closest('button')) return;
-    const c = e.target.closest('.kcard'); if (!c) return;
-    pend = { c, x: e.clientX, y: e.clientY };
+  makeSortable(board, {
+    item: '.kcard', container: '.kcards', zone: '.kcol', group: true, scrollX: '.board',
+    onDrop({ el, to, index }) {
+      const col = to.closest('.kcol').dataset.col, from = E.findCard(el.dataset.card);
+      if (!from) return;
+      // the Done column is shown sorted, so a position inside it means nothing
+      if (from.col !== col || from.index !== index) E.moveCard(el.dataset.card, col, col === 'done' ? null : index);
+    }
   });
-  const mm = e => {
-    if (drag) { e.preventDefault(); dragMove(e.clientX, e.clientY); return; }
-    if (pend && Math.hypot(e.clientX - pend.x, e.clientY - pend.y) > 6) { dragBegin(pend.c, e.clientX, e.clientY); pend = null; }
-  };
-  const mu = () => { pend = null; if (drag) dragEnd(true); };
-  window.addEventListener('mousemove', mm); window.addEventListener('mouseup', mu);
-  board.addEventListener('touchstart', e => {
-    if (e.touches.length !== 1 || e.target.closest('button')) return;
-    const c = e.target.closest('.kcard'); if (!c) return;
-    const t = e.touches[0]; pend = { c, x: t.clientX, y: t.clientY };
-    clearTimeout(timer);
-    timer = setTimeout(() => { if (pend) { dragBegin(pend.c, pend.x, pend.y); pend = null; if (navigator.vibrate) navigator.vibrate(12); } }, 320);
-  }, { passive: true });
-  board.addEventListener('touchmove', e => {
-    const t = e.touches[0];
-    if (drag) { e.preventDefault(); dragMove(t.clientX, t.clientY); return; }
-    if (pend && Math.hypot(t.clientX - pend.x, t.clientY - pend.y) > 10) { pend = null; clearTimeout(timer); }   // it was a scroll
-  }, { passive: false });
-  const te = () => { clearTimeout(timer); pend = null; if (drag) dragEnd(true); };
-  board.addEventListener('touchend', te); board.addEventListener('touchcancel', () => { clearTimeout(timer); pend = null; dragEnd(false); });
-  // the board node is replaced on every render; drop the window listeners with it
-  new MutationObserver((_, obs) => { if (!document.contains(board)) { window.removeEventListener('mousemove', mm); window.removeEventListener('mouseup', mu); obs.disconnect(); } })
-    .observe(document.getElementById('view'), { childList: true });
 }
 
 const view = {
@@ -283,7 +229,6 @@ export default view;
 registerActions({
   'card.new': d => openCard({ col: d.col || 'today' }),
   'card.edit': (d, e) => {
-    if (Date.now() - suppressClick < 250) return;
     if (e && e.target.closest('button')) return;
     const f = E.findCard(d.id); if (f) openCard({ card: f.card, col: f.col });
   },
@@ -297,7 +242,7 @@ registerActions({
     const f = E.findCard(d.id); if (!f) return;
     closeModal();
     const c = f.card;
-    openCard({ col: f.col === 'done' ? 'today' : f.col, draft: { text: c.text, tagId: c.tagId, est: c.est, deadline: c.deadline, notes: c.notes, subs: (c.subs || []).map(s => ({ id: uid(), t: s.t, done: false })) } });
+    openCard({ col: f.col === 'done' ? 'today' : f.col, draft: { text: c.text, tagId: c.tagId, activityId: c.activityId, est: c.est, deadline: c.deadline, notes: c.notes, subs: (c.subs || []).map(s => ({ id: uid(), t: s.t, done: false })) } });
   },
   'card.subs': d => { open.has(d.id) ? open.delete(d.id) : open.add(d.id); refresh(); },
   'card.subToggle': d => {

@@ -6,7 +6,7 @@ import { registerActions, runAction, openModal, closeModal } from '../ui.js';
 import { icon } from '../icons.js';
 import { esc, today, addDays, ymd, parseYmd, fmtDate, fmtDur, fmtMins, pad } from '../util.js';
 import { ui, refresh } from '../bus.js';
-import { L } from '../flows.js';
+import { L, monthHtml } from '../flows.js';
 
 const month = () => ui.calMonth || today().slice(0, 7);
 
@@ -22,8 +22,10 @@ function dayInfo(date) {
 function cellHtml(date, inMonth) {
   const i = dayInfo(date), t = today(), d = parseYmd(date).getDate();
   const dueH = E.habitsDue(date).length, doneH = E.habitsDoneOn(date);
-  return `<button class="cal-c ${inMonth ? '' : 'out'} ${date === t ? 'now' : ''} ${i.future ? 'future' : ''} ${i.rest ? 'rest' : ''}" data-act="cal.day" data-date="${date}" aria-label="${esc(fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' }))}">
-    <span class="cal-n">${d}${i.v || i.rest ? `<i class="v ${i.rest ? 'R' : i.v}" title="${i.rest ? 'Rest day' : i.v === 'W' ? 'Won' : 'Lost'}"></i>` : ''}</span>
+  const v = i.rest ? 'R' : i.v === 'W' || i.v === 'L' ? i.v : '';
+  const word = { W: 'Won', L: 'Lost', R: 'Rest' }[v] || '';
+  return `<button class="cal-c ${inMonth ? '' : 'out'} ${date === t ? 'now' : ''} ${i.future ? 'future' : ''} ${i.rest ? 'rest' : ''} ${v === 'R' ? '' : v}" data-act="cal.day" data-date="${date}" aria-label="${esc(fmtDate(date, { weekday: 'long', day: 'numeric', month: 'long' }))}${word ? ', ' + word.toLowerCase() : ''}">
+    <span class="cal-n">${d}${word ? `<span class="cal-v ${v}">${word}</span>` : ''}</span>
     ${!i.future && (i.x || i.hours) ? `<span class="cal-x"><b>${i.x}</b> xp</span><span class="cal-s">${i.hours ? i.hours.toFixed(1) + 'h' : ''}${dueH ? ` · ${doneH}/${dueH}` : ''}</span>` : '<span class="cal-x"></span>'}
     <span class="cal-e">${i.sleep ? `<small title="Sleep">${icon('moon')}${i.sleep}h</small>` : ''}${(i.log.emojis || []).slice(0, 4).map(esc).join('')}</span>
   </button>`;
@@ -81,21 +83,21 @@ export default {
     let grid = '';
     for (let i = 0; i < cells; i++) { const d = addDays(start, i); grid += cellHtml(d, d.slice(0, 7) === m); }
     // month totals from settled days + today
-    let w = 0, l = 0, r = 0, xp = 0, hrs = 0;
+    let xp = 0, hrs = 0;
     for (let d = 1; d <= daysIn; d++) {
       const date = `${m}-${pad(d)}`; if (date > t) break;
       const i = dayInfo(date);
-      if (i.v === 'W') w++; else if (i.v === 'L') l++; else if (i.rest) r++;
       xp += i.x; hrs += i.hours;
     }
     return `<div class="view-h"><h2>${esc(first.toLocaleDateString(undefined, { month: 'long', year: 'numeric' }))}</h2>
-        <span class="pill">${w} won · ${l} lost${r ? ` · ${r} rest` : ''}</span><span class="pill">${xp} XP</span><span class="pill">${hrs.toFixed(1)}h focus</span>
+        <span class="pill">${xp} XP</span><span class="pill">${hrs.toFixed(1)}h focus</span>
         <button class="icon-btn" data-act="cal.nav" data-d="-1" aria-label="Previous month">${icon('left')}</button>
         <button class="btn sm ghost" data-act="cal.nav" data-d="0" ${m === t.slice(0, 7) ? 'disabled' : ''}>Today</button>
         <button class="icon-btn" data-act="cal.nav" data-d="1" aria-label="Next month">${icon('right')}</button></div>
+      ${S().settings.modules.shadow && m <= t.slice(0, 7) ? `<section class="card month-card" aria-label="The month's record">${monthHtml(m)}</section>` : ''}
       <div class="card flush cal"><div class="cal-h">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<span>${d}</span>`).join('')}</div>
         <div class="cal-g">${grid}</div></div>
-      <div class="tiny dim" style="margin-top:10px">Green dot: won. Red: lost. Blue: rest day. Tap a day for the detail.</div>`;
+      <div class="tiny dim" style="margin-top:10px">A green day was won, a red day was lost, a blue day was a rest day. Tap a day for the detail.</div>`;
   }
 };
 

@@ -7,6 +7,7 @@ import { registerActions, openModal, closeModal, confirmDialog, toast } from '..
 import { icon } from '../icons.js';
 import { esc, today, addDays, uid, fmtDate, fmtDur, safeColor, daysBetween } from '../util.js';
 import { ui, refresh } from '../bus.js';
+import { makeSortable } from '../drag.js';
 
 const COLORS = ['#E0B25A', '#F2793A', '#F26D63', '#EE5D8C', '#8B7CF6', '#6FB1F0', '#2BC4E0', '#56CFB2', '#5FCB8B', '#9AA0A8'];
 
@@ -60,7 +61,7 @@ function goalHtml(g) {
   const n = (g.milestones || []).length;
   const ms = !open ? '' : (g.milestones || []).map(m => {
     const mo = ui.goalOpen.has(m.id), ts = m.tasks || [], d = msDone(m);
-    return `<div class="ms ${d ? 'done' : ''} ${liveId === m.id ? 'live' : ''}">
+    return `<div class="ms ${d ? 'done' : ''} ${liveId === m.id ? 'live' : ''}" data-id="${esc(m.id)}" data-goal="${esc(g.id)}" data-flip="m-${esc(m.id)}">
       <div class="row">
         <button class="check sq ${d ? 'on' : ''}" data-act="goal.msToggle" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-pressed="${d}" aria-label="Toggle milestone">${icon('check')}</button>
         <button class="ms-n grow ell" data-act="goal.open" data-id="${esc(m.id)}" aria-expanded="${mo}">${esc(m.name)}</button>
@@ -69,7 +70,7 @@ function goalHtml(g) {
         <button class="icon-btn sm" data-act="goal.msEdit" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Rename milestone">${icon('edit')}</button>
         <button class="icon-btn sm" data-act="goal.msDel" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Delete milestone">${icon('x')}</button>
       </div>
-      ${mo ? `<div class="ms-tasks">${ts.map(t => `<div class="row ${t.done ? 'tdone' : ''} ${liveId === t.id ? 'live' : ''}">
+      ${mo ? `<div class="ms-tasks" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}">${ts.map(t => `<div class="row g-task ${t.done ? 'tdone' : ''} ${liveId === t.id ? 'live' : ''}" data-id="${esc(t.id)}" data-flip="t-${esc(t.id)}">
           <button class="check sq ${t.done ? 'on' : ''}" data-act="goal.taskToggle" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" aria-pressed="${!!t.done}" aria-label="Toggle task">${icon('check')}</button>
           <span class="grow">${esc(t.name)}</span>
           ${timeEl('t:' + t.id)}
@@ -79,7 +80,7 @@ function goalHtml(g) {
         <form class="row" data-addtask data-goal="${esc(g.id)}" data-ms="${esc(m.id)}"><input class="input" name="name" placeholder="Add a task" maxlength="160" data-fk="t-${esc(m.id)}" aria-label="Add a task"><button class="btn sm" type="submit" aria-label="Add">${icon('plus')}</button></form></div>` : ''}
     </div>`;
   }).join('');
-  return `<article class="card goal ${open ? 'open' : ''}" style="--c:${safeColor(g.color)}">
+  return `<article class="card goal ${open ? 'open' : ''}" data-id="${esc(g.id)}" data-flip="g-${esc(g.id)}" style="--c:${safeColor(g.color)}">
     <div class="row">
       <button class="goal-n grow" data-act="goal.open" data-id="${esc(g.id)}" aria-expanded="${open}"><span class="dot" style="background:var(--c)"></span><span class="ell">${esc(g.name)}</span><span class="goal-chev">${icon('down')}</span></button>
       ${dl !== null ? `<span class="pill ${dl < 0 ? 'bad' : dl <= 7 ? 'warn' : ''}">${dl < 0 ? Math.abs(dl) + 'd overdue' : dl === 0 ? 'due today' : dl + 'd left'}</span>` : ''}
@@ -88,7 +89,7 @@ function goalHtml(g) {
     </div>
     <div class="bar" style="margin-top:12px"><i style="width:${u.pct}%;background:var(--c)"></i></div>
     <div class="goal-meta"><span>${u.done} of ${u.tot} done</span><span>${n} milestone${n === 1 ? '' : 's'}</span>${g.deadline ? `<span>due ${fmtDate(g.deadline, { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}${timeEl('g:' + g.id, 'goal-spent')}</div>
-    ${open ? `<div class="goal-body">${ms || '<div class="empty" style="padding:8px 0">No milestones yet.</div>'}
+    ${open ? `<div class="goal-body" data-goal="${esc(g.id)}">${ms || '<div class="empty" style="padding:8px 0">No milestones yet.</div>'}
       <form class="row" data-addms data-goal="${esc(g.id)}"><input class="input" name="name" placeholder="Add a milestone" maxlength="120" data-fk="m-${esc(g.id)}" aria-label="Add a milestone"><button class="btn sm" type="submit">${icon('plus')} Milestone</button></form></div>` : ''}
   </article>`;
 }
@@ -166,6 +167,19 @@ export default {
         : `<div class="card empty" style="padding:48px 16px">No goals yet. A goal here is something with an end: break it into milestones and tasks, time the work, and send tasks to the board when it is time.<br><button class="btn primary" data-act="goal.new">${icon('plus')} Add a goal</button></div>`}`;
   },
   mount(root) {
+    // Three lists nest here, and each can be put in order by dragging: the
+    // tasks of a milestone, the milestones of a goal, and the goals themselves.
+    const list = root.querySelector('.goals');
+    if (list) {
+      const order = (arr, box, sel) => { const ids = [...box.querySelectorAll(':scope > ' + sel)].map(el => el.dataset.id), by = new Map(arr.map(x => [x.id, x])); return [...ids.map(id => by.get(id)).filter(Boolean), ...arr.filter(x => !ids.includes(x.id))]; };
+      const KEEP = 'input, select, .icon-btn, .check, form';
+      makeSortable(list, { item: '.g-task', container: '.ms-tasks', ignore: KEEP,
+        onDrop({ to }) { const { g, m } = find(to.dataset); if (m) { m.tasks = order(m.tasks, to, '.g-task'); commit(g); } } });
+      makeSortable(list, { item: '.ms', container: '.goal-body', ignore: KEEP + ', .ms-tasks',
+        onDrop({ to }) { const g = S().goals.find(x => x.id === to.dataset.goal); if (g) { g.milestones = order(g.milestones, to, '.ms'); commit(g); } } });
+      makeSortable(list, { item: '.goal', container: '.goals', ignore: KEEP + ', .goal-body',
+        onDrop({ to }) { const st = S(); st.goals = order(st.goals, to, '.goal'); save(); } });
+    }
     root.querySelectorAll('form[data-addms], form[data-addtask]').forEach(f => f.addEventListener('submit', e => {
       e.preventDefault();
       const name = f.elements.name.value.trim(); if (!name) return;

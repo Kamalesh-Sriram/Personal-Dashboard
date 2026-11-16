@@ -18,3 +18,7 @@ Thumbs.db
 demo-backup.json
 dashboard-backup-*.json
 app/demo.json
+
+# Made-up files from `npm run samples`
+sample-gym.csv
+sample-bank.csv

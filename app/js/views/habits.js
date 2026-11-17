@@ -74,7 +74,7 @@ function habitHtml(h, dueToday) {
     <button class="check lg ${s.doneToday ? 'on' : ''}" data-act="habit.toggle" data-id="${esc(h.id)}" ${dueToday ? '' : 'disabled title="Not due today"'} aria-pressed="${s.doneToday}" aria-label="${esc(h.name)}">${icon('check')}</button>
     <div class="hab-main">
       <div class="hab-n">${esc(E.label(h))}</div>
-      <div class="tiny dim">${esc(scheduleLabel(h.schedule))} · ${diff.label}${dueToday ? '' : ' · not due today'}</div>
+      <div class="tiny dim">${esc(scheduleLabel(h.schedule))} · ${diff.label}${h.lvXp > 0 ? ` · <span class="tone-accent">+${Math.round(h.lvXp * E.levelState().gain)} level XP</span>` : ''}${dueToday ? '' : ' · not due today'}</div>
       <div class="hab-week">${week.join('')}</div>
     </div>
     <div class="hab-streak ${s.streak >= 7 ? 'hot' : ''} ${s.frozen ? 'frozen' : ''}" title="${s.frozen ? 'Frozen for a rest day' : 'Current streak'}">
@@ -137,7 +137,9 @@ function openHabit(h) {
         <div class="field"><label>Icon (optional)</label><input class="input" name="emoji" value="${esc(cur.emoji || '')}" maxlength="4" style="text-align:center;font-size:20px"></div>
         <div class="field"><label>Habit</label><input class="input" name="name" value="${esc(cur.name)}" maxlength="60" required autofocus placeholder="e.g. Read 10 pages"></div></div>
       <div id="hab-dyn" class="col" style="gap:14px">${body()}</div>
-      <div class="field"><label>Counts from</label><input class="input" type="date" name="startDate" value="${esc(cur.startDate || today())}" max="${today()}"></div>`,
+      <div class="form-row"><div class="field"><label>Counts from</label><input class="input" type="date" name="startDate" value="${esc(cur.startDate || today())}" max="${today()}"></div>
+        <div class="field"><label>Level XP when done (at level 1)</label><input class="input" type="number" name="lvXp" min="0" max="500" step="5" value="${cur.lvXp || 0}">
+          <div class="hint">0 means it only counts with the others. Give a habit like the gym its own XP and it pays that toward your level every time, on top.</div></div></div>`,
     onMount: el => {
       const dyn = el.querySelector('#hab-dyn');
       dyn.addEventListener('click', e => {
@@ -153,7 +155,7 @@ function openHabit(h) {
     },
     onSubmit: d => {
       const name = d.name.trim(); if (!name) return false;
-      const fields = { name, emoji: d.emoji.trim(), difficulty: diff, schedule: sch, color, startDate: d.startDate || today() };
+      const fields = { name, emoji: d.emoji.trim(), difficulty: diff, schedule: sch, color, startDate: d.startDate || today(), lvXp: clamp(parseInt(d.lvXp) || 0, 0, 500) };
       if (isNew) S().habits.push(touch({ id: uid(), ...fields, history: {} }));
       else { Object.assign(h, fields); touch(h); }
       E.invalidate(); save();

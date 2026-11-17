@@ -50,7 +50,10 @@ const SOUNDS = {
   stop: () => { note(0, 440, { to: 330, dur: 0.16, gain: 0.36, type: 'triangle' }); },
   win: () => [523, 659, 784, 1047].forEach((f, i) => note(i * 0.075, f, { dur: 0.3, gain: 0.34 })),
   drop: () => note(0, 300, { to: 220, dur: 0.07, gain: 0.22, type: 'triangle' }),
-  lift: () => note(0, 420, { to: 560, dur: 0.06, gain: 0.14, type: 'triangle' })
+  lift: () => note(0, 420, { to: 560, dur: 0.06, gain: 0.14, type: 'triangle' }),
+  // a run up to a held note, timed so the top lands as the new number does
+  levelup: () => { [392, 523, 659, 784].forEach((f, i) => note(0.42 + i * 0.07, f, { dur: 0.2, gain: 0.3, type: 'triangle' })); note(0.7, 1047, { dur: 0.8, gain: 0.34 }); note(0.7, 1568, { dur: 0.7, gain: 0.1 }); },
+  rankup: () => { note(0.3, 131, { dur: 1.1, gain: 0.3, type: 'triangle' }); [262, 392, 523, 659, 784].forEach((f, i) => note(0.34 + i * 0.07, f, { dur: 0.24, gain: 0.3, type: 'triangle' })); [1047, 1319, 1568].forEach(f => note(0.7, f, { dur: 1.2, gain: 0.2 })); note(1.05, 2093, { dur: 0.8, gain: 0.08 }); }
 };
 /** Play a named sound. Browsers only allow audio after a click or key press,
  *  so this is silent when called from a background event: that is intended. */
@@ -114,6 +117,7 @@ const keyOf = el => { const d = { ...el.dataset }; delete d.flip; return JSON.st
  *  play the flourish now and remember which box, so the redrawn one can
  *  draw its tick in (see `afterRender`). */
 export function onAction(el) {
+  if (el.dataset.nofx != null) return;                    // a row that is chosen, not ticked
   const box = el.classList.contains('check') ? el : el.querySelector(':scope > .check');
   if (!box || el.disabled) return;
   if (box.classList.contains('on')) { sound('untick'); return; }
@@ -194,4 +198,47 @@ function countUp(root) {
     };
     requestAnimationFrame(step);
   });
+}
+
+/* ── a level gained, or a new rank ── */
+let lvTimer = 0;
+/** Covers the page for a few seconds: the old number leaves, the new one lands, the rank and the bar
+ *  follow. A press, Escape or Enter ends it early. Returns false when motion is off or the page is
+ *  not being looked at, so the caller can say it another way. */
+export function levelUp({ from, to, rank, color, ranked = false, pct = 0, next = '' }) {
+  const m = motion();
+  if (m === 'off' || document.hidden) return false;
+  clearTimeout(lvTimer);
+  document.querySelectorAll('.lvup').forEach(x => x.remove());
+  const el = document.createElement('div');
+  el.className = 'lvup' + (ranked ? ' ranked' : '') + (m === 'subtle' ? ' calm' : '');
+  el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite');
+  if (color) el.style.setProperty('--rk', color);
+  let rays = '<u></u><u></u>';
+  for (let i = 0; i < 14; i++) rays += `<i style="--a:${Math.round(i * (360 / 14))}deg"></i>`;
+  el.innerHTML = `<div class="lvup-in">
+      <div class="lvup-k">${ranked ? 'Rank up' : 'Level up'}</div>
+      <div class="lvup-n"><span class="lvup-rays" aria-hidden="true">${rays}</span><span class="lvup-old" aria-hidden="true"></span><b></b></div>
+      <div class="lvup-line"></div>
+      <div class="lvup-rank"></div>
+      <div class="lvup-bar"><i style="width:${Math.max(0, Math.min(100, Math.round(pct)))}%"></i></div>
+      <div class="lvup-s"></div></div>`;
+  el.querySelector('.lvup-old').textContent = from;
+  el.querySelector('.lvup-n b').textContent = to;
+  el.querySelector('.lvup-rank').textContent = rank;
+  el.querySelector('.lvup-s').textContent = next;
+  let closed = false;
+  const onKey = e => { if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); close(); } };
+  const close = () => {
+    if (closed) return; closed = true;
+    clearTimeout(lvTimer); document.removeEventListener('keydown', onKey, true);
+    el.classList.add('out'); setTimeout(() => el.remove(), 380);
+  };
+  el.addEventListener('click', close);
+  document.addEventListener('keydown', onKey, true);
+  document.body.appendChild(el);
+  lvTimer = setTimeout(close, ranked ? 4800 : 3800);
+  sound(ranked ? 'rankup' : 'levelup');
+  buzz(ranked ? 30 : 14);
+  return true;
 }

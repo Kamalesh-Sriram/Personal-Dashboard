@@ -86,7 +86,7 @@ Where it works:
 
 If the bell says notifications are blocked, allow them for your site in the browser's site settings (the padlock or tune icon in the address bar), and on phones also in the system notification settings.
 
-You choose which reminders are sent, and you can rewrite every sentence they use, under **Settings > Notifications**.
+You choose which reminders are sent, and you can rewrite every sentence they use, under **Settings > Notifications**. With sync on, the same page shows when the day's reminders were last scheduled, how many are waiting and when the next one is due. If that line shows an error, press **Schedule again**.
 
 ![Editing what the notifications say](docs/images/settings-lines.jpg)
 
@@ -153,7 +153,7 @@ The dashboard is built around one loop. It takes about two minutes in the mornin
 
 1. **Write out your main goals.** These are the big ones you are working toward, not today's tasks. The strip at the top of Home is empty every morning and shows what you wrote last time in faint text. Typing them out again keeps them in front of you, and each one earns a little XP. Add as many as you like.
 2. **Declare the mission.** The morning brief opens by itself near the start of your day. Name one critical objective, up to three primary ones, and a fallback (the least you will accept from today).
-3. **Press Lock in.** It starts the timer on the top task in your Today list and fills the screen with it. Stopping is locked for the first 90 seconds, which is usually all it takes to get going.
+3. **Press Lock in.** It starts the timer on the top task in your Today list and fills the screen with it. Stopping is locked for the first 90 seconds, which is usually all it takes to get going. When the task is finished, press **Mark task as done**: the timer stops and the task is ticked off.
 
 **During the day**
 
@@ -177,11 +177,12 @@ The tabs live in the strip on the left. Press the arrows at the top of the strip
 
 Everything for today on one page: your main goals, you against the rival, the mission, the Lock in button with your top three tasks, how many habits are left, and the logbook.
 
-- **Top tasks** are the first three in the board's Today column. Drag them to reorder. Click one to select it. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
+- **Your level** is at the left of the top bar on every tab, with your rank and the bar to the next level, in your rank's colour. Press it for your stats: where today's level XP came from, the last 14 days, and the ranks. See [level and rank](#level-and-rank).
+- **Top tasks** are the first three in the board's Today column. Drag them to reorder. Click one to select it: the whole bar lights up to show which one is chosen. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
 - Press the question mark on the dial card for today's numbers: where your XP came from and how the rival's target was set.
-- **Main goals** are the lasting ones. Write them out each morning; yesterday's show faintly as a prompt. Press **Add goal** for another line.
+- **Main goals** are the lasting ones. Write them out each morning; yesterday's show faintly as a prompt. Press **Add goal** for another line, and the cross on a line to remove it.
 - **The month's record** sits under the dial: one cell per day, green for a day you won, red for one you lost, blue for a rest day. The line under it says how many more days you need to win the month. The record starts again on the 1st. Press it to open the calendar.
-- **Day left** is the first block under the two cards: how much of the working day you set is left, as time and as a share.
+- The dial has three rings. The outer ticks are your working day, lit as it passes. The share of the day that is left, and the time, is written above the dial. The thick arc is your XP. The thin arc and the notch are the rival's pace now and his target. Each ring's colour can be changed under **Settings > Look > Home dial**.
 - **Rest day** (top of the dial card) marks today as not scored. See [rest days](#rest-days).
 - The **logbook** has four entries: sleep, session ratings, efficacy, and the debrief. Each one you fill in earns a little XP. Tap any of them to fill it in.
 
@@ -208,7 +209,7 @@ A kanban board. Drag tasks between columns. On a phone, press and hold a task, t
 - The **24-hour ring** shows your day at a glance: each arc is a session, the lighter band is your working hours, the line is now. "Largest gap" is the longest stretch of your working hours with nothing logged.
 - Switch the session list to **Timeline** for a strip view with one lane per kind of activity.
 - Click any session to correct its times. Use **Log time by hand** for something you forgot to track.
-- Rate each session from 1 to 5 with the dots. Ratings feed your efficiency figure and the logbook.
+- Rate each session of a **Deep** activity from 1 to 5 with the dots. Ratings feed your efficiency figure and the logbook. Upkeep and Tracked time are not rated.
 
 Each activity has a weight: **Deep** earns full XP, **Upkeep** half, **Tracked** a token amount. Mark meals, naps and scrolling as a **break**: breaks never count as work and reset the combo.
 
@@ -217,6 +218,7 @@ Each activity has a weight: **Deep** earns full XP, **Upkeep** half, **Tracked**
 ![The Habits tab](docs/images/habits.jpg)
 
 - Each habit shows its **streak** and its **XP level** in full view, and what checking it today will earn.
+- A habit can also pay **level XP** directly. Open the habit's editor and fill in **Level XP when done**: that amount goes to your level every day you tick it, on top of the share for habits as a whole.
 - A habit you tick moves down to **Done today**. Drag a habit to change the order within its section. On a phone, press and hold first.
 - The **clean-sweep chain** counts consecutive days on which you did every habit that was due. Each day in the chain adds to the bonus.
 - The **habit map** at the top shows all habits together. Press the calendar icon on a habit for its own map. Click any past day on a habit's own map to correct it.
@@ -239,18 +241,31 @@ The month at a glance. Days you won are green, days you lost are red, rest days 
 
 Your training history, and what to try next time.
 
-- **Next session** lists your regular lifts with a suggestion each. The rule is double progression: stay at a weight and add reps until every set reaches the top of your rep range, then add weight and start again from fewer reps. Three sessions without progress at one weight and it suggests backing off by a tenth for a week.
-- Press any exercise for its chart (an estimated one-rep max from your best set of the day), your records and your last sessions.
-- **Last 12 weeks** shows weekly volume and how many workouts each week had.
+The tab reads from top to bottom in the order you use it: how the last weeks went, what to do next, the lifts you follow beside your latest workouts, and everything else folded away at the bottom.
 
-The history is stored on the device, not in your synced dashboard. With Hevy connected, each device reads it from Hevy.
+- **Last 12 weeks** shows weekly volume and how many workouts each week had, with four numbers under it: this week, volume over 30 days, records this month, and weeks in a row.
+- **Next workout** is your coach. Tell it your split once (**Set your split**): the sessions in the order you do them, using the names your workouts have in your gym app. The same name can repeat, so upper, lower, upper, lower, arms is five lines. It then works out where you are in the cycle from your latest workouts and lays out the next session from the last time you did that one: each exercise, how many working sets, and the reps and weight to aim for.
+- The targets follow double progression: stay at a weight and add reps until every set reaches the top of your rep range, then add weight and start again from fewer reps. Three sessions without progress at one weight and it suggests backing off by a tenth for a week.
+- **Your lifts** are the exercises you want to follow. Press **Choose lifts**, or the plus beside any exercise in the list at the bottom. Until you choose, it shows the ones you do most often.
+- **Recent workouts** sits beside your lifts and shows as many as it takes to stand level with them.
+- **All exercises** is folded shut at the bottom. Open it to search anything you have ever logged. Press any exercise for its chart (an estimated one-rep max from your best set of the day), your records and your last sessions.
+
+The history is stored on the device, not in your synced dashboard. Your split and chosen lifts do sync, and a backup (Settings > Data) carries the history.
 
 #### Get your workouts in: a file (two minutes, nothing to set up)
 
-1. In Hevy, open **Profile > Settings > Export & Import Data > Export Workouts** and save the CSV file. In Strong, it is **Settings > Export Data**.
-2. On the Gym tab, press **Import file** and choose that file.
+This works with openGym (free and open source), Hevy and Strong, and needs no account or subscription.
 
-The file is read on your device and stays there. Import a newer export any time: workouts already here are skipped.
+1. Export from your gym app:
+   - **openGym:** Settings > Data & backup > **Export backup (JSON)**.
+   - **Hevy:** Profile > Settings > Export & Import Data > **Export Workouts** (a CSV file).
+   - **Strong:** Settings > **Export Data** (a CSV file).
+2. Get the file to the device you use the dashboard on (it is often easiest to do the whole thing on your phone).
+3. On the Gym tab, press **Import file** and choose it.
+
+The file is read on your device and stays there. Do the same after new workouts, for example once a week: workouts already here are updated, new ones are added, and nothing is doubled.
+
+About openGym: out of the box its app keeps everything on your phone, and there is no openGym cloud to sync with. The file above is the way in. Automatic sync is possible only if you run openGym's server yourself; see below.
 
 #### Get your workouts in: Hevy sync (about five minutes, once)
 
@@ -267,13 +282,35 @@ You need Hevy Pro (the API key is a Pro feature) and sync turned on in the dashb
 
 If the Gym tab still shows the setup steps, press **Check again**. "Hevy rejected the API key" means the key was pasted wrongly or Hevy Pro has lapsed.
 
+#### Get your workouts in: openGym server sync (only if you run an openGym server)
+
+openGym's app has a switch from "all data stays on this phone" to "connect to my server". There is no server run by openGym: that switch points the app at a server **you** run. If you have one, the dashboard can read your workouts from it, with nothing to export.
+
+What you need first:
+
+- An openGym server that is reachable from the internet over **https**. That means a small always-on machine (a VPS, a home server, a Raspberry Pi) running openGym's Docker image behind a domain name or a tunnel such as Cloudflare Tunnel or Tailscale Funnel. Some hosting companies will run a private openGym for a monthly fee. A server that only exists on your home wifi will not work, because your site's function runs at Netlify and cannot reach it.
+- Sync turned on in the dashboard (section 5).
+
+If that sounds like more than you want to look after, stay with the backup file. It gives the dashboard exactly the same data.
+
+1. **Connect the app to your server.** In openGym on your phone: Settings, switch to **Connect to my server**, enter the server's address and sign in. Your history on the phone is uploaded to it.
+2. **Create a token.** In openGym: Settings > **API tokens** > new token. Allow it to read **workouts** and **plans**, nothing else. Copy the token (it starts with `ogt_`). It is shown once. Treat it like a password.
+3. **Give both to your site.** In Netlify: **Project configuration > Environment variables**, add two variables:
+   - `OPENGYM_URL`: your server's address, for example `https://gym.example.com`
+   - `OPENGYM_TOKEN`: the token
+4. **Redeploy** (Deploys > Trigger deploy, or `netlify deploy --prod`).
+5. **Sync.** Open the Gym tab and press **Sync**. From then on it checks your server each time you open the tab and reads again only when something changed.
+
+Hevy and openGym can both be set. The dashboard reads from each and does not double a workout that is in both. openGym numbers its built-in exercises; their names are looked up from openGym's public exercise list the first time they appear.
+
 ### Finance
 
 Where your money goes, by month and by year.
 
 - **Categories.** Each transaction is sorted into a category by the merchant's name. When one is wrong, pick the right category in the list. You are then asked whether to do the same for everything from that merchant: press **Always** and a rule is saved. Rules you make come before the built-in guesses, and a category you chose by hand is never changed by a rule.
 - Transfers and savings are left out of both spending and income.
-- Press a category under **Where it went** to filter the list. Switch between **Month** and **Year** at the top right.
+- **Where it went** is a ring with one slice per category. Point at a slice, or at its line in the list beside it, and the slice lifts and the middle of the ring names it. Press it and the transactions under it show only that category; press it again for everything.
+- **Day by day** (or **Month by month** in the year view) runs across the bottom. Switch between **Month** and **Year** at the top right.
 - The cog opens categories, your rules, linked banks and the option to remove all transactions.
 
 With sync on, your transactions are kept in your own database as well as on the device, so every device shows the same. Without sync they stay on the device you imported them on.
@@ -317,6 +354,16 @@ Good to know:
 - Yes, you approve at your bank twice in total: once to activate the application (step 4) and once from the dashboard (step 7). That is how Enable Banking's personal mode works.
 - If your bank is not in the list, statement files still give you the same tab.
 - To stop: the cog on the Finance tab > **Unlink**. That ends the session at the bank as well.
+
+### Shopping
+
+A list in two halves: **To buy** and **Bought**, each divided into your own lists (Groceries and Products to begin with; press **Lists** to change them).
+
+- Type what you need, pick the list, and press **Add**. An amount is optional.
+- Tick something and it moves to **Bought**. Untick it there when you need it again and it moves back. Adding something that is already in Bought also brings it back, so nothing is listed twice.
+- **Expiry dates.** Press the calendar on a bought item and pick the date. Things that expire soonest are at the top, marked when they have two days or less. When the date has passed the item returns to **To buy** by itself, with a note of when it ran out.
+- The dashboard remembers how long an item lasted and fills the expiry date in the next time you tick it off. Change it on the row if this one differs.
+- The search box looks through both halves.
 
 ### Subscriptions
 
@@ -368,13 +415,46 @@ If you work late, set an end time earlier than the start under **Settings > Day 
 
 ### Rest days
 
-A rest day is not scored at all. No win, no loss, no reputation change, and habit streaks freeze instead of breaking. You get one in any seven days unless you change the allowance under **Settings > Game**. You can also mark a past day as rest from the Calendar.
+A rest day is not scored at all. No win, no loss, and habit streaks freeze instead of breaking. You get one in any seven days unless you change the allowance under **Settings > Game**. You can also mark a past day as rest from the Calendar.
 
-### Mission, execution, rank
+### Mission and execution
 
 **Execution** is how much of the mission you declared you actually completed: the critical objective counts for 50%, the primaries for 35%, the fallback for 15%. If you leave a tier blank, its weight goes to the others.
 
-**Reputation** changes once a day from your execution: 80% or more adds 3, 60% adds 1.5, 40% adds 0.5, 20% takes 1, under 20% takes 3, and declaring nothing takes 2. Reputation decides your **rank**.
+### Level and rank
+
+Your **level** runs from 1 to 100 and is kept apart from the day's XP against the rival. Day XP starts from nothing every morning. Level XP only adds up, from the first day you used the dashboard.
+
+| What | Level XP |
+|---|---|
+| The mission, by how much of it you completed | up to 40 |
+| Half of the day's habits done | 6 |
+| Four fifths of them | 13 |
+| All of them | 22 |
+| A habit you gave its own level XP | whatever you set, each day it is ticked |
+| An hour of Deep work | 6, for up to 8 hours a day |
+| A milestone cleared | 25 |
+| A goal finished (its last milestone cleared) | 65 more |
+| A day won | 20 |
+| A day lost | minus 13 |
+| A task completed | 0 (off unless you give it a value) |
+
+Mission XP follows the objective weights above, so finishing only the critical objective earns half of it. It is paid only on a day you set a mission: no mission, no mission XP. A rest day earns nothing for the mission or habits and costs nothing.
+
+**What a level costs** follows Habitica's chart: 150 XP for the first level, 160 for the second, 260 at level 10, 1,260 at level 50 and 3,580 for the last, 145,410 in all.
+
+**What you earn grows as you level.** The table shows level 1. Everything in it, the cost of a lost day included, is multiplied as you climb: about x1.3 at level 10, x2.9 at level 50 and x4.9 at level 99. With these values a day halfway between your best and your worst reaches level 100 in about two years, a run of perfect days in about eleven months, and early levels take a couple of days each where the last ones take nearly two weeks. How much earnings grow is one slider under **Settings > Game** (0% never grows, 100% makes every level take equally long).
+
+A lost day takes XP away, but it never takes back a level you have reached, unless you switch that off.
+
+**Ranks** are bands of levels, each with its own colour: Novice from level 1, Apprentice from 6, Expert from 16, Elite from 31, Master from 51, Grand Master from 76. The level in the top bar wears the colour of your rank. Rename them, recolour them, move where each begins, or add your own under **Settings > Game**. Every number in the table is under **Settings > Game > What earns level XP**.
+
+**Levelling up.** When you gain a level the page gives way to it for a few seconds: the old number leaves, the new one lands in your rank's colour, and the bar to the next level fills. A new rank gets a longer version with the rank's name. Press anywhere, or Escape, to end it early. With motion set to Subtle it fades in without the flourish; with motion off you get a short notice in the corner instead.
+
+**Your stats.** Press the level in the top bar. The window shows the bar filling to where you stand, what today has paid and from what, the next rank and how far it is, days won and lost, hours of Deep work, milestones cleared, XP earned and lost in all, the last 14 days as bars, and every rank with its band of levels.
+
+The level is worked out from what is already stored, so it counts the days before this version too. One exception: a milestone remembers the day it was cleared only from this version on, so milestones cleared earlier earn nothing.
+
 
 ### Campaign
 
@@ -394,10 +474,10 @@ Start and end campaigns under **Settings > Game**. Ending one archives the resul
 
 | Where | What you can change |
 |---|---|
-| **Settings > Look** | Dashboard name. Light, dark or system. Accent colour (any colour). Typeface. Corners. Density. Motion (full, subtle or off), sounds and their volume, vibration. A background image, with sliders for dimming, blur and panel opacity. |
+| **Settings > Look** | Dashboard name. Light, dark or system. Accent colour (any colour). The colour of each ring on the Home dial, from the dashboard's own colours or any colour you pick. Typeface. Corners. Density. Motion (full, subtle or off), sounds and their volume, vibration. A background image, with sliders for dimming, blur and panel opacity. |
 | **Settings > Layout** | Sidebar as an icon strip or fully hidden. Which tabs show, and in what order. |
 | **Settings > Day & scoring** | Working hours, including hours that run past midnight. Daily targets. Every XP value. Weekly check-in categories. |
-| **Settings > Game** | Turn the rival, missions and rank on or off. Rename the rival, the Lock in button, the mission panel, rank and reputation. Edit the rank ladder. The rival's edge and voice. Rest day allowance. Campaigns. |
+| **Settings > Game** | Turn the rival, missions and the level on or off. Rename the rival, the Lock in button and the mission panel. Name the ranks and set the level each begins at. Set what earns level XP. The rival's edge and voice. Rest day allowance. Campaigns. |
 | **Settings > Notifications** | Which reminders are sent and when, including the times of the morning brief and the night debrief. Every sentence they use. |
 
 The background image stays on the device you chose it on. It is never uploaded. The dimming and panel opacity have lower limits so text stays readable on any photo.
@@ -435,7 +515,27 @@ What you should do:
 
 **Backup.** **Settings > Data > Export backup** downloads everything as one file. **Import backup** restores it. Without sync, this file is the only copy besides the browser itself, and clearing your browser's site data deletes the dashboard.
 
-**Updating.** When the original project improves, open your fork on GitHub and press **Sync fork**. Netlify redeploys by itself. Your data is not touched.
+**Updating to a newer version.** An update replaces the dashboard's code. Your data is not in the code: it is in your browser, and in your own database if sync is on, so an update does not touch it. How you update depends on how you set your copy up.
+
+*Your copy is a fork on GitHub and Netlify builds from it (the setup in section 1):*
+
+1. Export a backup first: **Settings > Data > Export backup**. You will not need it, but it costs ten seconds.
+2. On GitHub, open your fork. If there is something new, a line above the file list says "This branch is N commits behind". Press **Sync fork**, then **Update branch**.
+3. Netlify sees the change and redeploys by itself in about a minute. You can watch it under **Deploys**.
+4. Open [CHANGELOG.md](CHANGELOG.md) and read the newest entry. If it has an **After updating** line, do what it says. That is where a database change or a new setting is announced.
+5. On each device, close the dashboard completely and open it again. **Settings > About** shows the version you are now on.
+
+*You deploy from your computer with the Netlify CLI:*
+
+1. In the project folder run `git pull`. If the folder is a clone of your own fork, sync the fork on GitHub first (step 2 above).
+2. Run `netlify deploy --prod`.
+3. Do steps 4 and 5 above.
+
+*You downloaded a ZIP instead of forking:* download the new ZIP from GitHub (**Code > Download ZIP**), unpack it over the old folder but keep your `.netlify` folder, and deploy the way you did before.
+
+*You changed files in your fork:* **Sync fork** then offers to discard your commits. Do not accept that if you want to keep your changes. Instead merge on your computer: `git remote add upstream https://github.com/Kamalesh-Sriram/Personal-Dashboard.git` once, then `git fetch upstream` and `git merge upstream/main`, fix any conflicts, and push.
+
+To hear about new versions, press **Watch** on the original repository on GitHub.
 
 **Trying it with sample data.** With Node.js installed, run `npm run demo` in the project folder and import the file it creates.
 

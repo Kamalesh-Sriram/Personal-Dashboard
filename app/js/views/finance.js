@@ -6,7 +6,7 @@ import { registerActions, openModal, closeModal, toast, confirmDialog, segHtml }
 import { icon } from '../icons.js';
 import { esc, safeColor, today, uid, pad } from '../util.js';
 import { ui, refresh } from '../bus.js';
-import { shareBar } from '../charts.js';
+import { donut } from '../charts.js';
 import * as Fin from '../fin.js';
 import * as F from '../fincalc.js';
 import * as Sync from '../sync.js';
@@ -68,13 +68,17 @@ function statsHtml(t, prev, cur, label) {
 }
 function catsHtml(t, cur) {
   if (!t.rows.length) return '<div class="empty">Nothing was spent in this period.</div>';
-  const max = Math.max(...t.rows.map(r => r.v), 1), sum = t.rows.reduce((n, r) => n + Math.max(0, r.v), 0) || 1;
-  return `${shareBar(t.rows.map(r => ({ label: catOf(r.id).name, value: r.v, color: catOf(r.id).color })))}
-    <div class="fin-cats">${t.rows.map(r => { const c = catOf(r.id), on = ui.finCat === (r.id || '-');
-      return `<button class="fin-cat ${on ? 'on' : ''}" data-act="fin.filter" data-cat="${esc(r.id || '-')}" style="--c:${safeColor(c.color)}" aria-pressed="${on}">
-        <span class="dot" style="background:var(--c)"></span><span class="fin-cat-n ell">${esc(c.name)}</span>
-        <span class="bar thin grow"><i style="width:${Math.max(2, r.v / max * 100)}%;background:var(--c)"></i></span>
-        <b>${money(r.v, cur)}</b><span class="tiny dim" style="width:34px;text-align:right">${Math.round(Math.max(0, r.v) / sum * 100)}%</span></button>`; }).join('')}</div>`;
+  const rows = t.rows.filter(r => r.v > 0), sum = rows.reduce((n, r) => n + r.v, 0) || 1;
+  const parts = rows.map(r => ({ id: r.id || '-', label: catOf(r.id).name, value: r.v, color: catOf(r.id).color }));
+  const draw = ui.finDraw !== false; ui.finDraw = false;
+  return `<div class="fin-pie">
+      <div class="pie-wrap">${donut(parts, { on: ui.finCat || null, act: 'fin.filter', draw })}
+        <div class="pie-mid" id="pie-mid" data-total="${esc(money(t.spent, cur))}"><b>${esc(money(t.spent, cur))}</b><span>spent</span></div></div>
+      <div class="fin-cats">${t.rows.map((r, i) => { const c = catOf(r.id), on = ui.finCat === (r.id || '-');
+        return `<button class="fin-cat ${on ? 'on' : ''}" data-act="fin.filter" data-cat="${esc(r.id || '-')}" data-row="${rows.indexOf(r)}" data-name="${esc(c.name)}" data-amount="${esc(money(r.v, cur))}" data-pct="${Math.round(Math.max(0, r.v) / sum * 100)}" style="--c:${safeColor(c.color)}" aria-pressed="${on}">
+          <span class="dot" style="background:var(--c)"></span><span class="fin-cat-n ell">${esc(c.name)}</span>
+          <b>${money(r.v, cur)}</b><span class="tiny dim" style="width:34px;text-align:right">${Math.round(Math.max(0, r.v) / sum * 100)}%</span></button>`; }).join('')}</div>
+    </div>`;
 }
 function yearHtml(months, cur) {
   const max = Math.max(1, ...months.map(m => Math.max(m.spent, m.income)));
@@ -109,6 +113,26 @@ function listHtml(txs, cur) {
 }
 
 export default {
+  mount(root) {
+    // Hovering a slice (or its line in the list) lifts the slice and names it in the middle of the ring.
+    const mid = root.querySelector('#pie-mid'), pie = root.querySelector('.pie');
+    if (mid && pie) {
+      const rows = [...root.querySelectorAll('.fin-cat[data-row]')].filter(el => +el.dataset.row >= 0);
+      const picked = rows.find(el => el.classList.contains('on')), rest = picked ? +picked.dataset.row : -1;   // the chosen slice stays named when nothing is pointed at
+      const show = i => {
+        if (i < 0) i = rest;
+        pie.querySelectorAll('.seg').forEach(sg => sg.classList.toggle('hot', +sg.dataset.seg === i));
+        rows.forEach(el => el.classList.toggle('hot', +el.dataset.row === i));
+        const el = rows.find(x => +x.dataset.row === i);
+        mid.innerHTML = el ? `<b>${esc(el.dataset.amount)}</b><span>${esc(el.dataset.name)} · ${esc(el.dataset.pct)}%</span>` : `<b>${esc(mid.dataset.total)}</b><span>spent</span>`;
+      };
+      pie.querySelectorAll('.seg').forEach(sg => { sg.addEventListener('mouseenter', () => show(+sg.dataset.seg)); sg.addEventListener('focus', () => show(+sg.dataset.seg)); });
+      rows.forEach(el => el.addEventListener('mouseenter', () => show(+el.dataset.row)));
+      root.querySelector('.fin-pie').addEventListener('mouseleave', () => show(-1));
+      if (rest >= 0) show(-1);
+    }
+    if (ui.finScroll) { ui.finScroll = false; const tx = root.querySelector('#fin-tx'); if (tx) tx.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
+  },
   render() {
     const ready = ensure(), d = Fin.cached(), s = Fin.status;
     if (!ready || !d) return `<div class="view-h"><h2>Finance</h2></div><div class="card empty">Loading your transactions.</div>`;
@@ -133,11 +157,9 @@ export default {
         <span class="grow"></span>${segHtml('fin.view', [['month', 'Month'], ['year', 'Year']], year ? 'year' : 'month')}</div>
       ${statsHtml(t, prev, cur, year ? 'year' : 'month')}
       ${loose ? `<div class="notice" style="margin-top:var(--gap)">${icon('help')} <span>${loose} transaction${loose === 1 ? ' has' : 's have'} no category yet. Pick one in the list and choose "Always" to teach the dashboard that merchant. <button class="btn sm" data-act="fin.filter" data-cat="-">Show ${loose === 1 ? 'it' : 'them'}</button></span></div>` : ''}
-      <div class="gym-grid fin-grid">
-        <section class="card"><div class="card-h"><span class="eyebrow">Where it went</span><span class="tiny dim">press a category to filter</span></div>${catsHtml(t, cur)}</section>
-        <section class="card"><div class="card-h"><span class="eyebrow">${year ? 'Month by month' : 'Day by day'}</span></div>${year ? yearHtml(F.yearMonths(all, y, cats), cur) : daysHtml(set, ym, cur)}</section>
-      </div>
-      <section class="card" style="margin-top:var(--gap)">${listHtml(set, cur)}</section>
+      <section class="card" style="margin-top:var(--gap)"><div class="card-h"><span class="eyebrow">Where it went</span><span class="tiny dim">${ui.finCat ? 'press the slice again to show everything' : 'press a slice to see its transactions'}</span></div>${catsHtml(t, cur)}</section>
+      <section class="card" id="fin-tx" style="margin-top:var(--gap)">${listHtml(set, cur)}</section>
+      <section class="card" style="margin-top:var(--gap)"><div class="card-h"><span class="eyebrow">${year ? 'Month by month' : 'Day by day'}</span></div>${year ? yearHtml(F.yearMonths(all, y, cats), cur) : daysHtml(set, ym, cur)}</section>
       ${other ? `<p class="hint" style="margin-top:10px">${other} transaction${other === 1 ? '' : 's'} in another currency ${other === 1 ? 'is' : 'are'} stored but not counted in these ${esc(cur)} totals.</p>` : ''}`;
   }
 };
@@ -249,14 +271,14 @@ registerActions({
   'fin.link': () => linkDialog(),
   'fin.sync': async () => { const n = await Fin.bankSync(); if (!Fin.status.error) toast(n ? `${n} new transaction${n === 1 ? '' : 's'}` : 'Nothing new from your bank', '', { kind: n ? 'good' : '', ms: 4000 }); },
   'fin.manage': () => manageDialog(),
-  'fin.view': d => { ui.finView = d.v; ui.finCat = ''; refresh(); },
-  'fin.month': d => { ui.finMonth = d.ym; ui.finView = 'month'; ui.finCat = ''; refresh(); },
+  'fin.view': d => { ui.finView = d.v; ui.finCat = ''; ui.finDraw = true; refresh(); },
+  'fin.month': d => { ui.finMonth = d.ym; ui.finView = 'month'; ui.finCat = ''; ui.finDraw = true; window.scrollTo({ top: 0, behavior: 'smooth' }); refresh(); },
   'fin.nav': d => {
     const ym = month(), y = +ym.slice(0, 4), m = +ym.slice(5), n = +d.d;
     const next = ui.finView === 'year' ? new Date(y + n, m - 1, 1) : new Date(y, m - 1 + n, 1);
-    ui.finMonth = `${next.getFullYear()}-${pad(next.getMonth() + 1)}`; ui.finCat = ''; ui.finAll = false; refresh();
+    ui.finMonth = `${next.getFullYear()}-${pad(next.getMonth() + 1)}`; ui.finCat = ''; ui.finAll = false; ui.finDraw = true; refresh();
   },
-  'fin.filter': d => { ui.finCat = ui.finCat === d.cat ? '' : d.cat; ui.finAll = false; refresh(); },
+  'fin.filter': d => { ui.finCat = ui.finCat === d.cat ? '' : d.cat; ui.finAll = false; ui.finScroll = !!ui.finCat; refresh(); },
   'fin.query': (d, e, el) => { ui.finQuery = el.value; refresh(); },
   'fin.all': () => { ui.finAll = true; refresh(); },
   'fin.cat': async (d, e, el) => {

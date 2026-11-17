@@ -172,3 +172,90 @@ export function upNext(workouts, limit = 6, now = Date.now()) {
     .sort((a, b) => b.recent - a.recent || b.e.sessions[b.e.sessions.length - 1].ts - a.e.sessions[a.e.sessions.length - 1].ts)
     .slice(0, limit);
 }
+
+/* ── openGym backups ── */
+const human = id => String(id || 'Exercise').replace(/^(ex|custom|c)[-_:]/i, '').replace(/[-_]+/g, ' ').replace(/\s+/g, ' ').trim().replace(/\b[a-z]/g, c => c.toUpperCase()) || 'Exercise';
+/** openGym's "Export backup (JSON)" → workouts. The app stores the whole
+ *  profile as one document: workouts with entries (an exercise id and its
+ *  sets), plus the names of exercises you made yourself. */
+export function fromOpenGym(doc) {
+  const st = (doc && (doc.state || doc.data)) || doc || {};
+  const list = Array.isArray(st.workouts) ? st.workouts : null;
+  if (!list) throw new Error('No workouts were found in that backup.');
+  const lb = st.unit === 'lb';
+  const names = new Map();
+  (st.customEx || []).forEach(x => { if (x && x.id) names.set(String(x.id), x.n || x.name); });
+  (st.routines || []).forEach(r => (r.ex || []).forEach(x => { if (x && x.id && (x.n || x.name)) names.set(String(x.id), x.n || x.name); }));
+  const routine = new Map((st.routines || []).map(r => [String(r.id), r.name]));
+  const workouts = list.map((w, i) => {
+    const start = Number(w.start) || (w.d ? Date.parse(w.d + 'T12:00:00') : 0);
+    return {
+      id: 'og-' + (w.id || start || i), title: w.name || routine.get(String(w.routineId)) || 'Workout', start, end: Number(w.end) || start,
+      ex: (w.entries || []).map(e => ({
+        name: e.n || e.name || names.get(String(e.id)) || (/^\d+$/.test(String(e.id)) ? 'Exercise ' + e.id : human(e.id)), tid: String(e.id || ''),
+        sets: (e.sets || []).filter(s => s && s.done !== false && (s.r > 0 || s.w > 0 || s.t > 0 || s.sec > 0)).map(s => ({
+          t: s.warm || s.warmup || s.type === 'warmup' ? 'warmup' : 'normal', kg: s.w == null ? null : lb ? s.w * LB : s.w, reps: s.r ?? null,
+          sec: s.sec ?? s.t ?? null, m: s.dist ?? null, rpe: s.rpe ?? null }))
+      })).filter(x => x.sets.length)
+    };
+  }).filter(w => w.start && w.ex.length).sort((a, b) => a.start - b.start);
+  if (!workouts.length) throw new Error('That backup has no finished workouts in it.');
+  return { source: 'openGym', workouts };
+}
+/** Any file the Gym tab accepts: an openGym backup (JSON), or a Hevy or Strong export (CSV). */
+export function fromFile(text) {
+  const t = String(text || '').replace(/^﻿/, '').trimStart();
+  if (t[0] === '{' || t[0] === '[') {
+    let doc; try { doc = JSON.parse(t); } catch { throw new Error('That JSON file could not be read.'); }
+    return fromOpenGym(doc);
+  }
+  return fromCsv(text);
+}
+
+/* ── the coach: which session comes next in your split, and what to do in it ── */
+const norm = s => String(s || '').trim().toLowerCase();
+/** A first guess at the split from the titles of recent workouts: the
+ *  shortest repeating pattern, or failing that each title once. */
+export function guessSplit(workouts) {
+  const titles = [...workouts].sort((a, b) => a.start - b.start).slice(-24).map(w => w.title);
+  if (titles.length < 2) return titles;
+  for (let p = 2; p <= 8 && p * 2 <= titles.length; p++) {
+    let ok = 0, n = 0;
+    for (let i = titles.length - 1; i - p >= 0 && n < p * 2; i--, n++) if (norm(titles[i]) === norm(titles[i - p])) ok++;
+    if (n >= p && ok / n >= 0.85) return titles.slice(-p);
+  }
+  const seen = [];
+  titles.forEach(t => { if (!seen.some(s => norm(s) === norm(t))) seen.push(t); });
+  return seen.slice(-7);
+}
+/** Where you are in the split: line the cycle up with your latest workouts
+ *  (the longest run that matches, counting back from the last one) and take
+ *  the slot after it. Then build that session from the last time you did it. */
+export function nextWorkout(workouts, split) {
+  const hist = [...workouts].sort((a, b) => a.start - b.start), n = (split || []).length;
+  if (!n || !hist.length) return null;
+  let best = -1, bestRun = -1;
+  for (let k = 0; k < n; k++) {
+    let run = 0;
+    for (let i = 0; i < Math.min(hist.length, n * 2); i++) {
+      if (norm(hist[hist.length - 1 - i].title) === norm(split[((k - i) % n + n) % n])) run++; else break;
+    }
+    if (run > bestRun) { bestRun = run; best = k; }
+  }
+  const slot = bestRun > 0 ? (best + 1) % n : 0, title = split[slot];
+  // the same slot one cycle ago, if that workout carries this title; otherwise the latest with the title
+  const same = hist.filter(w => norm(w.title) === norm(title));
+  const cycleAgo = hist[hist.length - n];
+  const template = cycleAgo && norm(cycleAgo.title) === norm(title) ? cycleAgo : same[same.length - 1] || null;
+  const all = new Map(exercises(hist).map(e => [e.key, e]));
+  const items = !template ? [] : template.ex.map(x => {
+    const sets = x.sets.filter(s => s.t !== 'warmup' && ((s.reps || 0) > 0 || (s.sec || 0) > 0));
+    if (!sets.length) return null;
+    const e = all.get(String(x.name).trim().toLowerCase()), s = e ? suggest(e.sessions) : null;
+    const lastTop = sets.reduce((b, v) => ((v.kg || 0) > (b.kg || 0) ? v : b), sets[0]);
+    return { name: x.name, key: e ? e.key : '', sets: sets.length, kind: s ? s.kind : 'same',
+      kg: s ? s.kg : lastTop.kg || 0, reps: s ? s.reps : lastTop.reps || 0, sec: s && s.kind === 'time' ? Math.round((lastTop.sec || 0) * 1.05) : 0,
+      last: lastTop, text: s ? s.text : 'Same as last time.' };
+  }).filter(Boolean);
+  return { title, slot, of: n, known: bestRun > 0, template, lastDone: same.length ? same[same.length - 1].start : 0, items };
+}

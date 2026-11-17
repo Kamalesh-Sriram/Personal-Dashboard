@@ -1,5 +1,7 @@
-/* GYM: progress per exercise and what to try next, from your Hevy history
-   or an imported file. The numbers are worked out in gymcalc.js. */
+/* GYM: what to do next, and how each lift is going, from your training
+   history (Hevy sync, or a file from Hevy, Strong or openGym). The numbers
+   are worked out in gymcalc.js. */
+import { S, save } from '../store.js';
 import { registerActions, openModal, closeModal, toast, confirmDialog } from '../ui.js';
 import { icon } from '../icons.js';
 import { esc, fmtDur } from '../util.js';
@@ -9,11 +11,14 @@ import * as Gym from '../gym.js';
 import * as G from '../gymcalc.js';
 import * as Sync from '../sync.js';
 
+const FILES = '.csv,.json,text/csv,text/plain,application/json';
+const cfg = () => S().gym;
 const fmtDay = ts => new Date(ts).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 const fmtFull = ts => new Date(ts).toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 const tonnes = kg => (kg >= 10000 ? (kg / 1000).toFixed(1) + ' t' : Math.round(kg).toLocaleString() + ' kg');
 const setText = s => (s.kg > 0 ? `${G.fmtKg(s.kg)} kg × ${s.reps || 0}` : s.reps ? `${s.reps} reps` : s.sec ? `${s.sec}s` : '-');
 const ago = ts => { const d = Math.floor((Date.now() - ts) / 86400000); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? `${d} days ago` : d < 70 ? `${Math.round(d / 7)} weeks ago` : `${Math.round(d / 30)} months ago`; };
+const kindPill = k => `<span class="pill tiny-pill ${k === 'add' ? 'good' : k === 'deload' ? 'warn' : ''}">${k === 'add' ? 'Add weight' : k === 'deload' ? 'Back off' : k === 'time' ? 'Longer' : k === 'same' ? 'Repeat' : 'More reps'}</span>`;
 
 let wired = false, asked = false;
 function ensure() {
@@ -22,7 +27,8 @@ function ensure() {
   if (!asked) {
     asked = true;
     // connected: top up quietly when the tab opens, at most every half hour
-    Gym.checkConfigured().then(ok => { const d = Gym.cached(); if (ok && d && Date.now() - (d.syncedAt || 0) > 30 * 60000) Gym.syncHevy(); });
+    Gym.checkConfigured().then(ok => { const d = Gym.cached(); if (ok && d && Date.now() - (d.syncedAt || 0) > 30 * 60000) Gym.syncAll(); });
+    Gym.resolveNames();
   }
   return true;
 }
@@ -33,15 +39,15 @@ function setupHtml() {
       <div class="h3">Bring in your training history</div>
       <p class="muted">Two ways. Either works on its own.</p>
       <div class="gym-ways">
-        <div><div class="label">Sync from Hevy</div>
-          <p class="hint">Keeps itself up to date. Needs Hevy Pro for the API key.</p>
-          ${!signed ? `<p class="hint">Turn on sync first (Settings > Sync): the key is kept on your site, and it only answers when you are signed in.</p><button class="btn sm" data-act="nav.go" data-tab="settings" data-sub="sync">Open sync settings</button>`
-            : s.configured ? `<button class="btn primary" data-act="gym.sync" ${s.busy ? 'disabled' : ''}>${icon('refresh')} ${s.busy ? esc(s.progress || 'Syncing') : 'Sync now'}</button>`
-            : `<ol class="hint gym-steps"><li>On hevy.com open Settings > Developer and copy your API key.</li><li>In Netlify open your site > Site configuration > Environment variables and add <b>HEVY_API_KEY</b> with that key.</li><li>Redeploy the site, then come back here.</li></ol>
-               <button class="btn sm" data-act="gym.check">${icon('refresh')} Check again</button>`}</div>
         <div><div class="label">Import a file</div>
-          <p class="hint">The CSV export from Hevy or Strong. It stays on this device.</p>
-          <label class="btn">${icon('upload')} Choose file<input type="file" accept=".csv,text/csv,text/plain" data-change="gym.file" hidden></label></div>
+          <p class="hint">A backup from openGym (Settings > Data & backup > Export backup), or the CSV export from Hevy or Strong. It is read on this device and stays here. Import a newer one any time.</p>
+          <label class="btn primary">${icon('upload')} Choose file<input type="file" accept="${FILES}" data-change="gym.file" hidden></label></div>
+        <div><div class="label">Sync by itself</div>
+          <p class="hint">From Hevy (needs Hevy Pro for its API key) or from an openGym server you run yourself. Either keeps the tab up to date without files.</p>
+          ${!signed ? `<p class="hint">Turn on sync first (Settings > Sync): the keys are kept on your site, and it only answers when you are signed in.</p><button class="btn sm" data-act="nav.go" data-tab="settings" data-sub="sync">Open sync settings</button>`
+            : s.configured || s.opengym ? `<button class="btn" data-act="gym.sync" ${s.busy ? 'disabled' : ''}>${icon('refresh')} ${s.busy ? esc(s.progress || 'Syncing') : `Sync from ${s.configured ? 'Hevy' : 'openGym'}`}</button>`
+            : `<p class="hint">Add <b>HEVY_API_KEY</b>, or <b>OPENGYM_URL</b> and <b>OPENGYM_TOKEN</b>, to your site's environment variables in Netlify and redeploy. The steps for both are in HOW-TO-USE.md.</p>
+               <button class="btn sm" data-act="gym.check">${icon('refresh')} Check again</button>`}</div>
       </div>
       ${s.error ? `<div class="notice bad">${esc(s.error)}</div>` : ''}
     </div>`;
@@ -49,26 +55,55 @@ function setupHtml() {
 
 function statsHtml(sum) {
   const delta = sum.volPrev ? Math.round((sum.vol30 - sum.volPrev) / sum.volPrev * 100) : null;
-  const stat = (ico, label, big, small) => `<div class="card stat"><div class="stat-ico">${icon(ico)}</div><div><span class="eyebrow">${label}</span><b class="num">${big}</b><span>${small}</span></div></div>`;
-  return `<div class="hab-sum">
-    ${stat('gym', 'This week', `${sum.thisWeek}<small> workout${sum.thisWeek === 1 ? '' : 's'}</small>`, `${sum.count30} in the last 30 days`)}
-    ${stat('gauge', 'Volume, 30 days', tonnes(sum.vol30), delta === null ? 'No earlier month to compare' : `${delta >= 0 ? '+' : ''}${delta}% on the 30 days before`)}
-    ${stat('zap', 'Records this month', sum.records, sum.records ? 'New estimated maxes' : 'None yet this month')}
-    ${stat('flame', 'Weeks in a row', `${sum.weekStreak}<small> week${sum.weekStreak === 1 ? '' : 's'}</small>`, 'With at least one workout')}
+  const stat = (label, big, small) => `<div><b class="num">${big}</b><span class="eyebrow">${label}</span><i>${small}</i></div>`;
+  return `<div class="gym-stats">
+    ${stat('This week', `${sum.thisWeek}`, `workout${sum.thisWeek === 1 ? '' : 's'}, ${sum.count30} in 30 days`)}
+    ${stat('Volume, 30 days', tonnes(sum.vol30), delta === null ? 'no earlier month yet' : `${delta >= 0 ? '+' : ''}${delta}% on the month before`)}
+    ${stat('Records this month', sum.records, sum.records ? 'new estimated maxes' : 'none yet')}
+    ${stat('Weeks in a row', sum.weekStreak, 'with at least one workout')}
   </div>`;
 }
 
-function nextHtml(list) {
-  if (!list.length) return `<div class="empty">Suggestions appear once an exercise has two sessions in the last few weeks.</div>`;
-  return `<div class="list">${list.map(({ e, s }) => {
+/* ── the coach: your next session, exercise by exercise ── */
+function target(it) {
+  if (it.kind === 'time' || (!it.kg && !it.reps && it.sec)) return `${it.sets} × ${it.sec || it.last.sec || 0}s`;
+  const reps = it.kind === 'add' ? `${it.reps}+` : it.kind === 'same' ? String(it.reps) : it.kind === 'deload' ? `up to ${it.reps}` : String(it.reps);
+  return it.kg > 0 ? `${it.sets} × ${reps} at ${G.fmtKg(it.kg)} kg` : `${it.sets} × ${reps}`;
+}
+function coachHtml(workouts) {
+  const split = cfg().split.length ? cfg().split : G.guessSplit(workouts), mine = cfg().split.length > 0;
+  const n = G.nextWorkout(workouts, split);
+  const head = (right = '') => `<div class="card-h"><span class="eyebrow">Next workout</span>${right}
+      <button class="btn sm ghost" data-act="gym.split">${icon('edit')} ${mine ? 'Edit split' : 'Set your split'}</button></div>`;
+  if (!n || !n.title) return `${head()}<div class="empty">Tell the dashboard your split and it will line up your next session from the last time you did it.</div>`;
+  return `${head(`<span class="tiny dim">${n.slot + 1} of ${n.of} in your split</span>`)}
+    <div class="coach-h"><b class="coach-t">${esc(n.title)}</b>
+      <span class="muted">${n.lastDone ? `last done ${ago(n.lastDone)}` : 'not done before'}${mine ? '' : ' · split guessed from your history'}</span></div>
+    <div class="coach-split">${split.map((t, i) => `<span class="${i === n.slot ? 'on' : ''}">${esc(t)}</span>`).join('')}</div>
+    ${n.items.length ? `<div class="list coach-list">${n.items.map(it => `<button class="li coach-row" data-act="gym.exercise" data-key="${esc(it.key)}" ${it.key ? '' : 'disabled'}>
+        <div class="grow"><div class="row"><b class="ell">${esc(it.name)}</b>${kindPill(it.kind)}</div><div class="tiny dim">${esc(it.text)}</div></div>
+        <div class="coach-do">${esc(target(it))}</div></button>`).join('')}</div>
+      <p class="hint" style="margin-top:10px">Built from your last ${esc(n.title)} session in this place of the split. Sets are your working sets; warm-ups are up to you.</p>`
+      : `<div class="empty">No earlier workout called "${esc(n.title)}" was found, so there is nothing to build it from. Check the names in your split.</div>`}`;
+}
+
+/* ── the lifts you care about ── */
+function liftsHtml(workouts, exs) {
+  const focus = cfg().focus || [], byKey = new Map(exs.map(e => [e.key, e]));
+  const list = focus.length ? focus.map(k => byKey.get(k)).filter(Boolean).map(e => ({ e, s: G.suggest(e.sessions) })) : G.upNext(workouts);
+  const head = `<div class="card-h"><span class="eyebrow">${focus.length ? 'Your lifts' : 'Your regular lifts'}</span>
+      <button class="btn sm ghost" data-act="gym.focus">${icon('edit')} Choose lifts</button></div>`;
+  if (!list.length) return `${head}<div class="empty">${focus.length ? 'None of the lifts you chose are in your history yet.' : 'Pick the lifts that matter most to you, or log an exercise twice and it shows up here.'}</div>`;
+  return `${head}<div class="list">${list.map(({ e, s }) => {
     const last = e.sessions[e.sessions.length - 1];
     const sets = last.sets.filter(x => (x.kg || 0) >= (last.top.kg || 0) * 0.95).slice(0, 5).map(x => x.reps || 0).join(', ');
     return `<button class="li gym-next" data-act="gym.exercise" data-key="${esc(e.key)}">
-      <div class="grow"><div class="row"><b class="ell">${esc(e.name)}</b><span class="pill tiny-pill ${s.kind === 'add' ? 'good' : s.kind === 'deload' ? 'warn' : ''}">${s.kind === 'add' ? 'Add weight' : s.kind === 'deload' ? 'Back off' : s.kind === 'time' ? 'Longer' : 'More reps'}</span></div>
-        <div class="gym-tip">${esc(s.text)}</div>
-        <div class="tiny dim">Last time, ${ago(last.ts)}: ${last.top.kg > 0 ? `${G.fmtKg(last.top.kg)} kg × ${esc(sets)}` : esc(setText(last.top))}</div></div>
+      <div class="grow"><div class="row"><b class="ell">${esc(e.name)}</b>${s ? kindPill(s.kind) : ''}</div>
+        ${s ? `<div class="gym-tip">${esc(s.text)}</div>` : ''}
+        <div class="tiny dim">Last time, ${ago(last.ts)}: ${last.top.kg > 0 ? `${G.fmtKg(last.top.kg)} kg × ${esc(sets)}` : esc(setText(last.top))}${e.best ? ` · best est. max ${G.fmtKg(Math.round(e.best * 2) / 2)} kg` : ''}</div></div>
       <div class="gym-spark">${sparkLine(e.sessions.slice(-10).map(x => x.e1rm || x.reps))}</div>
-    </button>`; }).join('')}</div>`;
+    </button>`; }).join('')}</div>
+    ${focus.length ? '' : '<p class="hint" style="margin-top:10px">These are picked by how often you do them. Press Choose lifts to decide for yourself.</p>'}`;
 }
 
 function weeksHtml(wk) {
@@ -76,27 +111,26 @@ function weeksHtml(wk) {
   return `<div class="gym-weeks">${wk.map((w, i) => `<div class="gym-week" title="Week of ${fmtDay(w.start)}: ${w.count} workout${w.count === 1 ? '' : 's'}, ${tonnes(w.vol)}">
       <div class="gym-week-bar"><i class="${i === wk.length - 1 ? 'now' : ''}" style="height:${Math.max(w.vol ? 4 : 0, w.vol / max * 100)}%"></i></div>
       <b>${w.count || '·'}</b></div>`).join('')}</div>
-    <div class="tiny dim" style="margin-top:8px">Bars are weekly volume. The number is workouts that week.</div>`;
+    <div class="tiny dim" style="margin-top:8px;text-align:center">Bars are weekly volume. The number under each is workouts that week.</div>`;
 }
 
 function exercisesHtml(all, templates) {
-  const q = (ui.gymQuery || '').trim().toLowerCase();
-  const rows = all.filter(e => !q || e.name.toLowerCase().includes(q)).sort((a, b) => b.sessions.length - a.sessions.length).slice(0, ui.gymAll ? 400 : 12);
-  return `<div class="card-h"><span class="eyebrow">Exercises · ${all.length}</span>
-      <input class="input" style="max-width:220px;height:32px" placeholder="Search" value="${esc(ui.gymQuery || '')}" data-input="gym.query" data-fk="gym-q" aria-label="Search exercises"></div>
-    <div class="list">${rows.map(e => { const last = e.sessions[e.sessions.length - 1], m = (templates[e.tid] || {}).muscle;
-      return `<button class="li gym-ex" data-act="gym.exercise" data-key="${esc(e.key)}">
-        <div class="grow"><div class="ell"><b>${esc(e.name)}</b></div><div class="tiny dim">${m ? esc(m.replace(/_/g, ' ')) + ' · ' : ''}${e.sessions.length} session${e.sessions.length === 1 ? '' : 's'} · last ${ago(last.ts)}</div></div>
-        <div class="gym-num"><b>${e.best ? G.fmtKg(Math.round(e.best * 2) / 2) + ' kg' : '-'}</b><span class="tiny dim">est. max</span></div>
-        <div class="gym-num"><b>${esc(setText(last.top))}</b><span class="tiny dim">last top set</span></div>
-      </button>`; }).join('') || '<div class="empty">Nothing matches.</div>'}</div>
+  const q = (ui.gymQuery || '').trim().toLowerCase(), focus = new Set(cfg().focus || []);
+  const rows = all.filter(e => !q || e.name.toLowerCase().includes(q)).sort((a, b) => b.sessions.length - a.sessions.length).slice(0, ui.gymAll || q ? 400 : 12);
+  return `<div class="row" style="margin:4px 0 8px"><input class="input" style="max-width:320px;height:34px" placeholder="Search your exercises" value="${esc(ui.gymQuery || '')}" data-input="gym.query" data-fk="gym-q" aria-label="Search your exercises"></div>
+    <div class="list">${rows.map(e => { const last = e.sessions[e.sessions.length - 1], m = (templates[e.tid] || {}).muscle, on = focus.has(e.key);
+      return `<div class="li gym-ex-row"><button class="gym-ex grow" data-act="gym.exercise" data-key="${esc(e.key)}">
+          <div class="grow"><div class="ell"><b>${esc(e.name)}</b></div><div class="tiny dim">${m ? esc(m.replace(/_/g, ' ')) + ' · ' : ''}${e.sessions.length} session${e.sessions.length === 1 ? '' : 's'} · last ${ago(last.ts)}</div></div>
+          <div class="gym-num"><b>${e.best ? G.fmtKg(Math.round(e.best * 2) / 2) + ' kg' : '-'}</b><span class="tiny dim">est. max</span></div>
+          <div class="gym-num"><b>${esc(setText(last.top))}</b><span class="tiny dim">last top set</span></div></button>
+        <button class="icon-btn sm ${on ? 'on' : ''}" data-act="gym.pin" data-key="${esc(e.key)}" title="${on ? 'Remove from your lifts' : 'Add to your lifts'}" aria-pressed="${on}" aria-label="${on ? 'Remove from' : 'Add to'} your lifts">${icon(on ? 'check' : 'plus')}</button></div>`; }).join('') || '<div class="empty">Nothing matches.</div>'}</div>
     ${!ui.gymAll && !q && all.length > 12 ? `<button class="btn sm ghost" data-act="gym.all" style="margin-top:8px">Show all ${all.length}</button>` : ''}`;
 }
 
-function recentHtml(workouts, exs) {
+function recentHtml(workouts, exs, count = 6) {
   const prAt = new Map();
   exs.forEach(e => e.prs.forEach(p => { const s = e.sessions.find(x => x.ts === p.ts); if (s) prAt.set(s.wid, (prAt.get(s.wid) || 0) + 1); }));
-  return `<div class="list">${workouts.slice(-8).reverse().map(w => `<button class="li gym-ex" data-act="gym.workout" data-id="${esc(w.id)}">
+  return `<div class="list">${workouts.slice(-count).reverse().map(w => `<button class="li gym-ex" data-act="gym.workout" data-id="${esc(w.id)}">
       <div class="grow"><div class="ell"><b>${esc(w.title)}</b>${prAt.get(w.id) ? ` <span class="pill tiny-pill good">${prAt.get(w.id)} record${prAt.get(w.id) === 1 ? '' : 's'}</span>` : ''}</div>
         <div class="tiny dim">${fmtFull(w.start)}${w.end > w.start ? ' · ' + fmtDur(w.end - w.start) : ''}</div></div>
       <div class="gym-num"><b>${G.setsOf(w)}</b><span class="tiny dim">sets</span></div>
@@ -104,13 +138,15 @@ function recentHtml(workouts, exs) {
     </button>`).join('')}</div>`;
 }
 
+/* ── dialogs ── */
 function openExercise(key) {
   const d = Gym.cached(), e = d && G.exercises(d.workouts).find(x => x.key === key);
   if (!e) return;
-  const s = G.suggest(e.sessions), weighted = e.best > 0;
+  const s = G.suggest(e.sessions), weighted = e.best > 0, on = (cfg().focus || []).includes(e.key);
   const pts = e.sessions.map(x => ({ x: x.ts, y: weighted ? x.e1rm : x.reps, t: `${fmtDay(x.ts)}: ${weighted ? G.fmtKg(Math.round(x.e1rm * 2) / 2) + ' kg' : x.reps + ' reps'}` }));
   openModal({
     title: e.name, cancel: 'Close', wide: true,
+    left: `<button type="button" class="btn" data-act="gym.pin" data-key="${esc(e.key)}" data-close="1">${icon(on ? 'x' : 'plus')} ${on ? 'Remove from your lifts' : 'Add to your lifts'}</button>`,
     body: `${s ? `<div class="notice ${s.kind === 'add' ? 'good' : s.kind === 'deload' ? 'warn' : ''}">${icon('zap')} <span><b>Next time.</b> ${esc(s.text)}</span></div>` : ''}
       <div class="telemetry">
         <div><span>${weighted ? 'Best estimated max' : 'Sessions'}</span><b>${weighted ? G.fmtKg(Math.round(e.best * 2) / 2) + ' kg' : e.sessions.length}</b>${weighted ? `<i>${fmtDay(e.bestAt)}</i>` : ''}</div>
@@ -121,7 +157,7 @@ function openExercise(key) {
       <div><div class="label" style="margin-bottom:6px">Last sessions</div>
         <div class="list">${e.sessions.slice(-6).reverse().map(x => `<div class="li"><span style="width:92px" class="dim">${fmtDay(x.ts)}</span>
           <span class="grow">${x.sets.map(setText).map(esc).join('<span class="dim"> · </span>')}</span>${weighted ? `<b>${G.fmtKg(Math.round(x.e1rm * 2) / 2)}</b>` : ''}</div>`).join('')}</div></div>
-      <p class="hint">The estimated max uses the Epley formula on your best set of the day. The suggestion follows double progression: more reps at the same weight until every set reaches your usual top, then more weight.</p>`
+      <p class="hint">The estimated max uses the Epley formula on your best set of the day. The suggestion follows double progression: more reps at the same weight until every set reaches the top of your rep range, then more weight.</p>`
   });
 }
 function openWorkout(id) {
@@ -134,55 +170,127 @@ function openWorkout(id) {
         <span class="grow muted">${x.sets.map(s => (s.t === 'warmup' ? '<span class="dim">w </span>' : '') + esc(setText(s))).join('<span class="dim"> · </span>')}</span></div>`).join('')}</div>`
   });
 }
+/** Your split, in order: each line is the name you give that workout in your gym app. */
+function openSplit() {
+  const d = Gym.cached(), titles = [];
+  [...((d && d.workouts) || [])].reverse().forEach(w => { if (!titles.some(t => t.toLowerCase() === w.title.toLowerCase())) titles.push(w.title); });
+  let rows = (cfg().split.length ? cfg().split : G.guessSplit((d && d.workouts) || [])).slice();
+  if (!rows.length) rows = [''];
+  const html = () => rows.map((t, i) => `<div class="row"><span class="dim" style="width:18px">${i + 1}</span>
+      <input class="input" value="${esc(t)}" list="gym-titles" data-i="${i}" maxlength="60" placeholder="Workout name, for example Upper" aria-label="Session ${i + 1}">
+      <button type="button" class="icon-btn sm" data-up="${i}" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up')}</button>
+      <button type="button" class="icon-btn sm" data-down="${i}" ${i === rows.length - 1 ? 'disabled' : ''} aria-label="Move down">${icon('down')}</button>
+      <button type="button" class="icon-btn sm" data-del="${i}" ${rows.length <= 1 ? 'disabled' : ''} aria-label="Remove">${icon('x')}</button></div>`).join('');
+  openModal({
+    title: 'Your split', submit: 'Save split',
+    body: `<p class="muted">List your sessions in the order you do them, one cycle long. Use the names your workouts have in your gym app, so the dashboard can recognise them. The same name can appear more than once: upper, lower, upper, lower, arms is five lines.</p>
+      <div id="sp-rows" class="col" style="gap:8px">${html()}</div>
+      <datalist id="gym-titles">${titles.slice(0, 40).map(t => `<option value="${esc(t)}">`).join('')}</datalist>
+      <button type="button" class="btn sm" id="sp-add" style="align-self:flex-start">${icon('plus')} Add a session</button>
+      <div class="hint">Names seen in your history: ${titles.slice(0, 12).map(esc).join(', ') || 'none yet'}.</div>`,
+    onMount: el => {
+      const box = el.querySelector('#sp-rows');
+      box.addEventListener('input', e => { const t = e.target.closest('[data-i]'); if (t) rows[+t.dataset.i] = t.value; });
+      box.addEventListener('click', e => {
+        const u = e.target.closest('[data-up]'), dn = e.target.closest('[data-down]'), dl = e.target.closest('[data-del]');
+        if (u) { const i = +u.dataset.up; [rows[i - 1], rows[i]] = [rows[i], rows[i - 1]]; }
+        if (dn) { const i = +dn.dataset.down; [rows[i + 1], rows[i]] = [rows[i], rows[i + 1]]; }
+        if (dl) rows.splice(+dl.dataset.del, 1);
+        if (u || dn || dl) box.innerHTML = html();
+      });
+      el.querySelector('#sp-add').addEventListener('click', () => { rows.push(''); box.innerHTML = html(); const all = box.querySelectorAll('input'); all[all.length - 1].focus(); });
+    },
+    onSubmit: () => { S().gym.split = rows.map(t => t.trim()).filter(Boolean).slice(0, 14); save(); }
+  });
+}
+/** Pick the lifts shown under "Your lifts". */
+function openFocus() {
+  const d = Gym.cached(), exs = G.exercises((d && d.workouts) || []).sort((a, b) => b.sessions.length - a.sessions.length);
+  const chosen = new Set(cfg().focus || []);
+  const html = q => exs.filter(e => !q || e.name.toLowerCase().includes(q)).slice(0, 200).map(e => `<label class="li" style="padding:8px 0;cursor:pointer"><input type="checkbox" data-key="${esc(e.key)}" ${chosen.has(e.key) ? 'checked' : ''}>
+      <span class="grow ell">${esc(e.name)}</span><span class="tiny dim">${e.sessions.length} session${e.sessions.length === 1 ? '' : 's'}</span></label>`).join('') || '<div class="empty">Nothing matches.</div>';
+  openModal({
+    title: 'Choose your lifts', submit: 'Save',
+    body: `<p class="muted">Tick the exercises you want to follow. They are listed with what to aim for next time. Leave everything unticked and the dashboard picks your most frequent ones.</p>
+      <input class="input" id="fo-q" placeholder="Search your exercises" aria-label="Search your exercises" autofocus>
+      <div id="fo-list" class="list" style="max-height:46vh;overflow:auto">${html('')}</div>`,
+    onMount: el => {
+      const box = el.querySelector('#fo-list');
+      el.querySelector('#fo-q').addEventListener('input', e => { box.innerHTML = html(e.target.value.trim().toLowerCase()); });
+      box.addEventListener('change', e => { const c = e.target.closest('[data-key]'); if (c) { c.checked ? chosen.add(c.dataset.key) : chosen.delete(c.dataset.key); } });
+    },
+    onSubmit: () => { const keep = (cfg().focus || []).filter(k => chosen.has(k)); S().gym.focus = [...keep, ...[...chosen].filter(k => !keep.includes(k))].slice(0, 30); save(); }
+  });
+}
 
 export default {
   render() {
     const ready = ensure(), d = Gym.cached(), s = Gym.status;
     if (!ready || !d) return `<div class="view-h"><h2>Gym</h2></div><div class="card empty">Loading your training history.</div>`;
     if (!d.workouts.length) return `<div class="view-h"><h2>Gym</h2></div>${setupHtml()}`;
-    const exs = G.exercises(d.workouts), sum = G.summary(d.workouts), hevy = d.source === 'hevy';
+    const exs = G.exercises(d.workouts), sum = G.summary(d.workouts), hevy = d.source === 'hevy', og = d.source === 'opengym' && d.syncedAt && d.ogRev != null;
     return `<div class="view-h"><h2>Gym</h2>
-        <span class="tiny dim">${s.busy ? esc(s.progress || 'Syncing') : hevy && d.syncedAt ? `Synced with Hevy ${ago(d.syncedAt) === 'today' ? 'today at ' + new Date(d.syncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ago(d.syncedAt)}` : `${sum.total} workouts from a file`}</span>
-        ${Sync.signedIn() && s.configured ? `<button class="btn sm ghost" data-act="gym.sync" ${s.busy ? 'disabled' : ''}>${icon('refresh')} Sync</button>` : ''}
-        <label class="btn sm ghost">${icon('upload')} Import file<input type="file" accept=".csv,text/csv,text/plain" data-change="gym.file" hidden></label>
+        <span class="tiny dim">${s.busy ? esc(s.progress || 'Syncing') : (hevy || og) && d.syncedAt ? `Synced with ${hevy ? 'Hevy' : 'openGym'} ${ago(d.syncedAt) === 'today' ? 'today at ' + new Date(d.syncedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ago(d.syncedAt)}` : `${sum.total} workouts, latest ${ago(d.workouts[d.workouts.length - 1].start)}`}</span>
+        ${Sync.signedIn() && (s.configured || s.opengym) ? `<button class="btn sm ghost" data-act="gym.sync" ${s.busy ? 'disabled' : ''}>${icon('refresh')} Sync</button>` : ''}
+        <label class="btn sm ghost">${icon('upload')} Import file<input type="file" accept="${FILES}" data-change="gym.file" hidden></label>
         <button class="icon-btn sm" data-act="gym.manage" title="Manage gym data" aria-label="Manage gym data">${icon('settings')}</button></div>
       ${s.error ? `<div class="notice bad" style="margin-bottom:var(--gap)">${esc(s.error)}</div>` : ''}
-      ${statsHtml(sum)}
+      <section class="card gym-weeks-card"><div class="card-h"><span class="eyebrow">Last 12 weeks</span></div>
+        <div class="gym-weeks-in">${weeksHtml(G.weeks(d.workouts, 12))}</div>${statsHtml(sum)}</section>
+      <section class="card" style="margin-top:var(--gap)">${coachHtml(d.workouts)}</section>
       <div class="gym-grid">
-        <section class="card"><div class="card-h"><span class="eyebrow">Next session</span><span class="tiny dim">what to try on your regular lifts</span></div>${nextHtml(G.upNext(d.workouts))}</section>
-        <div class="stack">
-          <section class="card"><div class="card-h"><span class="eyebrow">Last 12 weeks</span></div>${weeksHtml(G.weeks(d.workouts, 12))}</section>
-          <section class="card"><div class="card-h"><span class="eyebrow">Recent workouts</span></div>${recentHtml(d.workouts, exs)}</section>
-        </div>
+        <section class="card">${liftsHtml(d.workouts, exs)}</section>
+        <section class="card"><div class="card-h"><span class="eyebrow">Recent workouts</span></div>${recentHtml(d.workouts, exs, recentCount(d.workouts, exs))}</section>
       </div>
-      <section class="card" style="margin-top:var(--gap)">${exercisesHtml(exs, d.templates || {})}</section>`;
+      <details class="card fold" data-fold="gymEx" ${ui.gymExOpen || ui.gymQuery ? 'open' : ''} style="margin-top:var(--gap)">
+        <summary><span class="eyebrow">All exercises · ${exs.length}</span><span class="tiny dim">search, charts and records for anything you have logged</span>${icon('down')}</summary>
+        ${ui.gymExOpen || ui.gymQuery ? exercisesHtml(exs, d.templates || {}) : ''}
+      </details>`;
+  },
+  mount(root) {
+    // remember whether the exercise list is open, and fill it in when it opens
+    root.querySelectorAll('details[data-fold]').forEach(el => el.addEventListener('toggle', () => { const open = el.open; if (ui.gymExOpen !== open) { ui.gymExOpen = open; if (!open) ui.gymQuery = ''; refresh(); } }));
   }
 };
+/** As many recent workouts as it takes to stand level with the lifts beside them. */
+function recentCount(workouts, exs) {
+  const focus = (cfg().focus || []).filter(k => exs.some(e => e.key === k)).length;
+  const lifts = focus || G.upNext(workouts).length;
+  return Math.max(3, Math.min(10, Math.round(lifts * 1.42)));
+}
 
 registerActions({
-  'gym.sync': () => Gym.syncHevy(),
-  'gym.check': async () => { const ok = await Gym.checkConfigured(); toast(ok ? 'Hevy is connected' : 'Not connected yet', ok ? 'Press Sync now to read your history.' : 'HEVY_API_KEY was not found on the site. Add it in Netlify and redeploy.', { kind: ok ? 'good' : '', ms: 7000 }); },
+  'gym.sync': () => Gym.syncAll(),
+  'gym.check': async () => { const ok = await Gym.checkConfigured(); toast(ok ? 'Connected' : 'Not connected yet', ok ? 'Press Sync to read your history.' : 'Neither HEVY_API_KEY nor OPENGYM_URL with OPENGYM_TOKEN was found on the site. Add them in Netlify and redeploy.', { kind: ok ? 'good' : '', ms: 8000 }); },
   'gym.file': async (d, e, el) => {
     const file = el.files && el.files[0]; el.value = '';
-    try { const n = await Gym.importFile(file); toast(n ? `Added ${n} workout${n === 1 ? '' : 's'}` : 'Nothing new in that file', n ? '' : 'Every workout in it was already here.', { kind: n ? 'good' : '', ms: 5000 }); }
+    try { const r = await Gym.importFile(file); toast(r.added ? `Added ${r.added} workout${r.added === 1 ? '' : 's'}` : 'Nothing new in that file', r.added ? `Read as ${r.source}.` : 'Every workout in it was already here.', { kind: r.added ? 'good' : '', ms: 5000 }); }
     catch (err) { toast('Could not read that file', err.message, { kind: 'bad', ms: 10000 }); }
   },
   'gym.query': (d, e, el) => { ui.gymQuery = el.value; refresh(); },
   'gym.all': () => { ui.gymAll = true; refresh(); },
   'gym.exercise': d => openExercise(d.key),
   'gym.workout': d => openWorkout(d.id),
+  'gym.split': () => openSplit(),
+  'gym.focus': () => openFocus(),
+  'gym.pin': d => {
+    const g = S().gym, has = (g.focus || []).includes(d.key);
+    g.focus = has ? g.focus.filter(k => k !== d.key) : [...(g.focus || []), d.key].slice(0, 30);
+    if (d.close) closeModal();
+    save();
+  },
   'gym.manage': () => {
     const d = Gym.cached() || { workouts: [] };
     openModal({
       title: 'Gym data', cancel: 'Close',
-      body: `<p class="muted">${d.workouts.length} workouts are stored on this device. They are not part of your synced dashboard: with Hevy connected, each device reads them from Hevy.</p>
-        <div class="row wrap">${Sync.signedIn() && Gym.status.configured ? `<button type="button" class="btn" data-act="gym.resync">${icon('refresh')} Read everything from Hevy again</button>` : ''}
+      body: `<p class="muted">${d.workouts.length} workouts are stored on this device. They are not part of your synced dashboard, but a backup (Settings > Data) carries them. Your split and the lifts you chose do sync.</p>
+        <div class="row wrap">${Sync.signedIn() && (Gym.status.configured || Gym.status.opengym) ? `<button type="button" class="btn" data-act="gym.resync">${icon('refresh')} Read everything again</button>` : ''}
           <button type="button" class="btn danger" data-act="gym.clear">${icon('trash')} Remove gym data from this device</button></div>`
     });
   },
-  'gym.resync': () => { closeModal(); Gym.syncHevy({ full: true }); },
+  'gym.resync': () => { closeModal(); Gym.syncAll({ full: true }); },
   'gym.clear': async () => {
-    if (!(await confirmDialog({ title: 'Remove gym data from this device?', body: 'Nothing is deleted in Hevy. You can sync or import again at any time.', ok: 'Remove', danger: true }))) return;
+    if (!(await confirmDialog({ title: 'Remove gym data from this device?', body: 'Nothing is deleted in your gym app. You can sync or import again at any time.', ok: 'Remove', danger: true }))) return;
     closeModal(); await Gym.clearGym();
   }
 });

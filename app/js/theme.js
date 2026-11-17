@@ -59,6 +59,12 @@ export function applyTheme() {
     root.style.setProperty('--on-accent', onColor(accent));
   }
 
+  // The Home dial's three rings can each have their own colour, and keep it in a campaign.
+  const dial = s.dial || {};
+  [['--dial-day', dial.day], ['--dial-xp', dial.xp], ['--dial-rival', dial.rival]].forEach(([k, v]) => {
+    if (/^#[0-9a-fA-F]{6}$/.test(v || '')) root.style.setProperty(k, v); else root.style.removeProperty(k);
+  });
+
   // Background image. Floors on dim and glass are what guarantee legibility.
   const on = !!(s.bg.on && bgUrl);
   root.dataset.bg = on ? 'on' : 'off';

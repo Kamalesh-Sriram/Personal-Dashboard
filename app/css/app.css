@@ -101,6 +101,16 @@ a { color: var(--accent-text); }
   -webkit-backdrop-filter: blur(18px) saturate(1.25); backdrop-filter: blur(18px) saturate(1.25);
 }
 .top-name { font: 700 clamp(20px, 2.4vw, 28px)/1.1 var(--font-display); letter-spacing: var(--name-track, -0.025em); text-transform: var(--name-case, none); margin-right: auto; min-width: 0; overflow-wrap: anywhere; }
+/* the level, always in view */
+.lv-chip { --rk: var(--accent); display: inline-flex; align-items: center; gap: 11px; padding: 2px 18px 2px 0; margin: 0; background: none; border: 0; border-right: 1px solid var(--line); border-radius: 0; color: var(--text); cursor: pointer; }
+.lv-n { display: inline-flex; align-items: baseline; gap: 5px; }
+.lv-n i { font: 700 10px/1 var(--font-sans); letter-spacing: .14em; font-style: normal; color: var(--text-3); }
+.lv-n b { font: 700 28px/1 var(--font-display); color: var(--rk); text-shadow: 0 0 18px color-mix(in srgb, var(--rk) 50%, transparent); transition: text-shadow .15s; }
+.lv-chip:hover .lv-n b, .lv-chip:focus-visible .lv-n b { text-shadow: 0 0 22px var(--rk); }
+.lv-r { display: flex; flex-direction: column; gap: 7px; width: 124px; text-align: left; }
+.lv-name { font: 700 10.5px/1 var(--font-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--rk); }
+.lv-bar { display: block; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text) 14%, transparent); overflow: hidden; }
+.lv-bar i { display: block; height: 100%; border-radius: 2px; background: var(--rk); box-shadow: 0 0 8px var(--rk); transition: width .5s cubic-bezier(.2, .8, .2, 1); }
 .top-meta { display: flex; gap: 22px; align-items: center; }
 .meta-l { font: 600 10px/1 var(--font-sans); letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); margin-bottom: 5px; }
 .meta-v { font: 600 15px/1 var(--font-display); white-space: nowrap; }
@@ -303,6 +313,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
   .top-meta { gap: 16px; order: 3; width: 100%; }
   /* once the page is scrolled the bar gives height back: the small labels go */
   .top.stuck .meta-l { display: none; }
+  .lv-chip { gap: 8px; padding-right: 12px; } .lv-r { width: 84px; gap: 6px; } .lv-n b { font-size: 22px; } .lv-name { font-size: 9.5px; letter-spacing: .12em; }
+  .top-name { font-size: 18px; }
   .modal-back { place-items: end center; padding: 0; }
   .modal { border-radius: var(--r-card) var(--r-card) 0 0; max-height: min(92dvh, calc(100dvh - env(safe-area-inset-top) - 12px)); width: 100%; padding-bottom: env(safe-area-inset-bottom); }
   #toasts { right: 8px; left: 8px; bottom: calc(8px + env(safe-area-inset-bottom)); width: auto; }
@@ -351,6 +363,11 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .check.pop::before { content: ""; position: absolute; inset: -2px; border-radius: inherit; background: var(--c, var(--accent)); animation: check-flood .42s cubic-bezier(.2, .8, .2, 1) both; }
 .check.pop svg path { stroke-dasharray: 20; animation: check-draw .26s cubic-bezier(.6, 0, .3, 1) .1s both; }
 
+/* a row being chosen: a ring leaves its edge and light sweeps across it */
+@keyframes pick-ring { from { box-shadow: 0 0 0 0 var(--accent), inset 0 0 0 1px var(--accent); } to { box-shadow: 0 0 0 12px transparent, inset 0 0 0 1px var(--line-2); } }
+@keyframes pick-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
+.fx-pick { position: relative; overflow: hidden; animation: pick-ring .5s cubic-bezier(.2, .8, .2, 1); }
+.fx-pick::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 26%, transparent) 50%, transparent 70%); animation: pick-sweep .55s ease-out both; }
 /* overlays drawn above the page: rays, a rising label, a sweep of light */
 #fx { position: fixed; inset: 0; z-index: 400; pointer-events: none; overflow: hidden; }
 .fx-burst { position: absolute; width: 0; height: 0; --c: var(--accent); }
@@ -382,3 +399,42 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; animation: none !important; } }
 :root[data-motion="off"] * { transition: none !important; animation: none !important; }
+
+/* on a narrow phone the level stands over its bar and the rank name goes, so the top bar stays on one line */
+@media (max-width: 480px) {
+  .lv-chip { flex-direction: column; align-items: stretch; gap: 4px; padding-right: 10px; } .lv-name { display: none; } .lv-r { width: auto; } .lv-n { justify-content: center; }
+  .top-name { min-width: 0; flex: 1 1 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+}
+/* between phone and desktop the level takes less room, so the top bar still fits on one line */
+@media (min-width: 481px) and (max-width: 1024px) { .lv-r { width: auto; min-width: 72px; max-width: 104px; } .lv-name { letter-spacing: .1em; } .lv-chip { padding-right: 12px; gap: 9px; } .top { column-gap: 12px; } }
+
+/* ── the level-up moment: the old number leaves, the new one lands, rays go out, the rank and bar follow ── */
+.lvup { --rk: var(--accent); position: fixed; inset: 0; z-index: 450; display: grid; place-items: center; cursor: pointer; overflow: hidden;
+  background: radial-gradient(55% 45% at 50% 46%, color-mix(in srgb, var(--rk) 24%, transparent), transparent 72%), color-mix(in srgb, var(--bg) 84%, transparent);
+  -webkit-backdrop-filter: blur(12px); backdrop-filter: blur(12px); animation: fade .25s ease both; transition: opacity .35s ease; }
+.lvup.out { opacity: 0; pointer-events: none; }
+.lvup-in { position: relative; display: flex; flex-direction: column; align-items: center; gap: 16px; padding: 24px; text-align: center; }
+.lvup-k { font: 700 13px/1 var(--font-sans); letter-spacing: .5em; margin-right: -.5em; text-transform: uppercase; color: var(--rk); animation: lvup-k .8s cubic-bezier(.2, .8, .2, 1) .1s both; }
+.lvup-n { position: relative; display: grid; place-items: center; height: clamp(120px, 26vw, 200px); }
+.lvup-old, .lvup-n b { grid-area: 1 / 1; font: 700 clamp(110px, 24vw, 190px)/1 var(--font-display); }
+.lvup-old { color: var(--text-3); animation: lvup-old .45s cubic-bezier(.5, 0, .8, .4) .3s both; }
+.lvup-n b { color: var(--rk); text-shadow: 0 0 70px color-mix(in srgb, var(--rk) 70%, transparent), 0 0 16px color-mix(in srgb, var(--rk) 55%, transparent); animation: lvup-new .75s cubic-bezier(.2, 1.4, .4, 1) .7s both; }
+.lvup-rays { position: absolute; left: 50%; top: 50%; width: 0; height: 0; }
+.lvup-rays u { position: absolute; left: -90px; top: -90px; width: 180px; height: 180px; border-radius: 50%; border: 2px solid var(--rk); opacity: 0; animation: lvup-ring 1.1s cubic-bezier(.2, .7, .3, 1) .78s both; }
+.lvup-rays u + u { animation-delay: 1s; }
+.lvup-rays i { position: absolute; left: -1.5px; top: 0; width: 3px; height: 74px; border-radius: 2px; background: linear-gradient(var(--rk), transparent); transform-origin: 50% 0; opacity: 0; animation: lvup-ray .9s cubic-bezier(.2, .7, .3, 1) .78s both; }
+.lvup-line { width: min(440px, 72vw); height: 1px; background: linear-gradient(90deg, transparent, var(--rk), transparent); animation: grow-x .8s cubic-bezier(.2, .8, .2, 1) .9s both; }
+.lvup-rank { font: 700 clamp(20px, 4vw, 30px)/1.1 var(--font-display); letter-spacing: .2em; margin-right: -.2em; text-transform: uppercase; color: var(--text); animation: rise .5s cubic-bezier(.2, .8, .2, 1) 1.15s both; }
+.lvup.ranked .lvup-rank { color: var(--rk); font-size: clamp(26px, 5.4vw, 42px); text-shadow: 0 0 30px color-mix(in srgb, var(--rk) 60%, transparent); animation: lvup-rank .8s cubic-bezier(.2, 1.3, .4, 1) 1.15s both; }
+.lvup-bar { width: min(320px, 62vw); height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--text) 14%, transparent); overflow: hidden; animation: fade .4s ease 1.3s both; }
+.lvup-bar i { display: block; height: 100%; border-radius: 2px; background: var(--rk); box-shadow: 0 0 10px var(--rk); transform-origin: left; animation: grow-x 1s cubic-bezier(.2, .8, .2, 1) 1.45s both; }
+.lvup-s { font-size: 13px; color: var(--text-2); animation: fade .5s ease 1.6s both; }
+@keyframes lvup-k { from { opacity: 0; letter-spacing: 1.5em; } }
+@keyframes lvup-old { from { opacity: 1; transform: none; } to { opacity: 0; transform: translateY(-38%) scale(.7); filter: blur(8px); } }
+@keyframes lvup-new { from { opacity: 0; transform: scale(2.5); filter: blur(16px); } 55% { opacity: 1; filter: blur(0); } }
+@keyframes lvup-rank { from { opacity: 0; transform: scale(1.6); letter-spacing: .6em; } }
+@keyframes lvup-ring { from { transform: scale(.45); opacity: .9; } to { transform: scale(2.8); opacity: 0; } }
+@keyframes lvup-ray { 0% { opacity: 0; transform: rotate(var(--a)) translateY(96px) scaleY(.2); } 30% { opacity: 1; } 100% { opacity: 0; transform: rotate(var(--a)) translateY(250px) scaleY(1); } }
+/* the calmer setting: the same words, faded in, nothing flying */
+.lvup.calm .lvup-rays, .lvup.calm .lvup-old { display: none; }
+.lvup.calm .lvup-in > *, .lvup.calm .lvup-n b, .lvup.calm .lvup-bar i { animation: fade .5s ease both; }

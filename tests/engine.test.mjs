@@ -337,3 +337,96 @@ test('a task can name its own activity, ahead of its tag', () => {
   assert.equal(E.activityForCard(card).id, 'thesis');
   void st;
 });
+
+test('shopping: ticking moves an item to bought, and its expiry date brings it back', async () => {
+  const Shop = await import('../app/js/shop.js');
+  const st = fresh();
+  const milk = Shop.addItem({ name: 'Milk', kind: 'groceries', qty: '2' }).item;
+  assert.equal(milk.kind, 'Groceries'); assert.equal(milk.bought, false);
+  assert.equal(Shop.addItem({ name: ' milk ', kind: 'Groceries' }).how, 'there');   // not listed twice
+  assert.equal(st.shopping.length, 1);
+  Shop.setBought(milk.id, true, '2026-11-10');
+  assert.equal(milk.bought, true); assert.equal(milk.boughtAt, '2026-11-10'); assert.equal(milk.expires, null);
+  Shop.setExpiry(milk.id, '2026-11-17');
+  assert.equal(milk.life, 7);
+  assert.equal(Shop.daysLeft(milk, '2026-11-15'), 2);
+  assert.equal(Shop.expireItems('2026-11-17').length, 0);                         // the day it expires it is still good
+  const moved = Shop.expireItems('2026-11-18');
+  assert.equal(moved.length, 1); assert.equal(milk.bought, false); assert.equal(milk.expired, '2026-11-17'); assert.equal(milk.expires, null);
+  Shop.setBought(milk.id, true, '2026-11-20');                                     // bought again: the same shelf life is filled in
+  assert.equal(milk.expires, '2026-11-27'); assert.equal(milk.expired, null);
+  assert.equal(Shop.addItem({ name: 'Milk', kind: 'Groceries' }).how, 'again');    // adding it while bought puts it back on the list
+  assert.equal(milk.bought, false);
+  Shop.removeItem(milk.id);
+  assert.equal(st.shopping.length, 0); assert.ok(st.tomb[milk.id]);
+});
+
+test('level: Habitica\'s costs, earnings that grow with the level, and ranks as bands of levels', () => {
+  const st = fresh();
+  assert.deepEqual([1, 2, 3, 4, 5, 10, 50, 99].map(E.levelCost), [150, 160, 170, 180, 200, 260, 1260, 3580]);
+  assert.equal(E.levelStart(1), 0); assert.equal(E.levelStart(3), 310); assert.equal(E.levelStart(100), 145410);
+  assert.deepEqual(E.levelAt(0), { level: 1, into: 0, need: 150, pct: 0 });
+  assert.equal(E.levelAt(309).level, 2); assert.equal(E.levelAt(310).level, 3);
+  assert.equal(E.levelAt(1e9).level, 100);
+  // what you earn grows as the square root of what a level costs
+  assert.equal(E.levelGain(1), 1); assert.ok(Math.abs(E.levelGain(99) - Math.sqrt(3580 / 150)) < 1e-9);
+  // a day halfway between the best (every source maxed) and the worst (a lost day) reaches level 100 in about two years
+  const c = st.settings.level, best = c.mission + c.habits100 + c.deepHour * c.deepCap + c.win, mid = (best - c.loss) / 2;
+  const daysTo100 = perDay => { let xp = 0, n = 0; while (E.levelAt(xp).level < 100 && n < 5000) { xp += Math.round(perDay * E.levelGain(E.levelAt(xp).level)); n++; } return n; };
+  assert.ok(daysTo100(mid) > 650 && daysTo100(mid) < 810, 'two years at the middle: ' + daysTo100(mid));
+  assert.ok(daysTo100(best) > 300 && daysTo100(best) < 400, 'about eleven months of perfect days: ' + daysTo100(best));
+  st.settings.level.growth = 0; assert.equal(E.levelGain(99), 1);
+  st.settings.level.growth = 50;
+  assert.equal(E.rankForLevel(1).cur.name, 'Novice'); assert.equal(E.rankForLevel(5).cur.name, 'Novice');
+  assert.equal(E.rankForLevel(6).cur.name, 'Apprentice'); assert.equal(E.rankForLevel(100).cur.name, 'Grand Master');
+  assert.equal(E.rankForLevel(6).next.name, 'Expert');
+});
+test('level XP for a day comes from the mission, habits, linked habits, deep work, milestones and the result', () => {
+  const st = fresh(s => {
+    s.game.start = Y;
+    s.activities.push(activity('work'), activity('admin', 'upkeep'));
+    s.activities[0].sessions.push(session(Y, 9, 0, 11, 30));                 // 2.5 deep hours
+    s.activities[1].sessions.push(session(Y, 12, 0, 14, 0));                 // upkeep earns nothing here
+    s.habits.push(habit('a', Y, { [Y]: 'done' }), habit('b', Y, { [Y]: 'done' }), habit('gym', Y, { [Y]: 'done' }), habit('c', Y, {}), habit('d', Y, {}));
+    s.habits[2].lvXp = 15;
+    s.game.missions[Y] = { c: { t: 'Big thing', done: true }, p: [{ t: 'One', done: true }, { t: 'Two', done: false }], f: { t: 'Least', done: false } };
+    s.goals.push({ id: 'g', name: 'G', milestones: [{ id: 'm1', name: 'M1', done: true, doneAt: Y, tasks: [] }, { id: 'm2', name: 'M2', done: false, tasks: [] }] });
+    s.game.days[Y] = { v: 'W', x: 100, s: 80 };
+  });
+  const day = E.levelDay(Y);
+  assert.equal(day.parts.mission, Math.round(40 * 0.675));                   // critical 50% + half of the primaries' 35%
+  assert.equal(day.parts.habits, 6);                                         // 3 of 5 done is past half, short of 80%
+  assert.equal(day.parts.linked, 15);
+  assert.equal(day.parts.deep, 15);
+  assert.equal(day.parts.milestones, 25);
+  assert.equal(day.parts.result, 20);
+  assert.equal(day.total, 27 + 6 + 15 + 15 + 25 + 20);
+  assert.equal(E.levelState().xp, day.total + E.levelDay(T).total);
+  st.game.days[Y].v = 'L'; E.invalidate();
+  assert.equal(E.levelDay(Y).parts.result, -13);
+  assert.equal(E.levelDay(Y, 2).parts.result, -26);                          // at a level that pays double, it costs double too
+});
+test('a lost day costs XP but, by default, never a level already reached', () => {
+  const d2 = addDays(T, -2), d1 = addDays(T, -1);
+  const st = fresh(s => {
+    s.game.start = d2;
+    s.activities.push(activity('work'));
+    s.settings.level.deepHour = 20; s.settings.level.loss = 60;
+    s.activities[0].sessions.push(session(d2, 8, 0, 16, 0));                 // eight deep hours: 160 XP
+    s.game.days[d2] = { v: 'W', x: 1, s: 0 };                                // +20: 180 in all, which is level 2 (from 150)
+    s.game.days[d1] = { v: 'L', x: 0, s: 1 };                                // level 2 pays x1.03: -62 would be 118, back in level 1
+  });
+  assert.equal(E.levelState().level, 2);
+  assert.equal(E.levelState().xp, 150);                                      // held at the start of level 2
+  st.settings.level.keepLevel = false; E.invalidate();
+  assert.equal(E.levelState().xp, 118); assert.equal(E.levelState().level, 1);
+});
+test('clearing a milestone stamps the day, and unticking takes the stamp away', () => {
+  const st = fresh(s => { s.goals.push({ id: 'g', name: 'G', milestones: [{ id: 'm', name: 'M', done: false, tasks: [{ id: 'k1', name: 'a', done: true }, { id: 'k2', name: 'b', done: false }] }] }); });
+  const m = st.goals[0].milestones[0];
+  E.completeGoalTask('k2');
+  assert.equal(m.done, true); assert.equal(m.doneAt, T);
+  assert.equal(E.levelDay(T).parts.milestones, 25 + 65);                     // the milestone, and the goal it completed
+  m.tasks[1].done = false; E.stampMilestone(m);
+  assert.equal(m.doneAt, undefined);
+});

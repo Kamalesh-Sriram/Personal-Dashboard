@@ -133,6 +133,7 @@ export function completeGoalTask(id) {
   if (!f || f.t.done) return false;
   f.t.done = true;
   f.m.done = (f.m.tasks || []).length ? f.m.tasks.every(x => x.done) : true;
+  stampMilestone(f.m);
   touch(f.g);
   return true;
 }
@@ -327,6 +328,15 @@ export function prevDayGoals(date) {
   }
   return [];
 }
+/** Take a goal out of the day's list; the ones after it move up. */
+export function removeDayGoal(date, i) {
+  const st = S(), day = st.days[date] || (st.days[date] = {});
+  const list = (day.goals || []).slice();
+  if (i < list.length) list.splice(i, 1);
+  while (list.length && !list[list.length - 1].t) list.pop();
+  day.goals = list;
+  save();
+}
 export function setDayGoal(date, i, patch) {
   const st = S(), day = st.days[date] || (st.days[date] = {});
   const list = (day.goals || []).slice();
@@ -486,7 +496,8 @@ export function sweepBonus(date) {
  *  self-rating. */
 export function logbook(date) {
   const st = S(), day = st.days[date] || {}, j = st.journal[date] || {};
-  const real = sessionsOn(date, false).filter(({ s }) => s.dur >= COMBO.minMs);
+  // only deep work is rated for focus; a meal or admin has no focus score to give
+  const real = sessionsOn(date, false).filter(({ a, s }) => s.dur >= COMBO.minMs && isDeep(a));
   const items = {
     sleep: !!(day.sleep && day.sleep.hrs > 0),
     rated: real.length > 0 && real.every(({ s }) => s.eff != null),
@@ -946,3 +957,103 @@ export function voice(kind, vars = {}) {
 }
 
 export { tombstone, uid };
+
+/* ══════════════════════ LEVEL ══════════════════════
+   The long game. Day XP decides one day against the rival and then starts
+   again; level XP only ever accumulates, toward level 100.
+
+   Like every other score here it is not stored. Each day's level XP is
+   worked out from facts that are stored (the mission and what was ticked
+   off, habits kept, deep work logged, milestones cleared, the day's
+   verdict), and the level is those days added up. Change a value in
+   Settings and the whole history is re-read with it.
+
+   What a day earns (all of it adjustable under Settings > Game):
+     mission      a full mission's worth, shared out by objective weight
+     habits       a step at 50%, 80% and 100% of the habits due
+     linked       extra for each habit you marked as counting, when it is done
+     deep         per hour of deep work, up to a cap
+     milestones   each goal milestone cleared, and more for a whole goal
+     tasks        per task completed (off unless you turn it on)
+     result       won the day: plus. Lost it: minus.                        */
+export const LEVEL_MAX = 100;
+const lvCfg = () => S().settings.level;
+/** XP it takes to go from `level` to the next one. This is Habitica's curve: 150 for the first level,
+ *  3,580 for the last, 145,410 in all. */
+export const levelCost = level => Math.round((0.25 * level * level + 10 * level + 139.75) / 10) * 10;
+/** What you earn grows as you level, so the later levels stay within reach. At 100% growth earnings
+ *  rise exactly as fast as levels cost (every level takes equally long); at 0% they never change.
+ *  The default, 50%, is the square root of the cost: about x4.9 by level 99. */
+export const levelGain = level => Math.pow(levelCost(clamp(level, 1, LEVEL_MAX - 1)) / levelCost(1), clamp(Number(lvCfg().growth ?? 50), 0, 100) / 100);
+/** Total XP at which `level` begins. */
+export function levelStart(level) { let x = 0; for (let l = 1; l < Math.min(level, LEVEL_MAX); l++) x += levelCost(l); return x; }
+export function levelAt(xp) {
+  let level = 1, left = Math.max(0, xp);
+  while (level < LEVEL_MAX && left >= levelCost(level)) { left -= levelCost(level); level++; }
+  const need = level >= LEVEL_MAX ? 0 : levelCost(level);
+  return { level, into: Math.round(left), need, pct: need ? clamp(Math.round(left / need * 100), 0, 100) : 100 };
+}
+/** Which rank a level falls in. Ranks are bands of levels, named by you. */
+export function rankForLevel(level) {
+  const ranks = [...S().settings.ranks].sort((a, b) => (a.lv || 1) - (b.lv || 1));
+  let cur = ranks[0], next = null;
+  ranks.forEach((r, i) => { if (level >= (r.lv || 1)) { cur = r; next = ranks[i + 1] || null; } });
+  const from = cur.lv || 1, to = next ? next.lv : LEVEL_MAX;
+  return { cur, next, pct: next ? clamp(Math.round((level - from) / Math.max(1, to - from) * 100), 0, 100) : 100, from, to: next ? next.lv - 1 : LEVEL_MAX };
+}
+const msDoneOn = (m, date) => m.doneAt === date && ((m.tasks || []).length ? m.tasks.every(t => t.done) : !!m.done);
+/** One day's level XP, with where it came from. `mult` is what the level you held that day multiplies it by. */
+export function levelDay(date, mult = 1) {
+  const st = S(), c = lvCfg(), rest = isRest(date), p = { mission: 0, habits: 0, linked: 0, deep: 0, milestones: 0, tasks: 0, result: 0 };
+  if (!rest) {
+    const ex = st.settings.modules.mission ? execScoreFor(date) : null;
+    if (ex) p.mission = Math.round(c.mission * ex / 100);
+    const due = habitsDue(date);
+    if (due.length) {
+      const share = due.filter(h => h.history[date] === 'done').length / due.length;
+      p.habits = share >= 1 ? c.habits100 : share >= 0.8 ? c.habits80 : share >= 0.5 ? c.habits50 : 0;
+    }
+  }
+  st.habits.forEach(h => { if (h.lvXp > 0 && h.history[date] === 'done') p.linked += Math.round(h.lvXp); });
+  const deepMs = sessionsOn(date).reduce((n, { a, s }) => n + (isDeep(a) ? s.dur : 0), 0);
+  p.deep = Math.round(Math.min(c.deepCap, deepMs / 3600000) * c.deepHour);
+  st.goals.forEach(g => {
+    const ms = g.milestones || [], cleared = ms.filter(m => msDoneOn(m, date)).length;
+    p.milestones += cleared * c.milestone;
+    // the goal itself: every milestone done, and the last of them today
+    if (cleared && ms.length && ms.every(m => (m.tasks || []).length ? m.tasks.every(t => t.done) : m.done) && !ms.some(m => (m.doneAt || '') > date)) p.milestones += c.goal;
+  });
+  if (c.task) p.tasks = tasksDoneOn(date) * c.task;
+  const v = (st.game.days[date] || {}).v;
+  p.result = v === 'W' ? c.win : v === 'L' ? -c.loss : 0;
+  if (mult !== 1) Object.keys(p).forEach(k => { p[k] = Math.round(p[k] * mult); });
+  return { total: Object.values(p).reduce((a, b) => a + b, 0), parts: p };
+}
+/** Where you stand: every day since you began, folded into one total. */
+export function levelState() {
+  return memo('level:' + today(), () => {
+    const st = S(), c = lvCfg(), t = today();
+    const first = [st.game.start, st.profile.createdAt, Object.keys(st.game.days).sort()[0]].filter(Boolean).sort()[0] || t;
+    let xp = 0, top = 1, d = first, guard = 0, earned = 0, lost = 0, gain = 1, day = null;
+    const days = [];
+    while (d <= t && guard++ < 4000) {
+      gain = levelGain(levelAt(xp).level);                 // a day pays at the level you woke up with
+      day = levelDay(d, gain);
+      xp += day.total;
+      Object.values(day.parts).forEach(v => { if (v > 0) earned += v; else lost -= v; });
+      // a lost day costs XP, but (unless you turn this off) never a level you have reached
+      xp = Math.max(c.keepLevel ? levelStart(top) : 0, xp);
+      top = Math.max(top, levelAt(xp).level);
+      days.push({ d, total: day.total });
+      d = addDays(d, 1);
+    }
+    const at = levelAt(xp), rank = rankForLevel(at.level);
+    return { xp: Math.round(xp), ...at, rank, gain, today: day || levelDay(t), days: days.slice(-14), since: first, earned, lost, toNextRank: rank.next ? Math.max(0, levelStart(rank.next.lv) - Math.round(xp)) : 0 };
+  });
+}
+/** A milestone remembers the day it was cleared, which is what its level XP hangs on. */
+export function stampMilestone(m) {
+  const done = (m.tasks || []).length ? m.tasks.every(t => t.done) : !!m.done;
+  if (done) { if (!m.doneAt) m.doneAt = today(); } else delete m.doneAt;
+  return m;
+}

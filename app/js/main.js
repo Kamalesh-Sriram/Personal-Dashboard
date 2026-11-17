@@ -11,7 +11,7 @@ import * as E from './engine.js';
 import { applyTheme, loadBgImage } from './theme.js';
 import { initDelegation, registerActions, toast, modalOpen, openModal } from './ui.js';
 import { icon } from './icons.js';
-import { esc, today, fmtTimer, fmtDate, pad } from './util.js';
+import { esc, today, fmtTimer, fmtDate, pad, safeColor } from './util.js';
 import { ui, setRefresh, go } from './bus.js';
 import { VIEWS, TAB_META } from './views/index.js';
 import { focusOpen, stopAndRate } from './flows.js';
@@ -21,6 +21,7 @@ import { startOnboarding } from './views/onboarding.js';
 import * as fx from './fx.js';
 import { dragging } from './drag.js';
 import { finishLink } from './fin.js';
+import { expireItems } from './shop.js';
 
 const $ = id => document.getElementById(id);
 const isDrawer = () => S().settings.sidebar === 'hidden' || matchMedia('(max-width: 760px)').matches;
@@ -72,6 +73,9 @@ function renderTop() {
   const syncTitle = { idle: 'Synced', syncing: 'Syncing…', error: 'Sync problem: ' + sy.error, offline: 'Offline: changes are saved on this device', off: 'Sync is off' }[sy.state];
   $('top').innerHTML = `
     <button class="icon-btn menu-btn" data-act="nav.toggle" aria-label="Open menu">${icon('menu')}</button>
+    ${st.settings.modules.rank && st.profile.onboarded ? (() => { const lv = E.levelState();
+      return `<button class="lv-chip" data-act="level.open" style="--rk:${safeColor(lv.rank.cur.color, 'var(--accent)')}" title="Level ${lv.level}, ${esc(lv.rank.cur.name)}: ${lv.level >= E.LEVEL_MAX ? 'the top level' : `${lv.into} of ${lv.need} XP to the next`}. Press for your stats." aria-label="Level ${lv.level}, ${esc(lv.rank.cur.name)}">
+        <span class="lv-n"><i>LV</i><b id="lv-num">${lv.level}</b></span><span class="lv-r"><span class="lv-name ell">${esc(lv.rank.cur.name)}</span><span class="lv-bar"><i style="width:${lv.pct}%"></i></span></span></button>`; })() : ''}
     <h1 class="top-name">${esc(st.profile.name || 'Dashboard')}</h1>
     <div class="top-meta">
       <div><div class="meta-l">Local time</div><div class="meta-v" id="clock">${clockText()}</div></div>
@@ -166,7 +170,6 @@ function tick() {
 function announceSettlement(r) {
   if (!r.settled.length) return;
   const st = S(), L = st.settings.labels;
-  const before = E.rankFor(r.repBefore).cur, after = E.rankFor(r.repAfter).cur;
   if (r.settled.length <= 3) {
     const d = r.settled[r.settled.length - 1];
     const body = d.v === 'R' ? 'Nothing was scored.'
@@ -183,9 +186,25 @@ function announceSettlement(r) {
       notify(`${name}: ${b.w} won, ${b.l} lost`, b.result === 'won' ? 'You won the month. A new one starts today.' : b.result === 'lost' ? `${L.shadow} won the month. A new one starts today, level again.` : 'The month ended level. A new one starts today.', { kind: b.result === 'won' ? 'good' : '' });
     }
   }
-  if (st.settings.modules.rank && before.name !== after.name) {
-    notify(after.at > before.at ? `You've been promoted to ${after.name}` : `You've dropped to ${after.name}`, `Your ${L.rep.toLowerCase()} is now ${Math.round(r.repAfter)}.`, { kind: after.at > before.at ? 'good' : 'bad' });
+}
+/** Say so when a level or a rank has been gained since the last look. */
+function checkLevel() {
+  const st = S();
+  if (!st.profile.onboarded || !st.settings.modules.rank) return;
+  const lv = E.levelState(), n = st.game.notif, seen = n.level;
+  if (seen === lv.level) return;
+  n.level = lv.level; saveQuiet();
+  if (seen == null || lv.level < seen) return;                       // first run, or a setting changed the sums: nothing to celebrate
+  const was = E.rankForLevel(seen).cur, ranked = was.name !== lv.rank.cur.name;
+  const left = lv.level >= E.LEVEL_MAX ? 'The top level' : `${lv.need - lv.into} XP to level ${lv.level + 1}`;
+  const shown = fx.levelUp({ from: seen, to: lv.level, rank: lv.rank.cur.name, color: safeColor(lv.rank.cur.color, ''), ranked, pct: lv.pct,
+    next: ranked ? (lv.rank.next ? `Level ${lv.level}. ${lv.rank.next.name} begins at level ${lv.rank.next.lv}` : `Level ${lv.level}. The highest rank`) : left });
+  if (!shown) {                                                      // motion is off, or the page is in the background: say it quietly
+    fx.sound('win');
+    toast(ranked ? `You are now ${lv.rank.cur.name}` : `Level ${lv.level}`, ranked ? `Level ${lv.level}. A new rank.` : left + '.', { kind: 'good', ms: ranked ? 12000 : 7000 });
   }
+  renderTop();
+  const chip = document.querySelector('.lv-chip'); if (chip) fx.shine(chip);
 }
 function dayStart() {
   ui.day = today();
@@ -194,6 +213,9 @@ function dayStart() {
   announceSettlement(E.settlePending());
   // Yesterday is scored; its finished tasks no longer need to sit on the board.
   if (S().settings.autoClearDone) E.clearDone(today());
+  // Anything bought whose expiry date has passed goes back on the shopping list.
+  const out = expireItems();
+  if (out.length) toast(out.length === 1 ? `${out[0].name} has expired` : `${out.length} things have expired`, out.length === 1 ? 'It is back on your shopping list.' : `${out.slice(0, 4).map(x => x.name).join(', ')}${out.length > 4 ? ' and more' : ''} are back on your shopping list.`, { ms: 12000 });
 }
 function housekeeping() {
   if (!S().profile.onboarded) return;
@@ -280,6 +302,7 @@ async function boot() {
     if (kind === 'sync' && S().profile.onboarded && $('onb-root').firstChild) { $('onb-root').innerHTML = ''; dayStart(); }   // a dashboard arrived from the account
     if (kind === 'sync' || kind === 'replace') { E.invalidate(); if (S().profile.onboarded) announceSettlement(E.settlePending()); }
     if (kind !== 'quiet') scheduleRender(kind);
+    if (kind !== 'quiet') setTimeout(checkLevel, 60);
   });
   window.addEventListener('hashchange', route);
   const stick = () => $('top').classList.toggle('stuck', window.scrollY > 6);
@@ -298,6 +321,7 @@ async function boot() {
   if (landed === 'recovery') VIEWS.settings.newPasswordModal();
   if (landed === 'confirmed') toast('Your email is confirmed', "You're signed in and sync is on.", { kind: 'good' });
 
+  checkLevel();
   setInterval(tick, 1000);
   setInterval(housekeeping, 20000);
   setTimeout(housekeeping, 2500);

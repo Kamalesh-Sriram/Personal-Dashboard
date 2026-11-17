@@ -15,9 +15,10 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 - **Track.** Activity timers, a 24-hour ring of your day, a timeline, and editable sessions.
 - **Habits.** Streaks and XP levels in plain sight, a clean-sweep chain for doing all of them, and habit maps.
 - **Goals, Calendar, Subscriptions, Review.** Milestones with time tracking, a month view, recurring payments, and the week in numbers with a journal.
-- **Gym.** Progress per exercise and a suggestion for your next session, from Hevy or an export file.
-- **Finance.** Spending by category, month and year, from statement files of any bank or a read-only bank link.
-- **A game layer you can rename or switch off.** A rival that adapts to your last week, missions and execution, rank and reputation, rest days, and fixed-length campaigns with their own red theme.
+- **Gym.** Your next workout laid out from your split, and progress per exercise, from an openGym, Hevy or Strong file, Hevy sync, or your own openGym server.
+- **Finance.** Spending by category on a ring you can press, by month and year, from statement files of any bank or a read-only bank link.
+- **Shopping.** What to buy and what you have, with expiry dates that put things back on the list.
+- **A game layer you can rename or switch off.** A rival that adapts to your last week, missions and execution, a level from 1 to 100 with ranks you name and colour, rest days, and fixed-length campaigns with their own red theme.
 - **Yours to shape.** Light, dark or system theme, any accent colour, five typefaces, your own background image, renameable labels, editable notification wording, reorderable tabs, motion and sound you can turn down or off.
 
 | Board | Track |
@@ -27,6 +28,10 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 | Habits | On a phone |
 |---|---|
 | ![Habits](docs/images/habits.jpg) | <img src="docs/images/phone-home.jpg" alt="Home on a phone" width="260"> |
+
+## Updating your copy
+
+Open your fork on GitHub, press **Sync fork** then **Update branch**, and Netlify redeploys by itself. Your data is not touched. Then read the newest entry in [CHANGELOG.md](CHANGELOG.md) for an "After updating" line. The full steps, including for copies deployed from a computer, are in [HOW-TO-USE.md](HOW-TO-USE.md#11-backups-updates-and-troubleshooting).
 
 ## Quick start
 

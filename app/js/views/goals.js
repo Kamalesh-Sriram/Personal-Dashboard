@@ -215,6 +215,7 @@ registerActions({
     const { g, m } = find(d); if (!m) return;
     const ts = m.tasks || [];
     if (ts.length) { const all = ts.every(t => t.done); ts.forEach(t => { t.done = !all; }); m.done = !all; } else m.done = !m.done;
+    E.stampMilestone(m);
     commit(g);
   },
   'goal.msEdit': d => {
@@ -227,7 +228,7 @@ registerActions({
     if ((m.tasks || []).length && !(await confirmDialog({ title: `Delete “${m.name}”?`, body: 'Its tasks go with it.', ok: 'Delete', danger: true }))) return;
     g.milestones = g.milestones.filter(x => x !== m); commit(g);
   },
-  'goal.taskToggle': d => { const { g, m, t } = find(d); if (!t) return; t.done = !t.done; m.done = m.tasks.every(x => x.done); commit(g); },
+  'goal.taskToggle': d => { const { g, m, t } = find(d); if (!t) return; t.done = !t.done; m.done = m.tasks.every(x => x.done); E.stampMilestone(m); commit(g); },
   'goal.taskDel': d => { const { g, m, t } = find(d); if (!t) return; m.tasks = m.tasks.filter(x => x !== t); commit(g); },
   'goal.toBoard': d => {
     const { g, t } = find(d); if (!t) return;

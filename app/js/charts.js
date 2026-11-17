@@ -17,7 +17,7 @@ export function arcPath(cx, cy, r, a0, a1) {
  *   thin arc      where the rival's pace is right now
  *   notch         the rival's bar for the whole day
  */
-export function duelDial({ you, shadow, pace, dayFrac, showShadow = true, rest = false, label = 'XP today', sub = '' }) {
+export function duelDial({ you, shadow, pace, dayFrac, showShadow = true, rest = false, label = 'XP today', sub = '', dayNote = '', dayTitle = '' }) {
   const cx = 150, cy = 150, A0 = 135, SW = 270;
   const scale = Math.max(shadow * 1.18, you * 1.06, 1);
   const ang = v => A0 + SW * clamp(v / scale, 0, 1);
@@ -26,7 +26,7 @@ export function duelDial({ you, shadow, pace, dayFrac, showShadow = true, rest =
   for (let i = 0; i <= N; i++) {
     const a = A0 + SW * (i / N), major = i % 6 === 0;
     const [x0, y0] = polar(cx, cy, major ? 127 : 131, a), [x1, y1] = polar(cx, cy, 140, a);
-    ticks += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${i <= lit ? 'var(--accent)' : 'var(--card-3)'}" stroke-opacity="${i <= lit ? 0.7 : 1}" stroke-width="${major ? 2 : 1.2}" stroke-linecap="round"/>`;
+    ticks += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="${i <= lit ? 'var(--dial-day, var(--accent))' : 'var(--card-3)'}" stroke-opacity="${i <= lit ? 0.7 : 1}" stroke-width="${major ? 2 : 1.2}" stroke-linecap="round"/>`;
   }
   const ahead = you >= pace;
   let shadowBits = '';
@@ -34,13 +34,13 @@ export function duelDial({ you, shadow, pace, dayFrac, showShadow = true, rest =
     const [nx0, ny0] = polar(cx, cy, 96, ang(shadow)), [nx1, ny1] = polar(cx, cy, 120, ang(shadow));
     shadowBits = `
       <path d="${arcPath(cx, cy, 91, A0, A0 + SW)}" stroke="var(--card-3)" stroke-width="3" fill="none" stroke-linecap="round"/>
-      ${pace > 0 ? `<path class="dial-pace" pathLength="1" d="${arcPath(cx, cy, 91, A0, ang(pace))}" stroke="var(--text-2)" stroke-width="3" fill="none" stroke-linecap="round"/>` : ''}
-      <line x1="${nx0}" y1="${ny0}" x2="${nx1}" y2="${ny1}" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>`;
+      ${pace > 0 ? `<path class="dial-pace" pathLength="1" d="${arcPath(cx, cy, 91, A0, ang(pace))}" stroke="var(--dial-rival, var(--text-2))" stroke-width="3" fill="none" stroke-linecap="round"/>` : ''}
+      <line x1="${nx0}" y1="${ny0}" x2="${nx1}" y2="${ny1}" stroke="var(--dial-rival, var(--text))" stroke-width="2.5" stroke-linecap="round"/>`;
   }
   return `<svg class="dial" viewBox="0 0 300 258" role="img" aria-label="${esc(`${you} XP today` + (showShadow ? `, rival at ${pace} now and ${shadow} by close` : ''))}">
     ${ticks}
     <path d="${arcPath(cx, cy, 108, A0, A0 + SW)}" stroke="var(--card-3)" stroke-width="13" fill="none" stroke-linecap="round"/>
-    ${you > 0 ? `<path class="dial-xp" pathLength="1" d="${arcPath(cx, cy, 108, A0, ang(you))}" stroke="${rest ? 'var(--info)' : ahead || !showShadow ? 'var(--accent)' : 'var(--bad)'}" stroke-width="13" fill="none" stroke-linecap="round" style="filter:drop-shadow(0 0 7px ${rest ? 'var(--info)' : ahead || !showShadow ? 'var(--accent-glow)' : 'var(--bad)'})"/>` : ''}
+    ${you > 0 ? `<path class="dial-xp" pathLength="1" d="${arcPath(cx, cy, 108, A0, ang(you))}" stroke="${rest ? 'var(--info)' : `var(--dial-xp, ${ahead || !showShadow ? 'var(--accent)' : 'var(--bad)'})`}" stroke-width="13" fill="none" stroke-linecap="round" style="filter:drop-shadow(0 0 7px ${rest ? 'var(--info)' : `var(--dial-xp, ${ahead || !showShadow ? 'var(--accent-glow)' : 'var(--bad)'})`})"/>` : ''}
     ${shadowBits}
     <text x="150" y="116" text-anchor="middle" font-size="11" font-weight="600" letter-spacing="1.2" fill="var(--text-3)" style="fill:var(--text-3);text-transform:uppercase">${esc(label)}</text>
     <text x="150" y="168" text-anchor="middle" font-size="58" font-weight="650" letter-spacing="-2.5" data-count="${you}">${you}</text>
@@ -115,4 +115,19 @@ export function sparkLine(values, { color = 'var(--accent)' } = {}) {
 export function shareBar(parts) {
   const total = parts.reduce((n, p) => n + Math.max(0, p.value), 0) || 1;
   return `<div class="share">${parts.filter(p => p.value > 0).map(p => `<i style="width:${(p.value / total * 100).toFixed(2)}%;background:${safeColor(p.color)}" title="${esc(p.label)}"></i>`).join('')}</div>`;
+}
+
+/** A donut chart. parts: [{ id, label, value, color }]. Each slice is its own
+ *  path, so it can lift on hover and be pressed. `on` marks a chosen slice. */
+export function donut(parts, { on = null, act = '', draw = false } = {}) {
+  const list = parts.filter(p => p.value > 0), total = list.reduce((n, p) => n + p.value, 0) || 1;
+  const cx = 120, cy = 120, r = 82, gap = list.length > 1 ? 1.6 : 0;
+  let a = -90;
+  const segs = list.map((p, i) => {
+    const sweep = p.value / total * 360, a0 = a + gap / 2, a1 = Math.max(a0 + 0.6, a + sweep - gap / 2);
+    a += sweep;
+    return `<path class="seg ${on === p.id ? 'on' : ''}" pathLength="1" d="${arcPath(cx, cy, r, a0, a1)}" stroke="${safeColor(p.color)}" style="--i:${i};color:${safeColor(p.color)}" data-seg="${i}" ${act ? `data-act="${act}" data-cat="${esc(p.id)}" role="button" tabindex="0" aria-label="${esc(p.label)}"` : ''}><title>${esc(p.label)}</title></path>`;
+  }).join('');
+  return `<svg class="pie ${draw ? 'draw' : ''}" viewBox="0 0 240 240" role="img" aria-label="Spending by category">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card-3)" stroke-width="30" opacity=".5"/>${segs}</svg>`;
 }

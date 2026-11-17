@@ -36,7 +36,7 @@ function weekStats() {
     eff: eff.length ? Math.round(avg(eff)) : null, ttfb: tt.length ? Math.round(avg(tt)) : null };
 }
 function reportText() {
-  const st = S(), w = weekStats(), sb = E.scoreboard(), rk = E.rankFor(sb.rep), r = st.weekRatings[weekKey()] || {};
+  const st = S(), w = weekStats(), lv = E.levelState(), r = st.weekRatings[weekKey()] || {};
   const lines = [
     `${st.profile.name || 'Dashboard'}: week to ${fmtDate(today(), { day: 'numeric', month: 'long', year: 'numeric' })}`, '',
     `Focus: ${(w.focus / 3600000).toFixed(1)}h (target ${st.settings.targets.hours}h/day)`,
@@ -47,7 +47,7 @@ function reportText() {
     `Average start delay: ${fmtMins(w.ttfb)}`,
     `Average sleep: ${w.sleep === null ? 'not logged' : w.sleep + 'h'}`,
     `Average session efficiency: ${w.eff === null ? 'not rated' : w.eff + '%'}`,
-    `${L().rank}: ${rk.cur.name} (${L().rep.toLowerCase()} ${Math.round(sb.rep)})`, '',
+    `Level ${lv.level}, ${lv.rank.cur.name} (${lv.xp} XP in total)`, '',
     'Self-ratings (1-5): ' + (st.settings.ratings.map(c => `${c} ${r[c] || '-'}`).join(', ')), ''
   ];
   w.days.forEach(d => { const j = st.journal[d]; if (j && (j.w || j.l || j.f)) lines.push(`${fmtDate(d)}: right: ${j.w || '-'} | wrong: ${j.l || '-'} | fix: ${j.f || '-'}`); });

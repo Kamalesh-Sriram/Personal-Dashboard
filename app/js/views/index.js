@@ -8,9 +8,10 @@ import goals from './goals.js';
 import calendar from './calendar.js';
 import gym from './gym.js';
 import finance from './finance.js';
+import shop from './shop.js';
 import subs from './subs.js';
 import review from './review.js';
 import settings from './settings.js';
 
 export { TAB_META } from './tabs.js';
-export const VIEWS = { home, board, track, habits, goals, calendar, gym, finance, subs, review, settings };
+export const VIEWS = { home, board, track, habits, goals, calendar, gym, finance, shop, subs, review, settings };

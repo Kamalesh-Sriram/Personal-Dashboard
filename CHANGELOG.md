@@ -1,5 +1,41 @@
 # Changelog
 
+Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
+
+## 5.3.0
+
+### Fixed
+
+- **Reminders stopped arriving after the first one of the day.** Once a planned notification had been sent, planning the same one again later that day was refused by the database, and that refusal threw away the whole batch with it: the running-timer notice, idle callouts, everything. Test notifications were unaffected, which made it look as if notifications worked. Planning no longer touches rows that have already gone out. A timer starting or stopping is now planned at once instead of a few seconds later, and Settings > Notifications shows what was scheduled or why it could not be.
+
+### Added
+
+- **A level, from 1 to 100.** It sits in the top bar on every tab and is kept apart from the day's XP against the rival. It grows from the mission (by objective weight), from doing half, four fifths or all of your habits, from habits you give their own level XP, from hours of Deep work, from milestones and goals cleared, and from days won; a lost day takes some back, but never a level you have reached. Levels cost what they do in Habitica (150 XP for the first, 3,580 for the last), and what you earn grows as you climb, so an ordinary day reaches level 100 in about two years. Press it for your stats. Every value is under Settings > Game.
+- **Levelling up is a moment.** The page gives way for a few seconds: the old number leaves, the new one lands in your rank's colour with rays and a sound, and the bar fills. A new rank gets a longer one. It follows the motion setting, and a press ends it.
+- **Ranks are bands of levels.** Novice from level 1 up to Grand Master from 76, each with its own colour, renameable, each with the level it begins at.
+- **Finance: a ring instead of a bar.** Where it went is now the main display. Each slice lifts when you point at it, and pressing it shows that category's transactions. Day by day runs across the bottom.
+- **Gym: sync from your own openGym server**, beside Hevy. Both can be set at once.
+- **Shopping tab.** To buy and Bought, divided into your own lists. Ticking moves an item to Bought; unticking, or its expiry date passing, moves it back. The dashboard remembers how long each thing lasts.
+- **Gym: next workout.** Set your split once and the Gym tab lays out your next session from the last time you did it: exercises, working sets, and the reps and weight to aim for.
+- **Gym: your lifts.** Choose which exercises to follow instead of the automatic pick.
+- **Gym: openGym backups** can be imported, alongside Hevy and Strong files. Importing a newer file updates workouts already here.
+- **Dial colours.** The day ring, XP ring and rival ring can each have their own colour, from the dashboard's own colours or any you pick, kept during a campaign.
+- Main goals: a cross beside each line removes it.
+
+### Changed
+
+- The share of the working day that is left is written above the dial. The separate Day left block is gone.
+- Home's rank and momentum blocks are gone: the level in the top bar replaces them. Reputation is no longer shown.
+- The Gym tab is laid out in the order you use it: the last 12 weeks across the top, the next workout under it, your lifts beside recent workouts, and the full exercise list folded away.
+- Only sessions of Deep activities are rated, and "Sessions rated" on Home counts only those.
+- Selecting a top task lights up its whole bar instead of playing the tick.
+- On a narrow phone the top bar stays on one line.
+- Main goals no longer add a blank line by themselves. Lines are added with Add goal.
+- Log time by hand starts at the end of the last thing you tracked.
+- The Gym tab's two columns end level.
+
+**After updating:** nothing to do. Your level is worked out from the days already stored. To sync from an openGym server, add `OPENGYM_URL` and `OPENGYM_TOKEN` in Netlify and redeploy (HOW-TO-USE.md, Gym).
+
 ## 5.2.0
 
 ### Added
@@ -23,6 +59,8 @@
 - The top bar stays in place while the page scrolls, on every screen size. It no longer shows the time left in the day: that is on Home now.
 - The month's line reads "9/16 days needed to win."
 - Lock in's finish button is larger, centred, and says "Mark task as done".
+
+**After updating:** to keep transactions in your own database or link a bank, run `supabase/schema.sql` again in Supabase. The new environment variables (`HEVY_API_KEY`, `ENABLEBANKING_APP_ID`, `ENABLEBANKING_PRIVATE_KEY`) are optional.
 
 ### Fixed
 

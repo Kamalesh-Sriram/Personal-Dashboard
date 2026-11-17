@@ -13,7 +13,7 @@ import { today, uid, slug, deepClone, setDayOffset, dayOffsetFor } from './util.
 import { mergeStates } from './merge.js';
 import { DEFAULT_CATS } from './fincalc.js';
 
-export const APP_VERSION = '5.2.0';
+export const APP_VERSION = '5.3.0';
 export const LS_KEY = 'hq.v5.state';
 const DEVICE_KEY = 'hq.v5.device';
 
@@ -36,14 +36,31 @@ export const DEFAULT_COLUMNS = [
   { id: 'done',    name: 'Done',       color: '#72726D' }
 ];
 
+/* Ranks are bands of levels: `lv` is the level a rank begins at. (`at` is
+   the reputation threshold of versions before 5.3, kept so an older copy of
+   the app still reads the list.) */
 export const DEFAULT_RANKS = [
-  { at: 0,   name: 'Novice' },
-  { at: 25,  name: 'Apprentice' },
-  { at: 60,  name: 'Expert' },
-  { at: 120, name: 'Elite' },
-  { at: 200, name: 'Master' },
-  { at: 320, name: 'Grand Master' }
+  { lv: 1,  at: 0,   name: 'Novice',       color: '#9AA7B4' },
+  { lv: 6,  at: 25,  name: 'Apprentice',   color: '#4ADE80' },
+  { lv: 16, at: 60,  name: 'Expert',       color: '#38BDF8' },
+  { lv: 31, at: 120, name: 'Elite',        color: '#A78BFA' },
+  { lv: 51, at: 200, name: 'Master',       color: '#F5B544' },
+  { lv: 76, at: 320, name: 'Grand Master', color: '#FF5D73' }
 ];
+export const RANK_COLORS = DEFAULT_RANKS.map(r => r.color);
+/* What earns level XP. See the LEVEL section of engine.js. */
+export const DEFAULT_LEVEL = {
+  growth: 50,                               // how much earnings grow with the level, 0 to 100 (see levelGain in engine.js)
+  keepLevel: true,                          // a lost day costs XP but never a level you have reached
+  // What each thing pays at level 1. With these and 50% growth, a day halfway between
+  // your best and your worst reaches level 100 in about two years.
+  mission: 40,                              // a fully completed mission, shared out by objective weight
+  habits50: 6, habits80: 13, habits100: 22,
+  deepHour: 6, deepCap: 8,                  // per hour of deep work, counted up to this many hours a day
+  milestone: 25, goal: 65,                  // a goal milestone cleared; a whole goal finished
+  win: 20, loss: 13,                        // the day's result against the rival
+  task: 0                                   // per task completed (off)
+};
 
 export const DEFAULT_XP = {
   habit: 12, perHour: 14, task: 9, efficiency: 10,
@@ -52,7 +69,7 @@ export const DEFAULT_XP = {
   socialPerMin: 0.4, socialFreeMins: 20
 };
 
-export const ALL_TABS = ['home', 'board', 'track', 'habits', 'goals', 'calendar', 'gym', 'finance', 'subs', 'review'];
+export const ALL_TABS = ['home', 'board', 'track', 'habits', 'goals', 'calendar', 'gym', 'finance', 'shop', 'subs', 'review'];
 
 export function defaultSettings() {
   return {
@@ -62,8 +79,11 @@ export function defaultSettings() {
     corners: 'soft',            // soft | sharp
     density: 'comfortable',     // comfortable | compact
     reduceMotion: false,        // from before 5.2: true still means motion off
+    level: { ...DEFAULT_LEVEL },
+    dial: { day: null, xp: null, rival: null },   // ring colours on Home; null follows the theme
     motion: 'full',             // full | subtle | off
     sound: { on: true, volume: 40 },
+    shopKinds: ['Groceries', 'Products'],   // the lists the Shopping tab is divided into
     haptics: true,              // a short vibration on a tick, where the device has one
     bg: { on: false, dim: 60, blur: 0, glass: 78 },
     sidebar: 'rail',            // rail | hidden
@@ -104,6 +124,8 @@ export function defaultState() {
     activities: [],
     habits: [],
     goals: [],
+    gym: { split: [], focus: [] },            // your split, in order, and the lifts you follow (the history itself is on the device: see gym.js)
+    shopping: [],                              // { id, name, kind, qty, bought, boughtAt, expires, life, expired }
     finance: { cats: deepClone(DEFAULT_CATS), rules: [] },   // the transactions themselves are not in this document (see fin.js)
     subs: [],
     days: {},          // date -> { sleep:{start,end,hrs}, efficacy, emojis:[], rest, goals:[{t,done}], tasksArchived }
@@ -184,6 +206,16 @@ export function normalize(st) {
   ALL_TABS.forEach(t => { if (!order.includes(t)) order.push(t); });
   fresh.settings.tabs.order = order;
   if (!Array.isArray(fresh.settings.ranks) || !fresh.settings.ranks.length) fresh.settings.ranks = deepClone(DEFAULT_RANKS);
+  // Ranks from before levels existed: spread them over levels 1 to 100, in their old order.
+  const rk = fresh.settings.ranks;
+  if (rk.some(r => !(r.lv >= 1))) {
+    rk.sort((a, b) => (a.at || 0) - (b.at || 0));
+    const even = rk.length === DEFAULT_RANKS.length;       // the usual six: the usual bands
+    rk.forEach((r, i) => { r.lv = i === 0 ? 1 : even ? DEFAULT_RANKS[i].lv : Math.min(99, 1 + Math.round(99 * Math.pow(i / rk.length, 1.7))); });
+  }
+  rk.forEach((r, i) => { if (!/^#[0-9a-f]{6}$/i.test(r.color || '')) r.color = RANK_COLORS[Math.min(RANK_COLORS.length - 1, Math.round(i / Math.max(1, rk.length - 1) * (RANK_COLORS.length - 1)))]; });
+  // Level values from the trial of this version, which had its own cost per level: start from the defaults.
+  if (fresh.settings.level.base !== undefined || fresh.settings.level.step !== undefined) fresh.settings.level = { ...DEFAULT_LEVEL };
   return fresh;
 }
 

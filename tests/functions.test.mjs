@@ -9,7 +9,7 @@ import assert from 'node:assert/strict';
 const { privateKey, publicKey } = generateKeyPairSync('rsa', { modulusLength: 2048, privateKeyEncoding: { type: 'pkcs8', format: 'pem' }, publicKeyEncoding: { type: 'spki', format: 'pem' } });
 Object.assign(process.env, {
   SUPABASE_URL: 'https://proj.supabase.co', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'service',
-  HEVY_API_KEY: 'hevy-key', ENABLEBANKING_APP_ID: 'app-123', ENABLEBANKING_PRIVATE_KEY: privateKey.replace(/\n/g, '\\n'), URL: 'https://site.example'
+  HEVY_API_KEY: 'hevy-key', OPENGYM_URL: 'https://gym.example.com/', OPENGYM_TOKEN: 'ogt_test', ENABLEBANKING_APP_ID: 'app-123', ENABLEBANKING_PRIVATE_KEY: privateKey.replace(/\n/g, '\\n'), URL: 'https://site.example'
 });
 const UID = '11111111-2222-3333-4444-555555555555', LINK = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const calls = [];
@@ -53,6 +53,12 @@ globalThis.fetch = async (url, init = {}) => {
     }
     if (u.pathname === '/sessions/sess-1' && method === 'DELETE') return J({ message: 'OK' });
   }
+  if (u.host === 'gym.example.com') {
+    assert.equal(init.headers.Authorization, 'Bearer ogt_test');
+    if (u.pathname === '/api/token/data/rev') return J({ rev: 7, wid: 'x' });
+    if (u.pathname === '/api/token/data') return J({ rev: 7, state: { unit: 'kg', routines: [{ id: 'r1', name: 'Upper' }], workouts: [{ id: 'a', d: '2026-11-10', start: Date.parse('2026-11-10T17:00:00Z'), end: Date.parse('2026-11-10T18:00:00Z'), routineId: 'r1', entries: [{ id: '0025', sets: [{ w: 80, r: 8, done: true }] }] }] } });
+  }
+  if (u.host === 'raw.githubusercontent.com') return u.pathname.endsWith('/0025.json') ? J({ id: '0025', name: 'Barbell Bench Press' }) : J({}, 404);
   if (u.host === 'api.hevyapp.com') {
     assert.equal(init.headers['api-key'], 'hevy-key');
     const page = +u.searchParams.get('page');
@@ -73,7 +79,13 @@ test('gym and bank functions: sign-in gate, signed bank token, full link flow', 
   assert.equal((await req(bank, 'mode=status', { token: 'bad' })).status, 401);
   
   // gym
-  assert.deepEqual((await req(gym, 'mode=status')).body, { configured: true });
+  assert.deepEqual((await req(gym, 'mode=status')).body, { configured: true, opengym: true });
+  // openGym: the whole history in one read, its revision, and names for its numbered exercises
+  assert.equal((await req(gym, 'mode=opengym-rev')).body.rev, 7);
+  let og = await req(gym, 'mode=opengym');
+  assert.equal(og.body.rev, 7); assert.equal(og.body.workouts[0].title, 'Upper'); assert.equal(og.body.workouts[0].ex[0].name, 'Exercise 0025');
+  og = await req(gym, 'mode=names&ids=0025,9999,../x', { token: 'bad' });                   // public catalogue data: no sign-in needed, ids are checked
+  assert.deepEqual(og.body, { names: { '0025': 'Barbell Bench Press' } });
   let r = await req(gym, 'mode=workouts&page=1&n=3');
   assert.equal(r.body.workouts.length, 2); assert.equal(r.body.next, null); assert.equal(r.body.workouts[0].ex[0].sets[0].kg, 80);
   r = await req(gym, 'mode=events&since=2026-11-01T00:00:00Z');

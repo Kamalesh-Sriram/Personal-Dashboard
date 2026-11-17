@@ -20,6 +20,7 @@ The site is a set of static files, identical for every visitor. Your data lives 
 ## Gym and finance data
 
 - **Workout history** from Hevy is fetched by the site's own function, which holds the Hevy API key (`HEVY_API_KEY`). The key never reaches a browser, the function only answers a signed-in user, and it can only read.
+- **Workout history from your own openGym server** is fetched the same way, with a token (`OPENGYM_TOKEN`) that you create in openGym and limit to reading workouts and plans. It stays in Netlify's environment variables, and the function refuses any server address that is not https.
 - **Transactions** are stored on the device. With sync on they are also kept in the `transactions` table of your own database, where row level security lets each user reach only their own rows.
 - **A linked bank** is read-only. The dashboard asks Enable Banking for account information only, never for permission to pay, and there is no payment code in the repository. You sign in on your bank's own page, so the dashboard never sees your bank password. What it holds is a session that expires within 180 days, kept in the `bank_links` table, which the browser cannot read or write at all.
 - The Enable Banking private key (`ENABLEBANKING_PRIVATE_KEY`) is a secret like the service role key: it belongs only in Netlify's environment variables.

@@ -16,12 +16,14 @@ const tone = (ok, warn) => (ok ? 'good' : warn ? 'warn' : 'bad');
 /* ── main goals: the lasting ones, written out again each morning ── */
 function goalsHtml() {
   const t = today(), cur = E.dayGoals(t), prev = E.prevDayGoals(t), x = S().settings.xp;
-  const written = cur.filter(g => g && g.t).length;
-  const n = Math.max(3, written + 1, prev.length, ui.dgRows || 0);   // always one empty line, and more on request
+  // Three lines to start with (or as many as you wrote last time). More only when you ask.
+  const asked = (S().days[t] || {}).goalRows;
+  const n = Math.max(1, cur.length, asked != null ? asked : Math.max(3, prev.length));
   let rows = '';
   for (let i = 0; i < n; i++) {
     const g = cur[i] || { t: '' }, ghost = prev[i] ? prev[i].t : '';
-    rows += `<input class="input dg" value="${esc(g.t)}" placeholder="${esc(ghost || 'A goal you are working toward')}" maxlength="140" data-change="home.goal" data-i="${i}" data-fk="dg${i}" aria-label="Main goal ${i + 1}" autocomplete="off">`;
+    rows += `<div class="dg-row"><input class="input dg" value="${esc(g.t)}" placeholder="${esc(ghost || 'A goal you are working toward')}" maxlength="140" data-change="home.goal" data-i="${i}" data-fk="dg${i}" aria-label="Main goal ${i + 1}" autocomplete="off">
+      <button class="icon-btn sm dg-x" data-act="home.goalDel" data-i="${i}" data-n="${n}" title="Remove this goal" aria-label="Remove goal ${i + 1}">${icon('x')}</button></div>`;
   }
   const earned = E.goalXP(t);
   return `<div class="card-h"><span class="eyebrow">Main goals</span>
@@ -35,6 +37,11 @@ function duelHtml() {
   const st = S(), t = today(), rest = E.isRest(t), show = st.settings.modules.shadow, name = esc(L().shadow);
   const sc = E.dayScore(t), him = E.shadowXP(t), pace = E.shadowPaceNow(), w = E.winMinutes();
   const gap = sc.total - pace;
+  // the outer ring is the working day: lit as it passes, with what is left written at the top
+  const now = E.nowMinutes(), leftMin = clamp(w.end - Math.max(now, w.start), 0, w.total), pct = Math.round(leftMin / w.total * 100);
+  const dayNote = now < w.start ? 'Day not started' : now >= w.end ? 'Day closed' : `${pct}% of day left`;
+  const dayTime = now < w.start ? `starts in ${fmtMins(Math.ceil(w.start - now))}` : now >= w.end ? '' : fmtMins(Math.floor(leftMin));
+  const dayTitle = now < w.start ? `Your day starts in ${fmtMins(Math.ceil(w.start - now))}` : now >= w.end ? 'Your working day has ended' : `${fmtMins(Math.floor(leftMin))} left of the ${fmtMins(w.total)} you set`;
   const sub = rest ? 'rest day' : show ? `${him} to beat` : '';
   const line = rest ? E.voice('rest') : E.voice(sc.total === 0 ? 'idle' : gap >= 0 ? 'ahead' : 'behind');
   const tier = rest ? 'rest' : sc.total === 0 ? 'idle' : gap >= 0 ? 'ahead' : 'behind';
@@ -42,7 +49,8 @@ function duelHtml() {
   const standing = gap === 0 ? "You're level." : `You're ${Math.abs(gap)} XP ${gap > 0 ? 'ahead' : 'behind'}.`;
   const his = pace >= him ? `${name} has finished the day with ${him} XP.` : `${name} is at ${pace} XP and will end the day with ${him} XP.`;
   return `
-    <div class="dial-wrap">${duelDial({ you: sc.total, shadow: him, pace, dayFrac: (E.nowMinutes() - w.start) / w.total, showShadow: show, rest, sub })}</div>
+    <div class="dial-day" title="${esc(dayTitle)}"><b>${esc(dayNote)}</b>${dayTime ? `<span>${esc(dayTime)}</span>` : ''}</div>
+    <div class="dial-wrap">${duelDial({ you: sc.total, shadow: him, pace, dayFrac: (now - w.start) / w.total, showShadow: show, rest, sub, dayNote, dayTitle })}</div>
     ${rest ? `<div class="pace tone-info">It's a rest day. Nothing is scored.</div>`
       : show ? `<div class="pace tone-${gap >= 0 ? 'good' : 'bad'}">${standing}</div><div class="small muted" style="text-align:center">${his}</div>` : ''}
     ${show && duelHtml.line ? `<blockquote class="quote">${esc(duelHtml.line)}<cite>${name}</cite></blockquote>` : ''}`;
@@ -77,7 +85,7 @@ function lockHtml() {
   const rows = cards.slice(0, TOP_TASKS).map(c => {
     const tag = st.tags.find(x => x.id === c.tagId), isSel = sel && sel.id === c.id;
     const live = running && running.runCardId === c.id;
-    return `<div class="task ${tag ? 'tagged' : ''} ${isSel ? 'sel' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-act="home.select" data-id="${esc(c.id)}" data-flip="c-${esc(c.id)}" role="button" tabindex="0" aria-pressed="${isSel}">
+    return `<div class="task ${tag ? 'tagged' : ''} ${isSel ? 'sel' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-act="home.select" data-nofx data-id="${esc(c.id)}" data-flip="c-${esc(c.id)}" role="button" tabindex="0" aria-pressed="${isSel}">
       <button class="check" data-act="card.complete" data-id="${esc(c.id)}" title="Mark as done" aria-label="Mark as done">${icon('check')}</button>
       <div class="grow"><div class="task-t">${esc(c.text)}</div>
         <div class="task-m">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}
@@ -110,7 +118,7 @@ function logbookHtml() {
       ${lb.chain ? `<span class="streak ${lb.chain >= 7 ? 'hot' : ''}" title="${lb.chain} days in a row with a full logbook">${icon('flame')}${lb.chain}</span>` : ''}</div>
     <div class="logbook">
       ${item(lb.sleep, 'Sleep', 'log.sleep', 'bed', "Log last night's sleep", lb.sleep && day.sleep && day.sleep.hrs ? day.sleep.hrs + 'h' : '')}
-      ${item(lb.rated, lb.unrated ? `${lb.unrated} to rate` : 'Sessions rated', 'home.rate', 'gauge', 'Rate how focused each session was')}
+      ${item(lb.rated, lb.unrated ? `${lb.unrated} to rate` : 'Sessions rated', 'home.rate', 'gauge', 'Rate how focused each deep work session was')}
       ${item(lb.efficacy, 'Efficacy', 'log.efficacy', 'goals', 'Rate how well the day went', lb.efficacy && day.efficacy != null ? day.efficacy + '%' : '')}
       ${item(lb.journal, 'Debrief', 'debrief.open', 'note', 'Write up the day')}
     </div>`;
@@ -118,26 +126,21 @@ function logbookHtml() {
 
 /* ── identity strip ── */
 function hudHtml() {
-  const st = S(), t = today(), sb = E.scoreboard(), rk = E.rankFor(sb.rep), mom = E.momentum();
+  const st = S(), t = today();
   const ex = E.execScoreFor(t), e7 = E.exec7(), tt = E.ttfbFor(t), avgT = E.serviceRecord().ttfbAvg;
   const due = E.habitsDue(t), left = due.filter(h => h.history[t] !== 'done').length, sw = E.sweepStatus(), rest = E.isRest(t);
   const cells = [];
-  // how much of the working day you set is left, as time and as a share
-  const w = E.winMinutes(), now = E.nowMinutes(), leftMin = clamp(w.end - Math.max(now, w.start), 0, w.total), pct = Math.round(leftMin / w.total * 100);
-  cells.push(`<div class="hud-cell wide"><span class="eyebrow">Day left</span><b class="num">${fmtMins(Math.floor(leftMin))}<small>${pct}%</small></b>
-    <div class="bar thin"><i style="width:${pct}%"></i></div>
-    <span>${now < w.start ? `Your day starts in ${fmtMins(Math.ceil(w.start - now))}` : now >= w.end ? 'Your day is closed' : `of the ${fmtMins(w.total)} you set`}</span></div>`);
   // habits are a count here; the list lives on its own tab
   cells.push(`<button class="hud-cell" data-act="nav.go" data-tab="habits"><span class="eyebrow">Habits</span>
     <b class="num ${!due.length || rest ? 'tone-mute' : left ? '' : 'tone-good'}">${!due.length ? 'None due' : rest ? 'Rest day' : left ? left + ' left' : 'All done'}</b>
     <span>${!due.length ? 'Nothing is due today' : rest ? 'Your streaks are frozen' : left ? (sw.chain ? `Keep your ${sw.chain}-day sweep` : `${due.length - left} of ${due.length} done`) : `${sw.chain}-day sweep, +${sw.bonus} XP`}</span></button>`);
   if (st.settings.modules.rank) {
-    cells.push(`<button class="hud-cell" data-act="home.ranks"><span class="eyebrow">${esc(L().rank)}</span><b class="tone-accent">${esc(rk.cur.name)}</b>
-      <div class="bar thin"><i style="width:${rk.pct}%"></i></div><span>${Math.round(sb.rep)} ${esc(L().rep.toLowerCase())}${rk.next ? `, ${Math.ceil(rk.next.at - sb.rep)} more to ${esc(rk.next.name)}` : ''}</span></button>`);
+    const lv = E.levelState();
+    cells.push(`<button class="hud-cell" data-act="level.open"><span class="eyebrow">Level XP today</span><b class="num ${lv.today.total < 0 ? 'tone-bad' : lv.today.total ? 'tone-good' : 'tone-mute'}">${lv.today.total >= 0 ? '+' : ''}${lv.today.total}</b>
+      <span>${lv.level >= E.LEVEL_MAX ? 'You are at the top level' : `${lv.need - lv.into} XP to level ${lv.level + 1}`}</span></button>`);
   }
   if (st.settings.modules.mission) {
     cells.push(`<div class="hud-cell"><span class="eyebrow">Execution</span><b class="num tone-${ex === null ? 'mute' : tone(ex >= 60, ex >= 40)}">${ex === null ? '-' : ex + '%'}</b><span>${e7 !== null ? `Your 7-day average is ${e7}%` : ex === null ? 'Set a mission to score this' : 'Of the mission you set'}</span></div>`);
-    cells.push(`<div class="hud-cell"><span class="eyebrow">Momentum</span><b class="tone-${mom.tone}">${mom.label}</b><span>${esc(mom.sub)}</span></div>`);
   }
   cells.push(`<div class="hud-cell"><span class="eyebrow">Time to first block</span><b class="num tone-${tt === null ? 'mute' : tone(avgT === null || tt <= avgT, true)}">${fmtMins(tt)}</b><span>${tt === null ? 'No deep work yet today' : avgT !== null ? `Your average is ${fmtMins(avgT)}` : 'Your first record'}</span></div>`);
   cells.push(`<div class="hud-cell"><span class="eyebrow">Focus today</span><b class="num">${fmtDur(E.focusMsOn(t))}</b><span>Target ${st.settings.targets.hours}h · ${E.tasksDoneOn(t)} of ${st.settings.targets.tasks} tasks</span></div>`);
@@ -193,6 +196,7 @@ export default {
     </div>`;
   },
   mount(root) {
+    if (ui.selPulse) { const el = root.querySelector(`.task[data-id="${CSS.escape(ui.selPulse)}"]`); ui.selPulse = null; if (el && fx.motion() !== 'off') el.classList.add('fx-pick'); }
     if (ui.dgFocus != null) { const el = root.querySelector(`.dg[data-i="${ui.dgFocus}"]`); ui.dgFocus = null; if (el) el.focus(); }
     const tasks = root.querySelector('.tasks');
     if (tasks) makeSortable(tasks, {
@@ -222,13 +226,20 @@ export default {
 };
 
 registerActions({
-  'home.select': (d, e) => { if (e && e.target.closest('button')) return; ui.selCard = d.id; refresh(); },
+  'home.select': (d, e) => { if (e && e.target.closest('button')) return; ui.selCard = d.id; ui.selPulse = d.id; fx.sound('lift'); refresh(); },
   'home.goal': (d, e, el) => E.setDayGoal(today(), +d.i, { t: el.value.trim() }),
   // Open one more line and put the cursor in it. If a line is already empty, use that one.
   'home.goalAdd': d => {
     const empty = [...document.querySelectorAll('.dgs .dg')].find(el => !el.value.trim());
     if (empty) { empty.focus(); return; }
-    ui.dgRows = +d.n + 1; ui.dgFocus = +d.n; refresh();
+    const t = today(), day = S().days[t] || (S().days[t] = {});
+    day.goalRows = +d.n + 1; ui.dgFocus = +d.n; save();
+  },
+  // Remove a goal, or an empty line you do not want.
+  'home.goalDel': d => {
+    const t = today(), day = S().days[t] || (S().days[t] = {}), i = +d.i;
+    day.goalRows = Math.max(1, +d.n - 1);
+    E.removeDayGoal(t, i);
   },
   'home.rate': () => { ui.sessView = 'list'; location.hash = '#/track'; },
   'habit.toggle': (d, e, el) => {
@@ -260,14 +271,5 @@ registerActions({
         </div>`
     });
   },
-  'home.ranks': () => {
-    const sb = E.scoreboard(), ranks = [...S().settings.ranks].sort((a, b) => a.at - b.at), cur = E.rankFor(sb.rep).cur;
-    openModal({
-      title: `${L().rank} and ${L().rep.toLowerCase()}`, cancel: 'Close',
-      body: `<div class="list">${ranks.map(r => `<div class="li"><span class="grow ${r === cur ? 'tone-accent' : ''}"><b>${esc(r.name)}</b>${r === cur ? ' (you are here)' : ''}</span><span class="dim">${r.at}+</span></div>`).join('')}</div>
-        <div class="sep"></div>
-        <p class="hint">${esc(L().rep)} changes once a day, when the day ends, based on how much of your mission you finished. 80% or more adds 3. 60% adds 1.5. 40% adds 0.5. 20% takes 1 away. Under 20% takes 3. No mission at all takes 2. Rest days change nothing.</p>`
-    });
-  }
 });
 void clamp;

@@ -8,6 +8,7 @@ export const TAB_META = {
   calendar: { label: 'Calendar',      icon: 'calendar' },
   gym:      { label: 'Gym',           icon: 'gym' },
   finance:  { label: 'Finance',       icon: 'wallet' },
+  shop:     { label: 'Shopping',      icon: 'cart' },
   subs:     { label: 'Subscriptions', icon: 'subs' },
   review:   { label: 'Review',        icon: 'review' },
   settings: { label: 'Settings',      icon: 'settings' }

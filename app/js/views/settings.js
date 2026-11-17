@@ -1,5 +1,5 @@
 /* SETTINGS: everything that can be personalised lives here. */
-import { S, save, saveQuiet, replaceState, normalize, defaultState, DEFAULT_XP, DEFAULT_RANKS, APP_VERSION, LS_KEY } from '../store.js';
+import { S, save, saveQuiet, replaceState, normalize, defaultState, DEFAULT_XP, DEFAULT_RANKS, DEFAULT_LEVEL, APP_VERSION, LS_KEY } from '../store.js';
 import * as E from '../engine.js';
 import { registerActions, openModal, confirmDialog, toast, switchHtml, segHtml } from '../ui.js';
 import { icon } from '../icons.js';
@@ -10,10 +10,12 @@ import { TAB_META } from './tabs.js';
 import * as Sync from '../sync.js';
 import * as fx from '../fx.js';
 import { idbGet, idbSet } from '../idb.js';
-import { pushState, enableNotifications, testNotification } from '../notify.js';
+import { pushState, enableNotifications, testNotification, planStatus, replanNow } from '../notify.js';
 
 const TABS = [['look', 'Look'], ['layout', 'Layout'], ['day', 'Day & scoring'], ['game', 'Game'], ['notify', 'Notifications'], ['sync', 'Sync'], ['data', 'Data'], ['about', 'About']];
 const set = () => S().settings;
+/* The colours already used around the dashboard: the accents and the tag palette. */
+const RING_COLORS = ['#2BD4F0', '#8AB4F8', '#2BF0A0', '#56CFB2', '#FFD93D', '#F5A623', '#F28B82', '#FF4D5E', '#C58AF9', '#9B6EF0', '#E8EEF2'];
 const minToHm = m => String(Math.floor(m / 60) % 24).padStart(2, '0') + ':' + String(Math.round(m % 60)).padStart(2, '0');
 
 /* ── small builders ── */
@@ -46,6 +48,13 @@ function lookHtml() {
       ${row('Typeface', 'Classic is the look of the earlier versions (Rajdhani, Inter, JetBrains Mono) and loads from Google Fonts. The other four are already on your device, so nothing is fetched.', seg('settings.font', [['classic', 'Classic'], ['system', 'System'], ['rounded', 'Rounded'], ['serif', 'Serif'], ['mono', 'Mono']], s.font))}
       ${row('Corners', '', seg('settings.corners', [['soft', 'Soft'], ['sharp', 'Sharp']], s.corners))}
       ${row('Density', 'Compact fits more on screen.', seg('settings.density', [['comfortable', 'Comfortable'], ['compact', 'Compact']], s.density))}
+    </section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Home dial</span><button class="btn sm ghost" data-act="set.dialReset">Follow the theme</button></div>
+      <p class="hint" style="margin-bottom:4px">Each ring can have its own colour. These stay as you set them during a campaign too.</p>
+      ${[['day', 'Day ring', 'The outer ticks: how much of your working day has passed.'], ['xp', 'XP ring', 'The thick arc. Left on the theme, it turns red while you are behind.'], ['rival', 'Rival ring', `The thin arc and the notch: where ${esc(s.labels.shadow)} is now and where he will finish.`]].map(([k, t, h]) =>
+        row(t, h, `<div class="swatches dial-sw"><button class="swatch sm auto ${s.dial[k] ? '' : 'on'}" data-act="set.dialPick" data-k="${k}" data-c="" title="Follow the theme" aria-label="Follow the theme">A</button>
+          ${RING_COLORS.map(c => `<button class="swatch sm ${(s.dial[k] || '').toLowerCase() === c.toLowerCase() ? 'on' : ''}" style="background:${c}" data-act="set.dialPick" data-k="${k}" data-c="${c}" aria-label="${c}"></button>`).join('')}
+          <input type="color" class="input" value="${safeColor(s.dial[k], safeColor(s.accent))}" data-change="set.dial" data-k="${k}" title="Any colour: the picker takes RGB, HSL or hex" aria-label="${t}: any colour"></div>`)).join('')}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Motion and sound</span></div>
       ${row('Motion', 'Full: panels rise in when a tab opens, ticks draw themselves, things glide to their new place. Subtle keeps the fades and drops the rest. The "reduce motion" setting of your device always wins.', seg('settings.motion', [['full', 'Full'], ['subtle', 'Subtle'], ['off', 'Off']], s.reduceMotion ? 'off' : (s.motion || 'full')))}
@@ -107,23 +116,40 @@ function dayHtml() {
     </section>`;
 }
 function gameHtml() {
-  const s = set(), st = S(), g = st.game, c = g.campaign, sb = E.scoreboard();
+  const s = set(), st = S(), g = st.game, c = g.campaign, lv = E.levelState();
   const info = E.shadowInfo(today());
+  const lvRow = (k, label, hint, min, max) => row(label, hint, num('settings.level.' + k, s.level[k], min, max));
   return `<section class="card"><div class="card-h"><span class="eyebrow">Parts of the game</span></div>
       ${row(`The rival (${esc(s.labels.shadow)})`, 'A daily target built from your own recent performance, and a win or loss when the day closes.', toggle('settings.modules.shadow', s.modules.shadow))}
       ${row('Missions and execution', 'Declare what today is for; be scored on how much of it you kept.', toggle('settings.modules.mission', s.modules.mission))}
-      ${row('Rank and reputation', 'A standing that rises with kept commitments and falls with broken ones.', toggle('settings.modules.rank', s.modules.rank))}
+      ${row('Level and rank', 'A level from 1 to 100 that only builds up, shown at the top of every page, with your ranks as bands of levels.', toggle('settings.modules.rank', s.modules.rank))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Names</span></div>
       ${row('The rival is called', '', text('settings.labels.shadow', s.labels.shadow, 'maxlength="30"'))}
       ${row('The start button says', '', text('settings.labels.lockIn', s.labels.lockIn, 'maxlength="24"'))}
       ${row('The mission panel is titled', '', text('settings.labels.mission', s.labels.mission, 'maxlength="30"'))}
       ${row('Rank is called', '', text('settings.labels.rank', s.labels.rank, 'maxlength="20"'))}
-      ${row('Reputation is called', '', text('settings.labels.rep', s.labels.rep, 'maxlength="20"'))}
-      <div class="set-row" style="align-items:flex-start"><div class="grow"><div class="set-t">Rank ladder</div><div class="hint">Name and the ${esc(s.labels.rep.toLowerCase())} needed to hold each one. You currently have ${Math.round(sb.rep)}.</div></div>
-        <div class="set-c col" style="gap:6px">${[...s.ranks].map((r, i) => `<div class="row"><input class="input" value="${esc(r.name)}" data-change="set.rank" data-i="${i}" data-k="name" maxlength="24" aria-label="Rank name"><input class="input" type="number" value="${r.at}" min="0" max="100000" data-change="set.rank" data-i="${i}" data-k="at" style="width:84px" ${i === 0 ? 'disabled' : ''} aria-label="Reputation needed">
+      <div class="set-row" style="align-items:flex-start"><div class="grow"><div class="set-t">Ranks</div><div class="hint">Each rank is a band of levels: give it a colour, a name and the level it begins at. The first always begins at level 1. You are level ${lv.level}, ${esc(lv.rank.cur.name)}.</div></div>
+        <div class="set-c col" style="gap:6px">${[...s.ranks].map((r, i) => `<div class="row"><input type="color" class="input" value="${safeColor(r.color, '#9AA7B4')}" data-change="set.rank" data-i="${i}" data-k="color" style="width:42px;flex:none;padding:3px" title="This rank's colour" aria-label="Rank colour"><input class="input" value="${esc(r.name)}" data-change="set.rank" data-i="${i}" data-k="name" maxlength="24" aria-label="Rank name"><span class="tiny dim">from level</span><input class="input" type="number" value="${r.lv}" min="1" max="100" data-change="set.rank" data-i="${i}" data-k="lv" style="width:76px" ${i === 0 ? 'disabled' : ''} aria-label="Begins at level">
             <button class="icon-btn sm" data-act="set.rankDel" data-i="${i}" ${s.ranks.length <= 2 || i === 0 ? 'disabled' : ''} aria-label="Remove rank">${icon('x')}</button></div>`).join('')}
           <div class="row"><button class="btn sm" data-act="set.rankAdd">${icon('plus')} Add rank</button><button class="btn sm ghost" data-act="set.rankReset">Reset</button></div></div></div>
+    </section>
+    <section class="card"><div class="card-h"><span class="eyebrow">What earns level XP</span><button class="btn sm ghost" data-act="set.levelReset">Reset to defaults</button></div>
+      <p class="hint" style="margin-bottom:4px">Your level is worked out from your whole history with these values, so changing one changes the total straight away. Each value is what it pays at level 1; at level ${lv.level} everything pays x${lv.gain.toFixed(2)}. Set anything to 0 to leave it out. Day XP against ${esc(s.labels.shadow)} is separate and has its own values under Day & scoring.</p>
+      ${lvRow('mission', 'A completed mission', 'Shared out by weight: the critical objective is worth half, the primaries 35%, the fallback 15%. Each one pays as you tick it.', 0, 1000)}
+      ${lvRow('habits50', 'Half your habits done', 'At least 50% of the habits due that day.', 0, 500)}
+      ${lvRow('habits80', 'Most of your habits done', 'At least 80%. This replaces the amount above, it is not added to it.', 0, 500)}
+      ${lvRow('habits100', 'Every habit done', 'All of them. Replaces the two above.', 0, 500)}
+      ${row('A habit with its own XP', 'Open a habit and set "Level XP when done". It pays that every time, on top of the share above.', '<button class="btn sm" data-act="nav.go" data-tab="habits">Open habits</button>')}
+      ${lvRow('deepHour', 'Per hour of deep work', 'Deep activities only. Counted to the minute.', 0, 200)}
+      ${lvRow('deepCap', 'Deep hours counted a day', 'Hours past this earn nothing more.', 1, 24)}
+      ${lvRow('milestone', 'A milestone cleared', 'On the Goals tab. It pays on the day you clear it.', 0, 2000)}
+      ${lvRow('goal', 'A whole goal finished', 'Added when its last milestone is cleared.', 0, 5000)}
+      ${lvRow('win', 'Winning the day', `Beating ${esc(s.labels.shadow)}.`, 0, 1000)}
+      ${lvRow('loss', 'Losing the day', 'Taken away. Rest days cost nothing.', 0, 1000)}
+      ${lvRow('task', 'Per task completed', 'Off at 0.', 0, 200)}
+      ${row('Levels are never lost', 'With this on, a lost day costs XP but cannot drop you below the start of a level you have reached.', toggle('settings.level.keepLevel', s.level.keepLevel))}
+      ${row('Earnings grow as you level', `Levels cost more as you climb: 150 XP for the first, 3,580 for the last, ${E.levelStart(100).toLocaleString()} in all. So what you earn grows too. At 0% nothing grows and the top takes many years. At 100% every level takes equally long. At 50%, with the values above, an ordinary day gets you to level 100 in about two years.`, range('settings.level.growth', s.level.growth, 0, 100, '%'))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">${esc(s.labels.shadow)}</span><span class="tiny dim">today's bar: ${info.xp} XP</span></div>
       ${row('His edge', `How far ahead of your recent form he stays. He is rebuilt each morning from 60% of your 7-day average and 40% of your last day, plus this. He never asks for more than your best day of the last 30. <button class="btn sm ghost" data-act="home.shadowInfo" style="height:24px;padding:0 8px">See today's numbers</button>`, range('settings.shadow.edge', s.shadow.edge, 0, 25, '%'))}
@@ -131,7 +157,7 @@ function gameHtml() {
       <p class="hint" style="margin-top:12px">Every line he and the notifications can say is editable: Settings > Notifications > What they say.</p>
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Rest days</span></div>
-      ${row('Allowed in any 7 days', 'A rest day is not scored at all: no win or loss, no reputation change, and habit streaks freeze instead of breaking. The allowance is what stops it becoming an escape hatch.', num('settings.restPerWeek', s.restPerWeek, 0, 7))}
+      ${row('Allowed in any 7 days', 'A rest day is not scored at all: no win or loss, and habit streaks freeze instead of breaking. The allowance is what stops it becoming an escape hatch.', num('settings.restPerWeek', s.restPerWeek, 0, 7))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Campaign</span>${c.on ? `<span class="pill accent">Day ${Math.max(1, E.campaignDay())} of ${c.len}</span>` : ''}</div>
       <p class="hint" style="margin-bottom:12px">A campaign is a fixed-length push. While it runs the whole dashboard switches to the red tactical theme, breaks are challenged before 25 minutes of focus are on the board, and the win-loss record counts from its first day. Ending it archives the result under Review.</p>
@@ -160,6 +186,10 @@ function notifyHtml() {
       <div class="notice ${stateCopy[0]}">${icon(ps === 'subscribed' || ps === 'granted' ? 'bell' : 'bellOff')} ${stateCopy[1]}</div>
       <div class="row wrap" style="margin-top:12px"><button class="btn primary" data-act="set.notifyEnable">${icon('bell')} ${ps === 'subscribed' ? 'Re-register this device' : 'Enable notifications'}</button>
         <button class="btn" data-act="set.notifyTest">Send a test</button></div>
+      ${ps === 'subscribed' ? (() => { const p = planStatus(), at = t => new Date(t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        return `<div class="notice ${p.error ? 'bad' : ''}" style="margin-top:12px">${icon(p.error ? 'help' : 'check')} <span>${p.error ? `The day's reminders could not be scheduled: ${esc(p.error)}`
+          : p.at ? `Scheduled at ${at(p.at)}: ${p.count} for the rest of today${p.next ? `, the next one at ${at(p.next)}` : ''}. They arrive with the app closed.` : 'Reminders have not been scheduled yet in this session.'}
+          <button class="btn sm" data-act="set.notifyPlan" style="margin-left:6px">Schedule again</button></span></div>`; })() : ''}
       <p class="hint" style="margin-top:10px">Each device is enabled separately. Works in Chrome, Edge and Firefox on Windows, macOS and Android; in Safari on macOS 13 or later; and on iPhone/iPad (iOS 16.4+) once installed to the home screen.</p>
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">What to send</span></div>
@@ -329,6 +359,10 @@ registerActions({
     setPath(d.path, el.value); E.invalidate(); save();
     if (today() < before) E.reopenDay(today());
   },
+  'set.notifyPlan': async () => { await replanNow(); refresh(); },
+  'set.dial': (d, e, el) => { if (/^#[0-9a-fA-F]{6}$/.test(el.value)) { S().settings.dial[d.k] = el.value; save(); } },
+  'set.dialPick': d => { S().settings.dial[d.k] = /^#[0-9a-fA-F]{6}$/.test(d.c || '') ? d.c : null; save(); },
+  'set.dialReset': () => { S().settings.dial = { day: null, xp: null, rival: null }; save(); },
   // an optional time: emptied, it goes back to following the window
   'set.time': (d, e, el) => { setPath(d.path, /^\d\d:\d\d$/.test(el.value) ? el.value : null); E.invalidate(); save(); },
   'set.num': (d, e, el) => { const v = clamp(parseFloat(el.value), +el.min, +el.max); if (!isFinite(v)) return; setPath(d.path, v); E.invalidate(); save(); },
@@ -355,12 +389,13 @@ registerActions({
   'set.ratings': (d, e, el) => { const list = el.value.split('\n').map(s => s.trim()).filter(Boolean).slice(0, 10); if (list.length) { set().ratings = list; save(); } },
   'set.rank': (d, e, el) => {
     const r = set().ranks[+d.i]; if (!r) return;
-    if (d.k === 'name') r.name = el.value.trim() || r.name; else r.at = Math.max(0, parseInt(el.value) || 0);
-    set().ranks.sort((a, b) => a.at - b.at); set().ranks[0].at = 0;
+    if (d.k === 'color') r.color = safeColor(el.value, r.color); else if (d.k === 'name') r.name = el.value.trim() || r.name; else r.lv = clamp(parseInt(el.value) || 1, 1, 100);
+    set().ranks.sort((a, b) => a.lv - b.lv); set().ranks[0].lv = 1;
     E.invalidate(); save();
   },
-  'set.rankAdd': () => { const r = set().ranks, top = r[r.length - 1]; r.push({ at: Math.round(top.at * 1.5) + 50, name: 'New rank' }); E.invalidate(); save(); },
+  'set.rankAdd': () => { const r = set().ranks, top = r[r.length - 1]; r.push({ lv: Math.min(100, top.lv + Math.max(1, Math.round((100 - top.lv) / 2))), at: (top.at || 0) + 100, name: 'New rank', color: top.color || '#9AA7B4' }); E.invalidate(); save(); },
   'set.rankDel': d => { set().ranks.splice(+d.i, 1); E.invalidate(); save(); },
+  'set.levelReset': () => { set().level = { ...DEFAULT_LEVEL }; E.invalidate(); save(); },
   'set.rankReset': () => { set().ranks = deepClone(DEFAULT_RANKS); E.invalidate(); save(); },
   'set.campStart': (d, e, el) => { if (!el.value || el.value > today()) return; const c = S().game.campaign; E.startCampaign({ name: c.name, start: el.value, len: c.len }); },
   'set.lines': (d, e, el) => {

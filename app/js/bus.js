@@ -15,8 +15,10 @@ export const ui = {
   journalDate: null,
   journalQuery: '',
   settingsTab: 'look',
+  shopQuery: '', shopKind: '', shopAll: false,   // Shopping: search, the list new items go to
   gymQuery: '', gymAll: false,          // Gym: exercise search, show the full list
-  finMonth: null, finView: 'month', finQuery: '', finCat: ''   // Finance
+  finMonth: null, finView: 'month', finQuery: '', finCat: '', finDraw: true, finScroll: false,   // Finance
+  gymExOpen: false, selPulse: null
 };
 
 let _refresh = () => {};

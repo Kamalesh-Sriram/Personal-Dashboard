@@ -249,7 +249,8 @@ function buildPlan() {
       // The task if there is one, otherwise the activity. The function that
       // sends it adds how long it has been running, since only it knows the time.
       const task = E.runningTaskName(running);
-      add({ dedupe_key: `timer:${t}`, send_at: new Date().toISOString(), repeat_sec: 55, kind: 'timer', ongoing: true, silent: true, tag: 'hq-timer',
+      // keyed by when this run began, so a second timer the same day is a new row, not a clash with the first
+      add({ dedupe_key: `timer:${running.lastStart}`, send_at: new Date().toISOString(), repeat_sec: 55, kind: 'timer', ongoing: true, silent: true, tag: 'hq-timer',
             expires_at: new Date(Math.min(running.lastStart + E.MAX_RUN_MS, Math.max(end.getTime(), Date.now() + 3600000))).toISOString(),
             title: (task || E.label(running)).slice(0, 120), data: { started_at: running.lastStart, sub: task ? E.label(running) : '' } });
       pinned({ name: task || running.name, lastStart: running.lastStart });
@@ -271,17 +272,44 @@ function fingerprint() {
     E.habitsDue(t).filter(h => h.history[t] !== 'done').length, Math.round(E.dayXP(t) / 25),
     (st.subs || []).map(x => x.id + ':' + x.anchor + ':' + (x.remind !== false)).join(',')].join('|');
 }
+/** What the last planning run did, for Settings > Notifications. */
+const planInfo = { at: 0, count: 0, error: '', next: null };
+export const planStatus = () => ({ ...planInfo, subscribed: !!sub, signedIn: Sync.signedIn() });
+let planning = false, planAgain = false;
 async function plan(force) {
   if (!sub || !Sync.signedIn()) return;
+  if (planning) { planAgain = true; return; }
   const p = fingerprint();
   if (!force && p === lastPrint) return;
   lastPrint = p;
+  planning = true;
   try {
     const rows = buildPlan();
     await Sync.rest('DELETE', `push_queue?sent_at=is.null&dedupe_key=like.${encodeURIComponent(PLAN)}*`);
-    if (rows.length) await Sync.rest('POST', 'push_queue?on_conflict=user_id,dedupe_key', rows, 'resolution=merge-duplicates,return=minimal');
+    // "ignore-duplicates", not "merge": a notification that has already gone out
+    // today keeps its row, and updating a sent row is forbidden by the database.
+    // Merging made that one clash reject the WHOLE batch, so after the first
+    // "he passed you" of the day nothing else was queued: no timer, no callouts.
+    if (rows.length) await Sync.rest('POST', 'push_queue?on_conflict=user_id,dedupe_key', rows, 'resolution=ignore-duplicates,return=minimal');
     if (rows.some(r => new Date(r.send_at) <= new Date())) flush();
-  } catch { lastPrint = ''; /* offline: the next change retries */ }
+    const upcoming = rows.filter(r => r.kind === 'nudge').map(r => Date.parse(r.send_at)).filter(x => x > Date.now()).sort((a, b) => a - b);
+    Object.assign(planInfo, { at: Date.now(), count: rows.length, error: '', next: upcoming[0] || null });
+  } catch (e) {
+    lastPrint = '';                                    // the next change retries
+    Object.assign(planInfo, { at: Date.now(), error: /Failed to fetch|NetworkError|Load failed/i.test(e.message) ? 'Offline: it will be planned again when you are back online.' : e.message });
+  } finally {
+    planning = false;
+    if (planAgain) { planAgain = false; plan(false); }
+  }
 }
-export const schedulePlan = debounce(() => plan(false), 6000);
+const planSoon = debounce(() => plan(false), 6000);
+let lastRun = '';
+/** Most changes can wait a few seconds. A timer starting or stopping cannot:
+ *  the app is often closed straight afterwards. */
+export function schedulePlan() {
+  const r = E.runningActivity(), key = r ? r.id + '@' + r.lastStart : '-';
+  if (key !== lastRun) { lastRun = key; plan(false); } else planSoon();
+}
 export const replanNow = () => plan(true);
+// leaving the app: make sure what is planned matches what is true right now
+if (typeof document !== 'undefined') document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'hidden') plan(false); });

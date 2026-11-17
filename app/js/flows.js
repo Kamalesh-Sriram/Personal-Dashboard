@@ -7,7 +7,7 @@ import { S, save, touch } from './store.js';
 import * as E from './engine.js';
 import { registerActions, openModal, closeModal, toast, confirmDialog } from './ui.js';
 import { icon } from './icons.js';
-import { esc, today, addDays, fmtTimer, fmtDur, fmtMins, fmtDate, hmToMin, clamp } from './util.js';
+import { esc, today, addDays, fmtTimer, fmtDur, fmtMins, fmtDate, hmToMin, clamp, safeColor } from './util.js';
 import { ui, refresh } from './bus.js';
 import { notify } from './notify.js';
 import * as fx from './fx.js';
@@ -36,7 +36,7 @@ export function monthHtml(month, { link = false } = {}) {
 /* ── session rating: quick, optional, never blocks ── */
 function offerRating(activity) {
   const s = (activity.sessions || [])[activity.sessions.length - 1];
-  if (!s || s.dur < E.COMBO.minMs || s.eff != null) return;
+  if (!s || s.dur < E.COMBO.minMs || s.eff != null || !E.isDeep(activity)) return;
   toast(`You logged ${fmtDur(s.dur)} of ${E.label(activity)}`, 'How focused were you?', {
     ms: 14000,
     buttons: [1, 2, 3, 4, 5].map(n => ({ label: String(n), run: () => { s.eff = n / 5; touch(activity); E.invalidate(); save(); } }))
@@ -138,12 +138,11 @@ export function completeCard(id) {
 
 /* ══════════════════════ MISSION: BRIEF ══════════════════════ */
 function statusLines() {
-  const t = today(), sb = E.scoreboard(), rk = E.rankFor(sb.rep), mom = E.momentum();
+  const t = today(), lv = E.levelState();
   const y = S().game.days[addDays(t, -1)];
   const yLine = !y ? 'No data' : y.v === 'R' ? 'Rest day' : `${y.v === 'W' ? 'Won' : 'Lost'} · ${y.ex ?? 0}% execution · ${y.x} XP`;
   return `<div class="telemetry">
-    <div><span>${esc(L().rank)}</span><b class="tone-accent">${esc(rk.cur.name)}</b>${rk.next ? `<i>${Math.ceil(rk.next.at - sb.rep)} to ${esc(rk.next.name)}</i>` : ''}</div>
-    <div><span>Momentum</span><b class="tone-${mom.tone}">${mom.label}</b><i>${esc(mom.sub)}</i></div>
+    <div><span>Level ${lv.level}</span><b class="tone-accent">${esc(lv.rank.cur.name)}</b><i>${lv.level >= E.LEVEL_MAX ? 'the top level' : `${lv.need - lv.into} XP to level ${lv.level + 1}`}</i></div>
     <div><span>Yesterday</span><b>${esc(yLine)}</b></div>
     <div><span>${esc(shadowName())} today</span><b>${E.shadowXP(t)} XP</b><i>${esc(E.shadowBasis(t))}</i></div>
     <div><span>Average start delay</span><b>${fmtMins(E.serviceRecord().ttfbAvg)}</b></div>
@@ -200,11 +199,11 @@ export function objectiveRows(m) {
 /* ══════════════════════ MISSION: DEBRIEF ══════════════════════ */
 function debriefExecHtml() {
   if (!S().settings.modules.mission) return '';
-  const ex = E.execScoreFor(today()), d = E.repDelta(ex);
+  const ex = E.execScoreFor(today()), xp = E.levelState().today.parts.mission;
   if (E.isRest(today())) return `<div class="pill">It's a rest day, so nothing is scored.</div>`;
   return ex === null
-    ? `<div class="pill bad">No mission was set, so execution is 0% (${esc(L().rep)} ${d})</div>`
-    : `<div class="pill ${ex >= 60 ? 'good' : ex >= 40 ? 'warn' : 'bad'}">Execution ${ex}% · ${esc(L().rep)} ${d > 0 ? '+' : ''}${d}</div>`;
+    ? `<div class="pill bad">No mission was set, so it earned no level XP</div>`
+    : `<div class="pill ${ex >= 60 ? 'good' : ex >= 40 ? 'warn' : 'bad'}">Execution ${ex}% · +${xp} level XP</div>`;
 }
 function openDebrief() {
   const t = today(), st = S(), sc = E.dayScore(t), m = E.missionFor(t);
@@ -294,7 +293,7 @@ async function toggleRest(date = today()) {
   }
   const ok = await confirmDialog(on
     ? { title: `Make ${date === today() ? 'today' : fmtDate(date)} a rest day?`, ok: 'Rest day',
-        body: `Nothing is scored: no win or loss, no ${L().rep.toLowerCase()} change, and habit streaks freeze instead of breaking. ${b.left - 1} of ${b.allowed} left this week after this.` }
+        body: `Nothing is scored: no win or loss, no level XP won or lost for the result, and habit streaks freeze instead of breaking. ${b.left - 1} of ${b.allowed} left this week after this.` }
     : { title: 'Cancel the rest day?', ok: 'Cancel rest day', body: 'The day goes back to being scored normally.' });
   if (!ok) return;
   E.setRest(date, on);
@@ -393,6 +392,47 @@ registerActions({
     s.eff = s.eff === v ? null : v;
     touch(a); E.invalidate(); save();
   }
+});
+
+
+/* ══════════════════════ LEVEL: the window behind the top-bar badge ══════════════════════ */
+const LV_PARTS = [['mission', 'Mission'], ['habits', 'Habits kept'], ['linked', 'Linked habits'], ['deep', 'Deep work'], ['milestones', 'Milestones'], ['tasks', 'Tasks'], ['result', 'Day result']];
+export function openLevel() {
+  const st = S(), lv = E.levelState();
+  const ranks = [...st.settings.ranks].sort((a, b) => (a.lv || 1) - (b.lv || 1));
+  const parts = LV_PARTS.filter(([k]) => lv.today.parts[k] !== 0);
+  const max = Math.max(1, ...lv.days.map(x => Math.abs(x.total)));
+  const sb = E.scoreboard(), deepH = st.activities.filter(E.isDeep).reduce((n, a) => n + (a.sessions || []).reduce((k, s) => k + s.dur, 0), 0) / 3600000;
+  const cleared = st.goals.reduce((n, g) => n + (g.milestones || []).filter(m => m.doneAt).length, 0);
+  openModal({
+    title: `Level ${lv.level}`, cancel: 'Close', wide: true,
+    left: `<button type="button" class="btn ghost" data-act="level.settings">${icon('settings')} What earns XP</button>`,
+    body: `<div class="lv-hero" style="--rk:${safeColor(lv.rank.cur.color, 'var(--accent)')}">
+        <div class="lv-badge"><span>LV</span><b>${lv.level}</b></div>
+        <div class="grow"><div class="lv-rank">${esc(lv.rank.cur.name)}</div>
+          <div class="lv-bar" style="height:5px;margin:10px 0 7px"><i style="width:${lv.pct}%"></i></div>
+          <div class="row between small muted"><span>${lv.level >= E.LEVEL_MAX ? 'The top level' : `${lv.into} of ${lv.need} XP to level ${lv.level + 1}`}</span><span>${lv.xp.toLocaleString()} XP in total</span></div></div>
+      </div>
+      <div class="telemetry three">
+        <div><span>Today</span><b class="${lv.today.total < 0 ? 'tone-bad' : 'tone-good'}">${lv.today.total >= 0 ? '+' : ''}${lv.today.total} XP</b><i>so far</i></div>
+        <div><span>Next rank</span><b>${lv.rank.next ? esc(lv.rank.next.name) : 'None left'}</b><i>${lv.rank.next ? `at level ${lv.rank.next.lv}, ${lv.toNextRank.toLocaleString()} XP away` : 'you hold the highest'}</i></div>
+        <div><span>Days won</span><b>${sb.w}</b><i>${sb.l} lost</i></div>
+        <div><span>Deep work</span><b>${Math.round(deepH)}h</b><i>logged in total</i></div>
+        <div><span>Milestones</span><b>${cleared}</b><i>cleared</i></div>
+        <div><span>Earned and lost</span><b>${lv.earned.toLocaleString()}</b><i>${lv.lost ? `${lv.lost.toLocaleString()} lost to bad days` : 'nothing lost yet'}</i></div>
+      </div>
+      <div><div class="label" style="margin-bottom:6px">Where today's XP came from</div>
+        <div class="row wrap">${parts.map(([k, n]) => `<span class="pill ${lv.today.parts[k] < 0 ? 'bad' : ''}">${n} ${lv.today.parts[k] > 0 ? '+' : ''}${lv.today.parts[k]}</span>`).join('') || '<span class="muted">Nothing yet today.</span>'}</div></div>
+      <div><div class="label" style="margin-bottom:6px">Last ${lv.days.length} days</div>
+        <div class="lv-days">${lv.days.map((x, i) => `<div style="--d:${i}" title="${esc(fmtDate(x.d))}: ${x.total >= 0 ? '+' : ''}${x.total} XP"><i class="${x.total < 0 ? 'neg' : ''}" style="height:${Math.max(x.total ? 6 : 2, Math.abs(x.total) / max * 100)}%"></i><span>${fmtDate(x.d, { weekday: 'narrow' })}</span></div>`).join('')}</div></div>
+      <div><div class="label" style="margin-bottom:6px">Ranks</div>
+        <div class="lv-ranks">${ranks.map((r, i) => { const to = ranks[i + 1] ? ranks[i + 1].lv - 1 : E.LEVEL_MAX, on = r === lv.rank.cur, past = lv.level > to;
+          return `<div class="${on ? 'on' : past ? 'past' : ''}" style="--rk:${safeColor(r.color, 'var(--accent)')}"><b>${esc(r.name)}</b><span>${r.lv === to ? `level ${r.lv}` : `levels ${r.lv} to ${to}`}</span></div>`; }).join('')}</div></div>`
+  });
+}
+registerActions({
+  'level.open': () => openLevel(),
+  'level.settings': () => { closeModal(); ui.settingsTab = 'game'; location.hash = '#/settings'; refresh(); }
 });
 
 export { openBrief, openDebrief, stopAndRate };

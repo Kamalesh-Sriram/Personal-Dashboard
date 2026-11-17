@@ -133,3 +133,35 @@ test('dates in the spellings banks use', () => {
   assert.equal(F.parseDate('11/25/2026'), '2026-11-25');            // only one reading is possible
   assert.equal(F.parseDate('nonsense'), '');
 });
+
+test('an openGym backup is read, in pounds if the profile says so', () => {
+  const doc = { state: { unit: 'lb', customEx: [{ id: 'cx1', n: 'Cable Fly' }], routines: [{ id: 'r1', name: 'Upper' }],
+    workouts: [{ id: 'a', d: '2026-11-10', start: Date.parse('2026-11-10T17:00:00Z'), end: Date.parse('2026-11-10T18:00:00Z'), routineId: 'r1',
+      entries: [{ id: 'barbell-bench-press', sets: [{ w: 220, r: 5, done: true }, { w: 220, r: 4, done: false }] }, { id: 'cx1', sets: [{ w: 30, r: 12, done: true }] }] }] } };
+  const { source, workouts } = G.fromFile(JSON.stringify(doc));
+  assert.equal(source, 'openGym');
+  assert.equal(workouts[0].title, 'Upper');
+  assert.deepEqual(workouts[0].ex.map(x => x.name), ['Barbell Bench Press', 'Cable Fly']);
+  assert.equal(workouts[0].ex[0].sets.length, 1);                              // the set that was not done is left out
+  assert.ok(Math.abs(workouts[0].ex[0].sets[0].kg - 99.79) < 0.01);
+  assert.throws(() => G.fromFile('{"hello":1}'), /No workouts/);
+});
+test('the coach finds your place in the split and builds the next session from the last one like it', () => {
+  const day = 86400000, t0 = Date.parse('2026-10-01T17:00:00Z');
+  const w = (i, title, ex) => ({ id: 'w' + i, title, start: t0 + i * day, end: t0 + i * day + 3600000, ex: ex.map(([name, kg, ...reps]) => ({ name, tid: '', sets: reps.map(r => ({ t: 'normal', kg, reps: r })) })) });
+  const split = ['Upper', 'Lower', 'Upper', 'Lower', 'Arms'];
+  const hist = [
+    w(0, 'Upper', [['Bench', 80, 8, 8, 7]]), w(1, 'Lower', [['Squat', 100, 5, 5, 5]]), w(2, 'Upper', [['Overhead Press', 40, 8, 8]]), w(3, 'Lower', [['Deadlift', 120, 5, 5]]), w(4, 'Arms', [['Curl', 15, 12, 12]]),
+    w(7, 'Upper', [['Bench', 80, 9, 8, 8]]), w(8, 'Lower', [['Squat', 100, 6, 5, 5]])
+  ];
+  const twice = hist.slice(0, 5).concat(hist.slice(0, 5).map((x, i) => ({ ...x, start: x.start + 7 * day, id: 'z' + i })));
+  assert.deepEqual(G.guessSplit(twice), split);
+  const next = G.nextWorkout(hist, split);
+  assert.equal(next.title, 'Upper'); assert.equal(next.slot, 2);                // the second Upper of the cycle, not the first
+  assert.deepEqual(next.items.map(i => i.name), ['Overhead Press']);            // built from the same slot one cycle ago
+  assert.equal(next.items[0].sets, 2); assert.equal(next.items[0].kg, 40); assert.equal(next.items[0].reps, 9);
+  const after = G.nextWorkout([...hist, w(9, 'Upper', [['Overhead Press', 40, 9, 9]])], split);
+  assert.equal(after.title, 'Lower'); assert.equal(after.slot, 3);
+  assert.deepEqual(after.items.map(i => i.name), ['Deadlift']);
+  assert.equal(G.nextWorkout([], split), null);
+});

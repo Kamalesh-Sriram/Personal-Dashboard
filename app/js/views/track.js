@@ -90,7 +90,7 @@ function sessionsHtml(date) {
   return `<div class="sess-list">${rows.map(({ a, s }) => {
     const tier = E.tierOf(a), fc = s.cardId ? E.findCard(s.cardId) : null, gt = fc ? null : E.findGoalTask(s.taskId);
     const what = fc ? fc.card.text : gt ? gt.t.name : '';
-    const pips = s.live ? '<span class="tiny dim">running</span>' : `<span class="rate" role="group" aria-label="Focus rating">${[1, 2, 3, 4, 5].map(n =>
+    const pips = s.live ? '<span class="tiny dim">running</span>' : tier !== 'deep' ? '' : `<span class="rate" role="group" aria-label="Focus rating">${[1, 2, 3, 4, 5].map(n =>
       `<button class="${s.eff != null && s.eff * 5 >= n - 0.01 ? 'on' : ''}" data-act="session.rate" data-id="${esc(a.id)}" data-start="${s.start}" data-v="${n}" title="Focus ${n}/5" aria-label="Rate ${n} of 5"></button>`).join('')}</span>`;
     return `<div class="sess" style="--c:${safeColor(a.color)}">
       ${a.emoji ? `<span class="sess-e">${esc(a.emoji)}</span>` : ''}
@@ -162,14 +162,18 @@ function openSession(a, s) {
   const hm = ts => { const d = new Date(ts); return `${pad(d.getHours())}:${pad(d.getMinutes())}`; };
   const now = Date.now();
   if (!st.activities.length) { toast('Add an activity first'); return; }
+  // a new entry usually fills the gap since the last thing you tracked
+  const lastEnd = isNew ? Math.max(0, ...E.sessionsOn(date, false).map(x => x.s.end)) : 0;
+  const from = lastEnd && lastEnd < now ? lastEnd : now - 30 * 60000;
+  const until = date === today() ? now : from + 30 * 60000;
   openModal({
     title: isNew ? 'Log time by hand' : 'Edit session', submit: isNew ? 'Log it' : 'Save',
     left: isNew ? '' : `<button type="button" class="btn danger" data-act="session.delete" data-id="${esc(a.id)}" data-start="${s.start}">${icon('trash')} Delete</button>`,
     body: `<div class="field"><label>Activity</label><select class="input" name="act">${st.activities.map(x => `<option value="${esc(x.id)}" ${a && x.id === a.id ? 'selected' : ''}>${esc(E.label(x))}</option>`).join('')}</select></div>
       <div class="form-row">
         <div class="field"><label>Date</label><input class="input" type="date" name="date" value="${date}" max="${today()}" required></div>
-        <div class="field"><label>Start</label><input class="input" type="time" name="start" value="${s ? hm(s.start) : hm(now - 30 * 60000)}" required></div>
-        <div class="field"><label>End</label><input class="input" type="time" name="end" value="${s ? hm(s.end) : hm(now)}" required></div>
+        <div class="field"><label>Start</label><input class="input" type="time" name="start" value="${s ? hm(s.start) : hm(from)}" required></div>
+        <div class="field"><label>End</label><input class="input" type="time" name="end" value="${s ? hm(s.end) : hm(until)}" required></div>
         <div class="field"><label>Focus (1-5)</label><input class="input" type="number" name="eff" min="1" max="5" value="${s && s.eff != null ? Math.round(s.eff * 5) : ''}" placeholder="-"></div>
       </div><div class="hint">If the end is earlier than the start, the session is taken to run to the end of that day.${dayOffsetMin() ? ` Your days run until ${fmtMinOfDay(dayOffsetMin(), h24())}, so a time before that belongs to the night of the date you pick.` : ''}</div>`,
     onSubmit: d => {

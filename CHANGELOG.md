@@ -2,6 +2,14 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## Unreleased
+
+### Added
+
+- **Gym: openGym without a server.** openGym's automatic backups, copied by a sync app on your phone (FolderSync) into a private storage bucket such as Cloudflare R2, are read by the Gym tab: it checks for a newer backup each time you open the tab, and every device gets the same history. Set it up under Gym in HOW-TO-USE.md.
+
+**After updating:** to use it, add `OPENGYM_S3_ENDPOINT`, `OPENGYM_S3_KEY_ID` and `OPENGYM_S3_SECRET` (and `OPENGYM_S3_BUCKET` if the address does not end in it) in Netlify and redeploy.
+
 ## 5.3.0
 
 ### Fixed

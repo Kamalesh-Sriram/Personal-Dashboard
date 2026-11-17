@@ -79,7 +79,7 @@ test('gym and bank functions: sign-in gate, signed bank token, full link flow', 
   assert.equal((await req(bank, 'mode=status', { token: 'bad' })).status, 401);
   
   // gym
-  assert.deepEqual((await req(gym, 'mode=status')).body, { configured: true, opengym: true });
+  assert.deepEqual((await req(gym, 'mode=status')).body, { configured: true, opengym: true, opengymFrom: 'server' });
   // openGym: the whole history in one read, its revision, and names for its numbered exercises
   assert.equal((await req(gym, 'mode=opengym-rev')).body.rev, 7);
   let og = await req(gym, 'mode=opengym');

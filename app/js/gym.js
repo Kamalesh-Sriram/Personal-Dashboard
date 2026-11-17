@@ -18,7 +18,7 @@ import { fromFile } from './gymcalc.js';
 const KEY = 'gym';
 const blank = () => ({ workouts: [], templates: {}, since: null, syncedAt: 0, source: '' });
 let data = null;
-export const status = { configured: null, opengym: null, busy: false, error: '', progress: '' };
+export const status = { configured: null, opengym: null, opengymFrom: '', busy: false, error: '', progress: '' };
 const listeners = new Set();
 export const onGym = fn => { listeners.add(fn); return () => listeners.delete(fn); };
 const changed = () => listeners.forEach(fn => { try { fn(); } catch (e) { console.error(e); } });
@@ -39,7 +39,7 @@ async function call(query) {
 /** Is Hevy connected on this site? null = cannot tell (not signed in, or offline). */
 export async function checkConfigured() {
   if (!Sync.signedIn()) { status.configured = null; return null; }
-  try { const j = await call('mode=status'); status.configured = !!j.configured; status.opengym = !!j.opengym; } catch { status.configured = null; status.opengym = null; }
+  try { const j = await call('mode=status'); status.configured = !!j.configured; status.opengym = !!j.opengym; status.opengymFrom = j.opengymFrom || ''; } catch { status.configured = null; status.opengym = null; }
   changed();
   return status.configured || status.opengym;
 }
@@ -62,11 +62,12 @@ export async function resolveNames() {
   if (n) await store();
   return n;
 }
-/** Read everything from your own openGym server (see HOW-TO-USE.md). Skipped when nothing changed there. */
+/** Read everything from your own openGym server, or from the newest openGym backup in your
+ *  bucket (see HOW-TO-USE.md). Skipped when nothing changed there. */
 export async function syncOpenGym({ full = false } = {}) {
   if (status.busy) return;
   await load();
-  status.busy = true; status.error = ''; status.progress = 'Asking your openGym server'; changed();
+  status.busy = true; status.error = ''; status.progress = status.opengymFrom === 'backup' ? 'Reading your openGym backup' : 'Asking your openGym server'; changed();
   try {
     const rev = (await call('mode=opengym-rev')).rev;
     if (full || rev == null || rev !== data.ogRev || !data.workouts.some(w => String(w.id).startsWith('og-'))) {

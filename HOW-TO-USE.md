@@ -265,7 +265,7 @@ This works with openGym (free and open source), Hevy and Strong, and needs no ac
 
 The file is read on your device and stays there. Do the same after new workouts, for example once a week: workouts already here are updated, new ones are added, and nothing is doubled.
 
-About openGym: out of the box its app keeps everything on your phone, and there is no openGym cloud to sync with. The file above is the way in. Automatic sync is possible only if you run openGym's server yourself; see below.
+About openGym: out of the box its app keeps everything on your phone, and there is no openGym cloud to sync with. The file above is the way in. For automatic sync there are two ways, both below: let a sync app on your phone copy openGym's backups into a storage bucket (no server), or run openGym's server yourself.
 
 #### Get your workouts in: Hevy sync (about five minutes, once)
 
@@ -302,6 +302,29 @@ If that sounds like more than you want to look after, stay with the backup file.
 5. **Sync.** Open the Gym tab and press **Sync**. From then on it checks your server each time you open the tab and reads again only when something changed.
 
 Hevy and openGym can both be set. The dashboard reads from each and does not double a workout that is in both. openGym numbers its built-in exercises; their names are looked up from openGym's public exercise list the first time they appear.
+
+#### Get your workouts in: openGym backups through a bucket (about twenty minutes, once, no server)
+
+Your history stays on the phone. openGym saves a backup file after every workout, a sync app copies it into a private storage bucket, and the dashboard reads the newest backup from there. Every device you use gets the same workouts, and you never export by hand.
+
+The example uses FolderSync (Android) and Cloudflare R2 (free up to 10 GB; a backup is well under 1 MB). Any app that uploads a folder to S3-compatible storage, and any S3-compatible storage, works the same way. Supabase Storage does not work with FolderSync: FolderSync drops the `/storage/v1/s3` part of Supabase's address.
+
+1. **openGym.** Settings > Data & backup: turn on **Auto-backup on changes**. It writes a dated backup to `Documents/openGym` after each workout or routine edit.
+2. **A bucket.** In Cloudflare: R2 Object Storage > **Create bucket**, public access off. Open the bucket's **Settings** and copy its **S3 API** address. A bucket with a jurisdiction has `.eu.` or `.us.` in that address, and it only answers on that address.
+3. **A key for the phone.** R2 > API Tokens > **Create Account API token** with **Admin Read & Write** (FolderSync has to list buckets, which a bucket-only token cannot), TTL forever. Note the Access Key ID and Secret Access Key. The secret is shown once.
+4. **FolderSync.** Grant it file access (Manage all files), turn battery optimisation off for it, and allow notifications.
+   - Accounts > add **Amazon S3**: the two keys, **Custom endpoint** = the S3 API address *without* the bucket name, **Use path-style access** on, **Disable folder objects** on, Region **US-East (North Virginia)**. Press Test.
+   - Folderpairs > add: left `Documents/openGym` on the phone, right your bucket, sync type **To right folder** (phone to bucket only, never back). Turn on **Instant sync** and **Sync deletions**, schedule hourly as a safety net, allow any connection including metered, notify on errors only. Leave file encryption off: the dashboard could not read the files.
+   - Press Sync and check that the backup appears in the bucket. Log a workout and check that a new one appears by itself.
+5. **A key for the dashboard.** Create a second token with **Object Read only**, applied to this one bucket. The dashboard only ever reads.
+6. **Give it to your site.** In Netlify: **Project configuration > Environment variables**, add:
+   - `OPENGYM_S3_ENDPOINT`: the S3 API address. With or without the bucket name on the end.
+   - `OPENGYM_S3_BUCKET`: the bucket's name (can be left out when it is on the end of the address)
+   - `OPENGYM_S3_KEY_ID` and `OPENGYM_S3_SECRET`: the read-only token's keys
+   - `OPENGYM_S3_REGION`: only for storage other than R2, for example `us-east-1` on AWS. R2 needs nothing here.
+7. **Redeploy**, open the Gym tab and press **Sync**. From then on it checks the bucket each time you open the tab and downloads only when there is a newer backup.
+
+If `OPENGYM_URL` is set as well, the dashboard reads the server and ignores the bucket.
 
 ### Finance
 

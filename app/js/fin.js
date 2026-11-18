@@ -53,10 +53,15 @@ async function pushRows(list) {
     data.remote = true;
   } catch (e) { if (missing(e)) data.remote = false; else throw e; }
 }
+/* "The database has no transactions table" is remembered so it is not asked
+   on every change, but it is asked again once each time the app opens: the
+   table may have been added since (by running supabase/schema.sql). */
+let retried = false;
 /** Bring this device in line with the account's copy. */
 export async function pull({ full = false } = {}) {
   await load();
-  if (!Sync.signedIn() || data.remote === false) return;
+  if (!Sync.signedIn()) return;
+  if (data.remote === false) { if (retried) return; retried = true; }
   try {
     const since = full ? null : data.pulledAt, started = new Date(Date.now() - 60000).toISOString();
     const got = [];
@@ -201,6 +206,7 @@ export async function bankSync() {
         }
       }
     }
+    if (data.remote === false) data.remote = null;   // the bank just wrote to the table, so it exists
     await pull();
     await bankStatus();
   } catch (e) { status.error = e.message; }

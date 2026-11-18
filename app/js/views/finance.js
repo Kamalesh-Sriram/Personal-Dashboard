@@ -40,6 +40,8 @@ function ensure() {
 }
 
 function setupHtml() {
+  const s = Fin.status, active = ((s.bank && s.bank.links) || []).filter(l => l.status === 'active');
+  const linked = [...new Set(active.map(l => l.aspsp))];
   return `<div class="card gym-setup">
       <div class="h3">See where your money goes</div>
       <p class="muted">Bring in your transactions and they are sorted into categories, by month and by year. Two ways, and either works on its own.</p>
@@ -49,7 +51,9 @@ function setupHtml() {
           <label class="btn primary">${icon('upload')} Choose file<input type="file" accept=".csv,.txt,.xml,.tab,text/csv,text/plain,application/xml,text/xml" data-change="fin.file" hidden></label></div>
         <div><div class="label">Link your bank</div>
           <p class="hint">New transactions then arrive by themselves. Read-only, through Enable Banking, for most European banks.</p>
-          <button class="btn" data-act="fin.link">${icon('link')} Link a bank</button></div>
+          ${linked.length ? `<p class="hint">${linked.map(esc).join(', ')} linked. Its transactions are read when you press Sync.</p>
+          <button class="btn primary" data-act="fin.sync" ${s.busy ? 'disabled' : ''}>${icon('refresh')} ${s.busy ? esc(s.progress || 'Syncing') : 'Sync'}</button>`
+            : `<button class="btn" data-act="fin.link">${icon('link')} Link a bank</button>`}</div>
       </div>
       ${Fin.status.error ? `<div class="notice bad">${esc(Fin.status.error)}</div>` : ''}
       <p class="hint">Nothing here is shared with anyone. Files are read on this device. If sync is on, transactions are also kept in your own database so your other devices show them.</p>
@@ -211,7 +215,7 @@ async function linkDialog() {
     body: `<p class="muted">You sign in on your bank's own page and approve read-only access. This site never sees your bank password. Banks ask you to renew the link about every 180 days.</p>
       <div class="field"><label>Country</label><select class="input" name="country" id="bk-c">${COUNTRIES.map(([c, n]) => `<option value="${c}" ${c === guess.toUpperCase() ? 'selected' : ''}>${n}</option>`).join('')}</select></div>
       <div class="field"><label>Bank</label><select class="input" name="bank" id="bk-b" required><option value="">Loading</option></select></div>
-      ${st.links.length ? `<div class="hint">Already linked: ${st.links.map(l => esc(l.aspsp)).join(', ')}.</div>` : ''}`,
+      ${st.links.some(l => l.status === 'active') ? `<div class="hint">Already linked: ${[...new Set(st.links.filter(l => l.status === 'active').map(l => l.aspsp))].map(esc).join(', ')}.</div>` : ''}`,
     onMount: el => {
       const c = el.querySelector('#bk-c'), b = el.querySelector('#bk-b');
       const fill = async () => {

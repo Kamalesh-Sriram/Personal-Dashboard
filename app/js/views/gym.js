@@ -43,10 +43,10 @@ function setupHtml() {
           <p class="hint">A backup from openGym (Settings > Data & backup > Export backup), or the CSV export from Hevy or Strong. It is read on this device and stays here. Import a newer one any time.</p>
           <label class="btn primary">${icon('upload')} Choose file<input type="file" accept="${FILES}" data-change="gym.file" hidden></label></div>
         <div><div class="label">Sync by itself</div>
-          <p class="hint">From Hevy (needs Hevy Pro for its API key), from an openGym server you run yourself, or from openGym backups that a sync app on your phone copies into a bucket. Each keeps the tab up to date without importing files.</p>
+          <p class="hint">From Hevy (needs Hevy Pro for its API key), from an openGym server you run yourself, or from openGym backups in a bucket or a WebDAV folder. Each keeps the tab up to date without importing files.</p>
           ${!signed ? `<p class="hint">Turn on sync first (Settings > Sync): the keys are kept on your site, and it only answers when you are signed in.</p><button class="btn sm" data-act="nav.go" data-tab="settings" data-sub="sync">Open sync settings</button>`
             : s.configured || s.opengym ? `<button class="btn" data-act="gym.sync" ${s.busy ? 'disabled' : ''}>${icon('refresh')} ${s.busy ? esc(s.progress || 'Syncing') : `Sync from ${s.configured ? 'Hevy' : 'openGym'}`}</button>`
-            : `<p class="hint">Add <b>HEVY_API_KEY</b>, or <b>OPENGYM_URL</b> and <b>OPENGYM_TOKEN</b>, or the <b>OPENGYM_S3_</b> settings for a backup bucket, to your site's environment variables in Netlify and redeploy. The steps for each are in HOW-TO-USE.md.</p>
+            : `<p class="hint">Add <b>HEVY_API_KEY</b>, or <b>OPENGYM_URL</b> and <b>OPENGYM_TOKEN</b>, or the <b>OPENGYM_S3_</b> or <b>OPENGYM_DAV_</b> settings for openGym backups, to your site's environment variables in Netlify and redeploy. The steps for each are in HOW-TO-USE.md.</p>
                <button class="btn sm" data-act="gym.check">${icon('refresh')} Check again</button>`}</div>
       </div>
       ${s.error ? `<div class="notice bad">${esc(s.error)}</div>` : ''}
@@ -261,7 +261,7 @@ function recentCount(workouts, exs) {
 
 registerActions({
   'gym.sync': () => Gym.syncAll(),
-  'gym.check': async () => { const ok = await Gym.checkConfigured(); toast(ok ? 'Connected' : 'Not connected yet', ok ? 'Press Sync to read your history.' : 'No Hevy key, openGym server or openGym backup bucket was found on the site. Add the settings in Netlify and redeploy.', { kind: ok ? 'good' : '', ms: 8000 }); },
+  'gym.check': async () => { const ok = await Gym.checkConfigured(); toast(ok ? 'Connected' : 'Not connected yet', ok ? 'Press Sync to read your history.' : 'No Hevy key, openGym server, or openGym backup bucket or WebDAV folder was found on the site. Add the settings in Netlify and redeploy.', { kind: ok ? 'good' : '', ms: 8000 }); },
   'gym.file': async (d, e, el) => {
     const file = el.files && el.files[0]; el.value = '';
     try { const r = await Gym.importFile(file); toast(r.added ? `Added ${r.added} workout${r.added === 1 ? '' : 's'}` : 'Nothing new in that file', r.added ? `Read as ${r.source}.` : 'Every workout in it was already here.', { kind: r.added ? 'good' : '', ms: 5000 }); }

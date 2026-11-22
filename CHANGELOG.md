@@ -7,8 +7,9 @@ Each entry may end with an **After updating** line: something to do once, after 
 ### Added
 
 - **Gym: openGym without a server.** openGym's automatic backups, copied by a sync app on your phone (FolderSync) into a private storage bucket such as Cloudflare R2, are read by the Gym tab: it checks for a newer backup each time you open the tab, and every device gets the same history. Set it up under Gym in HOW-TO-USE.md.
+- **Gym: openGym's WebDAV backup**, for iPhone, where no sync app can copy the backup folder. openGym uploads a backup to a WebDAV drive such as Koofr once a day, and the Gym tab reads the newest one.
 
-**After updating:** to use it, add `OPENGYM_S3_ENDPOINT`, `OPENGYM_S3_KEY_ID` and `OPENGYM_S3_SECRET` (and `OPENGYM_S3_BUCKET` if the address does not end in it) in Netlify and redeploy.
+**After updating:** to use the WebDAV backup, add `OPENGYM_DAV_URL`, `OPENGYM_DAV_USER` and `OPENGYM_DAV_PASSWORD` in Netlify and redeploy. To use a bucket, add `OPENGYM_S3_ENDPOINT`, `OPENGYM_S3_KEY_ID` and `OPENGYM_S3_SECRET` (and `OPENGYM_S3_BUCKET` if the address does not end in it) in Netlify and redeploy.
 
 ## 5.3.0
 

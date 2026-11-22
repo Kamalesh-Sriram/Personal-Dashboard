@@ -326,6 +326,20 @@ The example uses FolderSync (Android) and Cloudflare R2 (free up to 10 GB; a bac
 
 If `OPENGYM_URL` is set as well, the dashboard reads the server and ignores the bucket.
 
+#### Get your workouts in: openGym's WebDAV backup (iPhone, about ten minutes, once, no server)
+
+On an iPhone no app can copy openGym's backup folder in the background, so FolderSync has no equivalent there. Instead, openGym uploads a backup itself to a WebDAV drive, and the dashboard reads the newest one. openGym does this **once a day**, so the Gym tab can be up to a day behind. It works the same on Android.
+
+1. **A WebDAV drive.** Make a free account at [Koofr](https://koofr.eu) (10 GB free). Under **Preferences > Password**, generate an **app password** for openGym. Any WebDAV drive works (Nextcloud, for example).
+2. **openGym.** Settings > Integrations > **WebDAV backup** > Connect, with the address `https://app.koofr.net/dav/Koofr`, your Koofr email and the app password. Let it make its first backup.
+3. **Give it to your site.** In Netlify: **Project configuration > Environment variables**, add:
+   - `OPENGYM_DAV_URL`: the same address you gave openGym, for example `https://app.koofr.net/dav/Koofr`. The dashboard looks for the newest `.json` backup there, and in the folders directly inside it, so it finds a backup in an `openGym` folder too.
+   - `OPENGYM_DAV_USER`: the email
+   - `OPENGYM_DAV_PASSWORD`: the app password (mark it secret)
+4. **Redeploy**, open the Gym tab and press **Sync**.
+
+The dashboard only lists the folder and downloads the backup. A bucket (`OPENGYM_S3_`) takes priority over WebDAV when both are set, and a server over both.
+
 ### Finance
 
 Where your money goes, by month and by year.

@@ -15,7 +15,7 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 - **Track.** Activity timers, a 24-hour ring of your day, a timeline, and editable sessions.
 - **Habits.** Streaks and XP levels in plain sight, a clean-sweep chain for doing all of them, and habit maps.
 - **Goals, Calendar, Subscriptions, Review.** Milestones with time tracking, a month view, recurring payments, and the week in numbers with a journal.
-- **Gym.** Your next workout laid out from your split, and progress per exercise, from an openGym, Hevy or Strong file, Hevy sync, your own openGym server, or openGym backups that your phone copies into a storage bucket.
+- **Gym.** Your next workout laid out from your split, and progress per exercise, from an openGym, Hevy or Strong file, Hevy sync, your own openGym server, or openGym backups in a storage bucket or a WebDAV folder.
 - **Finance.** Spending by category on a ring you can press, by month and year, from statement files of any bank or a read-only bank link.
 - **Shopping.** What to buy and what you have, with expiry dates that put things back on the list.
 - **A game layer you can rename or switch off.** A rival that adapts to your last week, missions and execution, a level from 1 to 100 with ranks you name and colour, rest days, and fixed-length campaigns with their own red theme.

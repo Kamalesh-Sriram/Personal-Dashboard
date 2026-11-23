@@ -475,3 +475,34 @@ test('a habit can be done on a day it is not due, and undone without a miss', ()
   E.toggleHabit('h', T);
   assert.equal(h.history[T], undefined);
 });
+
+/* ── 5.6 ── */
+test('a break is challenged every time by default, and not in the while after holding the line', () => {
+  const brk = activity('break', 'tracked', true);
+  fresh(st => st.activities.push(brk));
+  assert.equal(E.needsEscapeChallenge(brk), true);                         // no campaign, no minimum focus needed
+  S().game.notif.holdUntil = Date.now() - 1000;                            // held the line, and the 15 minutes are up
+  assert.equal(E.needsEscapeChallenge(brk), false);
+  S().game.notif.holdUntil = Date.now() + 60000;                           // still inside the 15 minutes
+  assert.equal(E.needsEscapeChallenge(brk), true);
+  S().game.notif.holdUntil = 0;
+  S().settings.breakCheck = 'campaign';
+  assert.equal(E.needsEscapeChallenge(brk), false);
+  S().settings.breakCheck = 'off';
+  assert.equal(E.needsEscapeChallenge(brk), false);
+  S().settings.breakCheck = 'always';
+  assert.equal(E.needsEscapeChallenge(activity('work')), false);           // only breaks are challenged
+});
+
+test('before a replace, what each copy holds that the other does not is counted', async () => {
+  const P = await import('../app/js/snapshots.js');
+  const a = defaultState(), b = defaultState();
+  a.goals = [{ id: 'g1' }, { id: 'g2' }]; b.goals = [{ id: 'g1' }];
+  a.cards.today = [{ id: 'c1' }, { id: 'c2' }]; b.cards.today = [{ id: 'c1' }];
+  const lose = P.missingFrom(a, b);
+  assert.equal(lose.goals, 1); assert.equal(lose.tasks, 1);
+  assert.equal(P.total(lose), 2);
+  assert.equal(P.describe(lose), '1 task and 1 goal');
+  assert.equal(P.total(P.missingFrom(b, a)), 0);
+  assert.equal(P.total(P.missingFrom(a, null)), 4);                        // an empty account would lose everything
+});

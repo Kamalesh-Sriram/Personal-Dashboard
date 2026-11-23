@@ -13,7 +13,7 @@ import { today, uid, slug, deepClone, setDayOffset, dayOffsetFor } from './util.
 import { mergeStates } from './merge.js';
 import { DEFAULT_CATS } from './fincalc.js';
 
-export const APP_VERSION = '5.5.1';
+export const APP_VERSION = '5.6.0';
 export const LS_KEY = 'hq.v5.state';
 const DEVICE_KEY = 'hq.v5.device';
 
@@ -103,12 +103,13 @@ export function defaultSettings() {
     autoClearDone: true,        // empty the board's Done column each morning
     modules: { shadow: true, mission: true, rank: true },
     restPerWeek: 1,
-    nudgeMins: 45,
+    nudgeMins: 60,
     lockSecs: 90,               // how long a Lock in holds before Stop unlocks
     finChart: 'together',       // Finance, day by day: together (shown as Mixed) | split
     colTint: true,              // Tasks: each column washed in its own colour
     priGlow: true,              // Tasks: High tasks breathe with a soft glow
-    notify: { idle: 'campaign', overtake: true, habits: true, habitsAt: '20:00', brief: true, debrief: true, subs: true, timer: true },
+    notify: { idle: 'campaign', overtake: true, ahead: true, records: true, habits: true, habitsAt: '20:00', brief: true, debrief: true, subs: true, timer: true },
+    breakCheck: 'always',       // challenge a break before it starts: always | campaign | off
     xp: { ...DEFAULT_XP },
     ratings: ['Morning routine', 'Deep work', 'Health', 'Sleep quality', 'Relationships']
   };

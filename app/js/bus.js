@@ -20,6 +20,7 @@ export const ui = {
   shopQuery: '', shopKind: '', shopAll: false,   // Shopping: search, the list new items go to
   gymQuery: '', gymAll: false,          // Gym: exercise search, show the full list
   finMonth: null, finView: 'month', finQuery: '', finCats: [], finSel: new Set(), finDay: null, finDraw: true, finScroll: false,   // Finance
+  entering: false,        // the view being drawn is a tab just opened
   ringSel: null,          // Track: the block picked on the 24-hour ring
   gymExOpen: false, selPulse: null
 };

@@ -15,13 +15,14 @@ import { esc, today, addDays, fmtTimer, fmtDate, pad, safeColor } from './util.j
 import { ui, setRefresh, go } from './bus.js';
 import { VIEWS, TAB_META } from './views/index.js';
 import { focusOpen, stopAndRate } from './flows.js';
-import { initNotify, nudgeTick, notify, pushState, enableNotifications, testNotification } from './notify.js';
+import { initNotify, nudgeTick, notify, deviceNotify, pushState, enableNotifications, testNotification } from './notify.js';
 import * as Sync from './sync.js';
 import { startOnboarding } from './views/onboarding.js';
 import * as fx from './fx.js';
 import { dragging } from './drag.js';
 import { finishLink } from './fin.js';
 import { expireItems } from './shop.js';
+import * as Points from './snapshots.js';
 
 const $ = id => document.getElementById(id);
 const isDrawer = () => S().settings.sidebar === 'hidden' || matchMedia('(max-width: 760px)').matches;
@@ -83,7 +84,8 @@ function renderTop() {
       <div><div class="meta-l">Status</div><div class="meta-v status ${s.cls}" id="status" style="${s.color ? `--run:${s.color};` : ''}${s.act ? 'cursor:pointer' : ''}" ${s.act ? `data-act="${s.act}" role="button" tabindex="0" title="${esc(s.title)}"` : ''}><i class="status-dot"></i><span>${esc(s.text)}</span></div></div>
     </div>
     <div class="top-actions">
-      ${sy.signedIn ? `<button class="icon-btn ${sy.state === 'error' ? 'tone-bad' : ''}" data-act="nav.go" data-tab="settings" data-sub="sync" title="${esc(syncTitle)}" aria-label="${esc(syncTitle)}">${icon(sy.state === 'error' || sy.state === 'offline' ? 'cloudOff' : 'cloud')}</button>` : ''}
+      ${sy.signedIn ? `<button class="icon-btn ${sy.state === 'error' ? 'tone-bad' : ''}" data-act="nav.go" data-tab="settings" data-sub="sync" title="${esc(syncTitle)}" aria-label="${esc(syncTitle)}">${icon(sy.state === 'error' || sy.state === 'offline' ? 'cloudOff' : 'cloud')}</button>`
+        : sy.lost ? `<button class="icon-btn tone-bad sync-lost" data-act="nav.go" data-tab="settings" data-sub="sync" title="Signed out of sync: changes on this device are not reaching your account. Press to sign in." aria-label="Signed out of sync">${icon('cloudOff')}</button>` : ''}
       <button class="icon-btn ${bellOn ? 'on' : ''}" data-act="notify.bell" title="${bellOn ? 'Notifications on: tap to send a test' : 'Turn on notifications'}" aria-label="Notifications">${icon(bellOn ? 'bell' : 'bellOff')}</button>
     </div>`;
 }
@@ -115,6 +117,9 @@ function renderView(entering = false) {
   const fk = ae && root.contains(ae) && ae.dataset ? ae.dataset.fk : null;
   const before = entering ? null : fx.snapshot(root);
   root.className = 'view' + (view.wide ? ' wide' : '');
+  // charts read this to draw themselves in, with their own class that outlasts
+  // the short entrance: otherwise a ring with many parts was cut off part-way
+  ui.entering = entering;
   root.innerHTML = view.render();
   if (view.mount) view.mount(root);
   Object.keys(scrolls).forEach(k => { const el = root.querySelector(`[data-scroll="${CSS.escape(k)}"]`); if (el) { el.scrollLeft = scrolls[k][0]; el.scrollTop = scrolls[k][1]; } });
@@ -191,7 +196,7 @@ function announceSettlement(r) {
     const b = E.monthBoard(last);
     if (b.w + b.l > 0) {
       const name = new Date(+last.slice(0, 4), +last.slice(5) - 1, 1).toLocaleDateString(undefined, { month: 'long' });
-      notify(`${name}: ${b.w} won, ${b.l} lost`, b.result === 'won' ? 'You won the month. A new one starts today.' : b.result === 'lost' ? `${L.shadow} won the month. A new one starts today, level again.` : 'The month ended level. A new one starts today.', { kind: b.result === 'won' ? 'good' : '' });
+      notify(`${name}: ${b.w} won, ${b.l} lost`, b.result === 'won' ? 'You won the month. A new one starts today.' : b.result === 'lost' ? `${L.shadow} won the month. A new one starts today, level again.` : 'The month ended level. A new one starts today.', { kind: b.result === 'won' ? 'good' : '', tag: 'hq-month', key: `month:${last}` });
     }
   }
 }
@@ -209,13 +214,29 @@ function checkLevel() {
     next: ranked ? (lv.rank.next ? `Level ${lv.level}. ${lv.rank.next.name} begins at level ${lv.rank.next.lv}` : `Level ${lv.level}. The highest rank`) : left });
   if (!shown) {                                                      // motion is off, or the page is in the background: say it quietly
     fx.sound('win');
-    toast(ranked ? `You are now ${lv.rank.cur.name}` : `Level ${lv.level}`, ranked ? `Level ${lv.level}. A new rank.` : left + '.', { kind: 'good', ms: ranked ? 12000 : 7000 });
+    notify(ranked ? `You are now ${lv.rank.cur.name}` : `Level ${lv.level}`, ranked ? `Level ${lv.level}. A new rank.` : left + '.', { kind: 'good', ms: ranked ? 12000 : 7000, tag: 'hq-level', key: `level:${lv.level}` });
   }
   renderTop();
   const chip = document.querySelector('.lv-chip'); if (chip) fx.shine(chip);
 }
+/* A lost sign-in is said out loud: once when it happens (and once a day after
+ that), with the device's own notification when the app is out of sight. The
+ top bar stays red until it is fixed. */
+let lostSaid = false;
+function sayLost() {
+  if (!Sync.status().lost || lostSaid) return;
+  lostSaid = true;
+  const title = 'You are signed out of your account', body = "Changes on this device are not reaching your account. Sign in again under Settings > Sync; nothing on this device is lost.";
+  toast(title, body, { kind: 'bad', ms: 20000 });
+  // the server cannot push to a device that is signed out, so the device says it itself
+  if (document.visibilityState !== 'visible') { S().game.notif.lostSaid = today(); saveQuiet(); deviceNotify(title, body, 'hq-signedout'); }
+}
+// going out of sight while signed out: the device says it once a day
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') return; if (Sync.status().lost && S().game.notif.lostSaid !== today()) { S().game.notif.lostSaid = today(); saveQuiet(); deviceNotify('You are signed out of your account', 'Sign in again under Settings > Sync so your changes reach your account.', 'hq-signedout'); } });
 function dayStart() {
   ui.day = today();
+  Points.keep('daily');                                  // a restore point a day, kept on this device
+  if (Sync.status().lost) { lostSaid = false; setTimeout(sayLost, 2000); }   // a new day: say it again
   E.closeStaleTimers();
   E.processHabitMisses();
   announceSettlement(E.settlePending());
@@ -231,7 +252,8 @@ function housekeeping() {
   nudgeTick();
   E.checkLiveRecords().forEach(b => {
     const def = E.RECORD_DEFS[b.key];
-    notify('You set a new record', `${def.label}: ${E.fmtRecord(b.key, b.v)}. Your previous best was ${E.fmtRecord(b.key, b.prev)}. ${b.key === 'xp' ? E.voice('pb') : ''}`.trim(), { kind: 'good' });
+    if (S().settings.notify.records === false) return;
+    notify('You set a new record', `${def.label}: ${E.fmtRecord(b.key, b.v)}. Your previous best was ${E.fmtRecord(b.key, b.prev)}. ${b.key === 'xp' ? E.voice('pb') : ''}`.trim(), { kind: 'good', tag: 'hq-record', key: `record:${b.key}:${today()}:${b.v}` });
   });
 }
 
@@ -288,16 +310,17 @@ async function boot() {
     const m = openModal({
       title: 'Which dashboard should this device use?', cancel: '',
       body: `<p class="muted">This device has “${esc(info.local)}”. Your account already has “${esc(info.remote)}”, last updated ${esc(new Date(info.updated).toLocaleString())}.</p>
-        <p class="hint">Pick the one with your real data. The other copy is replaced. After this, every device signed in to your account stays the same automatically.</p>`,
-      footer: `<button type="button" class="btn" data-pick="merge">Combine both</button>
-        <button type="button" class="btn" data-pick="local">Keep this device's</button>
-        <button type="button" class="btn primary" data-pick="remote">Use my account's</button>`,
+        <p class="hint">Combine both keeps everything from each. Either of the others replaces one copy with the other; a restore point of what is replaced is kept on this device. After this, every device signed in to your account stays the same automatically.</p>`,
+      footer: `<button type="button" class="btn" data-pick="local">Keep this device's</button>
+        <button type="button" class="btn" data-pick="remote">Use my account's</button>
+        <button type="button" class="btn primary" data-pick="merge">Combine both</button>`,
       onMount: el => el.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { done = true; m.close(); resolve(b.dataset.pick); })),
       onClose: () => { if (!done) resolve(null); }
     });
   }));
   const landed = Sync.initSync();
-  Sync.onStatus(() => renderTop());
+  Sync.onStatus(() => { renderTop(); sayLost(); });
+  setTimeout(sayLost, 3000);
 
   // With sync on, wait briefly for the cloud copy before settling any days,
   // so a day is never frozen from half the facts.

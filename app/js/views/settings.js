@@ -1,13 +1,14 @@
 /* SETTINGS: everything that can be personalised lives here. */
 import { S, save, saveQuiet, replaceState, normalize, defaultState, DEFAULT_XP, DEFAULT_RANKS, DEFAULT_LEVEL, APP_VERSION, LS_KEY } from '../store.js';
 import * as E from '../engine.js';
-import { registerActions, openModal, confirmDialog, toast, switchHtml, segHtml } from '../ui.js';
+import { registerActions, runAction, openModal, confirmDialog, toast, switchHtml, segHtml } from '../ui.js';
 import { icon } from '../icons.js';
 import { esc, today, addDays, uid, safeColor, clamp, deepClone, dayOffsetMin, fmtMinOfDay } from '../util.js';
 import { ui, refresh } from '../bus.js';
 import { applyTheme, ACCENTS, setBgImage, clearBgImage, hasBgImage } from '../theme.js';
 import { TAB_META } from './tabs.js';
 import * as Sync from '../sync.js';
+import * as Points from '../snapshots.js';
 import * as fx from '../fx.js';
 import { idbGet, idbSet } from '../idb.js';
 import { pushState, enableNotifications, testNotification, planStatus, replanNow } from '../notify.js';
@@ -161,11 +162,14 @@ function gameHtml() {
       ${row('Voice', 'Direct is plain and to the point. Ruthless is harsh on purpose, so only pick it if that is what gets you moving. Silent removes his lines.', seg('settings.shadow.voice', [['cold', 'Direct'], ['harsh', 'Ruthless'], ['off', 'Silent']], s.shadow.voice))}
       <p class="hint" style="margin-top:12px">Every line he and the notifications can say is editable: Settings > Notifications > What they say.</p>
     </section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Breaks</span></div>
+      ${row('Challenge a break before it starts', 'Starting a break asks you to work 15 minutes first; either choice is fine and recorded. After holding the line, the break is yours, unchallenged, for 45 minutes.', seg('settings.breakCheck', [['always', 'Always'], ['campaign', 'During a campaign'], ['off', 'Off']], s.breakCheck || 'always'))}
+    </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Rest days</span></div>
       ${row('Allowed in any 7 days', 'A rest day is not scored at all: no win or loss, and habit streaks freeze instead of breaking. The allowance is what stops it becoming an escape hatch.', num('settings.restPerWeek', s.restPerWeek, 0, 7))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Campaign</span>${c.on ? `<span class="pill accent">Day ${Math.max(1, E.campaignDay())} of ${c.len}</span>` : ''}</div>
-      <p class="hint" style="margin-bottom:12px">A campaign is a fixed-length push. While it runs the whole dashboard switches to the red tactical theme, breaks are challenged before 25 minutes of focus are on the board, and the win-loss record counts from its first day. Ending it archives the result under Review.</p>
+      <p class="hint" style="margin-bottom:12px">A campaign is a fixed-length push. While it runs the whole dashboard switches to the red tactical theme, and the win-loss record counts from its first day. Ending it archives the result under Review.</p>
       ${row('Name', '', text('game.campaign.name', c.name, 'maxlength="30"'))}
       ${c.on
         ? `${row('Started', 'Changing this restarts the scoreboard from the new date.', `<input class="input" type="date" value="${c.start}" max="${today()}" data-change="set.campStart" aria-label="Campaign start">`)}
@@ -198,9 +202,11 @@ function notifyHtml() {
       <p class="hint" style="margin-top:10px">Each device is enabled separately. Works in Chrome, Edge and Firefox on Windows, macOS and Android; in Safari on macOS 13 or later; and on iPhone/iPad (iOS 16.4+) once installed to the home screen.</p>
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">What to send</span></div>
-      ${row('Idle callouts', `From ${esc(s.labels.shadow)}, when nothing has been running for a while inside your window.`, seg('settings.notify.idle', [['off', 'Off'], ['campaign', 'Campaign only'], ['always', 'Always']], n.idle))}
-      ${row('…after this many idle minutes', '', num('settings.nudgeMins', s.nudgeMins, 10, 240, 5))}
+      ${row('Nothing is running', `From ${esc(s.labels.shadow)}, when nothing has run for a while inside your window. Further apart as your focus hours add up, none once you reach your target, and at most five a day.`, seg('settings.notify.idle', [['off', 'Off'], ['campaign', 'Campaign only'], ['always', 'Always']], n.idle))}
+      ${row('…when little is done, every (minutes)', '', num('settings.nudgeMins', s.nudgeMins, 20, 240, 5))}
       ${row('When he passes you', 'Once a day, at the moment his pace overtakes your XP.', toggle('settings.notify.overtake', n.overtake))}
+      ${row('When you pull ahead', 'Once a day, the first time you pass his pace.', toggle('settings.notify.ahead', n.ahead !== false))}
+      ${row('Records, levels and the month', 'A new personal best, a level or rank gained, and how the month ended.', toggle('settings.notify.records', n.records !== false))}
       ${row('Habits still open', '', `<div class="row">${toggle('settings.notify.habits', n.habits)}<input class="input" type="time" value="${esc(n.habitsAt)}" data-change="set.text" data-path="settings.notify.habitsAt" aria-label="Habit reminder time"></div>`)}
       ${row('Morning brief', `Opens at this time, or the first time you open the app in the two hours after it. If no mission is set three hours later, you get a reminder. ${n.briefAt ? 'Clear the time to go back to the start of your window.' : 'It follows the start of your window until you pick a time.'}`,
         `<div class="row">${toggle('settings.notify.brief', n.brief)}<input class="input" type="time" value="${minToHm(E.briefMin())}" data-change="set.time" data-path="settings.notify.briefAt" aria-label="Morning brief time"></div>`)}
@@ -242,7 +248,8 @@ function syncHtml() {
         ${row('This device has the right one', 'Sends this dashboard to your account. Every other device takes it on.', `<button class="btn" data-act="sync.useLocal">Use this device's everywhere</button>`)}
         ${row('Another device has the right one', 'Replaces what is on this device with the dashboard in your account.', `<button class="btn" data-act="sync.useRemote">Load my account's here</button>`)}
       </section>`
-    : `<section class="card"><div class="card-h"><span class="eyebrow">1 · Your Supabase project</span></div>
+    : `${sy.lost ? `<div class="notice bad" style="margin-bottom:var(--gap)">${icon('cloudOff')} <span>You were signed out. Changes made on this device since then are only here, not in your account. Sign in below and they are combined with your account's copy.</span></div>` : ''}
+      <section class="card"><div class="card-h"><span class="eyebrow">1 · Your Supabase project</span></div>
         <p class="hint" style="margin-bottom:10px">If you added <span class="mono">SUPABASE_URL</span> and <span class="mono">SUPABASE_ANON_KEY</span> to your Netlify site, leave these blank: the site already knows them. Otherwise paste them here (per device).</p>
         <form data-synccfg class="form-row"><div class="field"><label>Project URL</label><input class="input" name="url" value="${esc(mc.url)}" placeholder="https://xxxx.supabase.co" autocomplete="off"></div>
           <div class="field"><label>Publishable (anon) key</label><input class="input" name="key" value="${esc(mc.key)}" autocomplete="off" placeholder="sb_publishable_… or eyJ…"></div>
@@ -254,10 +261,46 @@ function syncHtml() {
         <div class="row wrap" style="margin-top:12px"><button class="btn primary" data-act="sync.signIn">Sign in</button><button class="btn" data-act="sync.signUp">Create account</button><button class="btn ghost" data-act="sync.forgot">Forgot password</button></div>
         <p class="hint" style="margin-top:10px">On first sign-in this device's data is merged with whatever is already in your account: nothing is overwritten.</p></section>`}`;
 }
+/* Before one copy replaces the other, say what would be lost and offer to keep both. */
+async function replaceCheck(which) {
+  let diff;
+  try { diff = await Sync.compare(); } catch (e) { toast('Could not reach your account', e.message, { kind: 'bad', ms: 8000 }); return; }
+  const lose = which === 'remote' ? diff.localOnly : diff.remoteOnly, n = Points.total(lose);
+  const where = which === 'remote' ? 'this device' : 'your account';
+  const run = () => (which === 'remote'
+    ? busy(() => Sync.useAccountCopy(), "This device now has your account's dashboard")
+    : busy(() => Sync.useThisDevice(), 'Your account now has this dashboard'));
+  if (!n) {
+    if (await confirmDialog(which === 'remote'
+      ? { title: "Load your account's dashboard here?", body: "Everything on this device is also in your account, so nothing is lost. A restore point of this device's copy is kept.", ok: 'Load it' }
+      : { title: "Use this device's dashboard everywhere?", body: 'Everything in your account is also on this device, so nothing is lost. Other devices take it on the next time they sync.', ok: 'Use this one' })) run();
+    return;
+  }
+  const m = openModal({
+    title: which === 'remote' ? "Load your account's dashboard here?" : "Use this device's dashboard everywhere?",
+    cancel: 'Cancel',
+    body: `<div class="notice bad">${icon('help')} <span>${esc(where.charAt(0).toUpperCase() + where.slice(1))} has ${esc(Points.describe(lose))} that ${which === 'remote' ? 'your account does not' : 'this device does not'}. ${which === 'remote' ? 'Loading would remove them from this device.' : 'Sending this copy would remove them from your account.'}</span></div>
+      <p class="muted">Combine both keeps everything from each copy. A restore point is kept either way, under Settings > Data.</p>`,
+    footer: `<button type="button" class="btn danger" data-pick="replace">${which === 'remote' ? 'Load it anyway' : 'Send it anyway'}</button>
+      <button type="button" class="btn primary" data-pick="combine">Combine both</button>`,
+    onMount: el => el.querySelectorAll('[data-pick]').forEach(b => b.addEventListener('click', () => { m.close(); if (b.dataset.pick === 'combine') runAction('sync.combine'); else run(); }))
+  });
+}
+const pointWhen = at => new Date(at).toLocaleString(undefined, { weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
+let pointsCache = null;
+function pointsHtml() {
+  if (!pointsCache) { Points.list().then(l => { pointsCache = l; refresh(); }); return '<div class="empty" style="padding:8px 0">Loading.</div>'; }
+  if (!pointsCache.length) return '<div class="empty" style="padding:8px 0">None yet. The first is kept the next time a day starts.</div>';
+  return `<div class="list">${pointsCache.map(p => `<div class="li restore-pt"><div class="grow"><b>${esc(pointWhen(p.at))}</b>
+      <div class="tiny dim">${esc(p.reason === 'daily' ? 'Start of the day' : p.reason)} · ${esc(Points.describe(p.counts))}</div></div>
+      <button class="btn sm" data-act="data.restorePoint" data-id="${esc(p.id)}">Restore</button></div>`).join('')}</div>`;
+}
 function dataHtml() {
   const hasV4 = (() => { try { return !!localStorage.getItem('commandCenterV2'); } catch { return false; } })();
   let size = 0; try { size = (localStorage.getItem(LS_KEY) || '').length; } catch { /* ignore */ }
-  return `<section class="card"><div class="card-h"><span class="eyebrow">Backup</span><span class="tiny dim">${(size / 1024).toFixed(0)} KB stored on this device</span></div>
+  return `<section class="card"><div class="card-h"><span class="eyebrow">Restore points</span><span class="tiny dim">kept on this device</span></div>
+      ${pointsHtml()}</section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Backup</span><span class="tiny dim">${(size / 1024).toFixed(0)} KB stored on this device</span></div>
       ${row('Export', 'Downloads everything as one JSON file, including gym history and transactions stored on this device. Keep it somewhere safe: it is the whole dashboard.', `<button class="btn" data-act="data.export">${icon('download')} Export backup</button>`)}
       ${row('Import', 'Replaces what is on this device with a backup file.', `<label class="btn">${icon('upload')} Import backup<input type="file" accept="application/json,.json" data-change="data.import" hidden></label>`)}
       ${hasV4 ? row('Bring over v4 data', 'A version 4 dashboard was found in this browser. Imports its activities and sessions, habits and history, board, goals, subscriptions and journal. The scoreboard starts fresh.', `<button class="btn" data-act="data.importV4">Import from v4</button>`) : ''}
@@ -348,7 +391,7 @@ const view = {
 export default view;
 
 registerActions({
-  'set.tab': d => { ui.settingsTab = d.v; refresh(); window.scrollTo(0, 0); },
+  'set.tab': d => { ui.settingsTab = d.v; if (d.v === 'data') pointsCache = null; refresh(); window.scrollTo(0, 0); },
   'set.text': (d, e, el) => {
     let v = el.value;
     if (d.path === 'profile.name') v = v.trim().slice(0, 40) || 'Dashboard';
@@ -423,8 +466,9 @@ registerActions({
   'sync.forgot': () => { const c = creds(); if (!c || !c.email) { toast('Type your email address first'); return; } busy(() => Sync.resetPassword(c.email), 'Reset link sent: check your inbox'); },
   'sync.signOut': () => busy(() => Sync.signOut(), 'Signed out'),
   'sync.now': () => busy(() => Sync.pushNow()),
-  'sync.useLocal': async () => { if (await confirmDialog({ title: "Use this device's dashboard everywhere?", body: 'The dashboard in your account is replaced with this one. Other devices take it on the next time they sync.', ok: 'Use this one' })) busy(() => Sync.useThisDevice(), 'Your account now has this dashboard'); },
-  'sync.useRemote': async () => { if (await confirmDialog({ title: "Load your account's dashboard here?", body: 'What is on this device is replaced with the dashboard in your account.', ok: 'Load it', danger: true })) busy(() => Sync.useAccountCopy(), 'This device now has your account dashboard'); },
+  'sync.useLocal': () => replaceCheck('local'),
+  'sync.useRemote': () => replaceCheck('remote'),
+  'sync.combine': () => busy(() => Sync.combine(), 'Combined: both copies are kept, on every device'),
   'sync.password': newPasswordModal,
   'data.export': async () => {
     // gym history and transactions live outside the dashboard document, so they are added here
@@ -442,12 +486,21 @@ registerActions({
       const doc = JSON.parse(await file.text());
       if (!doc || typeof doc !== 'object' || doc.v !== 5 || !doc.settings || !doc.game) throw new Error('This is not a version 5 backup file.');
       if (!(await confirmDialog({ title: 'Replace this device\'s data?', body: `The backup “${(doc.profile && doc.profile.name) || 'Dashboard'}” replaces everything currently here.`, ok: 'Replace', danger: true }))) return;
+      await Points.keep('Before importing a backup'); pointsCache = null;
       const extras = doc._extras || null; delete doc._extras;
       const next = normalize(doc); next._rev = Math.max(next._rev || 0, S()._rev || 0) + 1; next._at = Date.now();
       replaceState(next, 'replace');
       if (extras) { for (const k of ['gym', 'fin']) { if (extras[k] && typeof extras[k] === 'object') await idbSet(k, extras[k]); } }
       toast('Backup imported', extras ? 'Reload the page to see the gym and finance data it carried.' : '', { kind: 'good', ms: extras ? 9000 : 5000 });
     } catch (err) { toast('Import failed', err.message, { kind: 'bad', ms: 9000 }); }
+  },
+  'data.restorePoint': async d => {
+    const p = await Points.get(d.id); if (!p) return;
+    if (!(await confirmDialog({ title: `Bring back ${pointWhen(p.at)}?`, ok: 'Restore', body: `This device goes back to that copy: ${Points.describe(p.counts)}. A restore point of what is here now is kept first.${Sync.signedIn() ? " It is then combined with your account's copy, so nothing there is lost either." : ''}` }))) return;
+    await Points.keep('Before restoring an earlier point'); pointsCache = null;
+    const next = normalize(p.state); next._rev = Math.max(next._rev || 0, S()._rev || 0) + 1; next._at = Date.now();
+    replaceState(next, 'replace');
+    toast('Restored', `The dashboard is back to ${pointWhen(p.at)}.`, { kind: 'good', ms: 6000 });
   },
   'data.importV4': async () => { if (await confirmDialog({ title: 'Import from v4?', body: 'Activities, habits, the board, goals, subscriptions and the journal on this device are replaced with the v4 ones. Appearance settings are kept.', ok: 'Import' })) importV4(); },
   'data.erase': async () => {

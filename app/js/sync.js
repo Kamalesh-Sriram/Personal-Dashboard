@@ -17,6 +17,7 @@
 import { S, replaceState, onChange, adoptFromStorage, DEVICE_ID, LS_KEY } from './store.js';
 import { mergeStates } from './merge.js';
 import { debounce } from './util.js';
+import * as Points from './snapshots.js';
 
 const CFG_KEY = 'hq.v5.sync';
 const PUSH_DEBOUNCE = 1500, POLL_MS = 40000;
@@ -24,7 +25,8 @@ const PUSH_DEBOUNCE = 1500, POLL_MS = 40000;
 let local = (() => { try { return JSON.parse(localStorage.getItem(CFG_KEY) || '{}') || {}; } catch { return {}; } })();
 const persist = () => { try { localStorage.setItem(CFG_KEY, JSON.stringify(local)); } catch { /* ignore */ } };
 
-let serverCfg;                 // undefined = not asked yet, null = none
+let serverCfg;                 // undefined = not known yet (or the last ask failed), null = the site has none
+let cfgAsk = null;
 let state = 'off', lastError = '', lastSync = 0, seenStamp = null, applying = false, dirty = false;
 let resolveReady; export const ready = new Promise(r => { resolveReady = r; });
 const listeners = new Set();
@@ -36,11 +38,22 @@ const setState = (s, err = '') => { state = s; lastError = err; listeners.forEac
 export async function config() {
   if (local.url && local.key) return { url: local.url, key: local.key, vapid: local.vapid || (serverCfg && serverCfg.vapid) || '' };
   if (serverCfg === undefined) {
-    try {
-      const r = await fetch('/.netlify/functions/config', { cache: 'no-store' });
-      const j = r.ok ? await r.json() : null;
-      serverCfg = j && j.supabaseUrl && j.supabaseAnonKey ? { url: j.supabaseUrl.replace(/\/+$/, ''), key: j.supabaseAnonKey, vapid: j.vapidPublicKey || '' } : null;
-    } catch { serverCfg = null; }
+    // Only a clear answer from the site counts. A failed ask (offline, waking
+    // from sleep, a redeploy in progress) used to be remembered as "no sync"
+    // for the rest of the session, which then signed people out. Now it is
+    // asked again next time, and the last good answer stands in meanwhile.
+    if (!cfgAsk) cfgAsk = (async () => {
+      try {
+        const r = await fetch('/.netlify/functions/config', { cache: 'no-store' });
+        if (!r.ok) return;
+        const j = await r.json();
+        serverCfg = j && j.supabaseUrl && j.supabaseAnonKey ? { url: j.supabaseUrl.replace(/\/+$/, ''), key: j.supabaseAnonKey, vapid: j.vapidPublicKey || '' } : null;
+        local.cfgCache = serverCfg || null; persist();
+      } catch { /* unreachable: try again on the next call */ }
+      finally { cfgAsk = null; }
+    })();
+    await cfgAsk;
+    if (serverCfg === undefined && local.cfgCache && local.cfgCache.url && local.cfgCache.key) return local.cfgCache;
   }
   return serverCfg;
 }
@@ -53,12 +66,14 @@ export function setManualConfig(url, key) {
 export const manualConfig = () => ({ url: local.url || '', key: local.key || '' });
 export const signedIn = () => !!(local.session && local.session.refresh_token);
 export function status() {
-  return { state, error: lastError, lastSync, signedIn: signedIn(), email: signedIn() ? local.session.user.email : '', configured: !!(local.url || serverCfg) };
+  return { state, error: lastError, lastSync, signedIn: signedIn(), email: signedIn() ? local.session.user.email : '', configured: !!(local.url || serverCfg || local.cfgCache),
+           lost: !signedIn() && !!local.lost };     // signed out without asking to be: this device's changes are not reaching the account
 }
 
 /* ── auth ── */
 async function authCall(path, body, bearer) {
   const cfg = await config();
+  if (cfg === undefined) throw new Error('Failed to reach your site for the sync settings. Check your connection and try again.');
   if (!cfg) throw new Error('Sync is not set up yet. Add your Supabase project first.');
   const res = await fetch(`${cfg.url}/auth/v1/${path}`, {
     method: 'POST',
@@ -66,7 +81,7 @@ async function authCall(path, body, bearer) {
     body: JSON.stringify(body || {})
   });
   const json = await res.json().catch(() => ({}));
-  if (!res.ok) throw new Error(json.msg || json.error_description || json.message || json.error || `Request failed (${res.status})`);
+  if (!res.ok) { const e = new Error(json.msg || json.error_description || json.message || json.error || `Request failed (${res.status})`); e.status = res.status; throw e; }
   return json;
 }
 function storeSession(j) {
@@ -81,6 +96,7 @@ function storeSession(j) {
 }
 export async function signIn(email, password) {
   storeSession(await authCall('token?grant_type=password', { email, password }));
+  local.lost = false; persist();
   await start();
 }
 /** Returns true if signed in straight away, false if the project wants the
@@ -100,7 +116,7 @@ export async function updatePassword(password) {
 }
 export async function signOut() {
   try { if (signedIn()) await authCall('logout', {}, local.session.access_token); } catch { /* already invalid */ }
-  delete local.session; persist();
+  delete local.session; local.lost = false; persist();
   seenStamp = null;
   setState('off');
 }
@@ -113,8 +129,13 @@ export async function token() {
     refreshing = authCall('token?grant_type=refresh_token', { refresh_token: local.session.refresh_token })
       .then(storeSession)
       .catch(e => {
-        // A rejected refresh token means the session is over; a network error does not.
-        if (!/fetch|network|Failed/i.test(e.message)) { delete local.session; persist(); setState('error', 'Signed out: sign in again'); }
+        // Only Supabase saying no (400 or 401: the refresh token is invalid or
+        // expired) ends the session. Anything else (offline, the site busy, a
+        // timeout) leaves it alone and is simply tried again later.
+        if (e.status === 400 || e.status === 401) {
+          delete local.session; local.lost = true; persist();
+          setState('error', 'You were signed out. Sign in again so this device\'s changes reach your account.');
+        }
         throw e;
       })
       .finally(() => { refreshing = null; });
@@ -125,7 +146,9 @@ export async function token() {
 
 /** Authenticated PostgREST call. */
 export async function rest(method, path, body, prefer, keepalive = false) {
-  const cfg = await config(), tok = await token();
+  const cfg = await config();
+  if (!cfg) throw new Error(cfg === undefined ? 'Failed to reach your site for the sync settings.' : 'Sync is not set up yet.');
+  const tok = await token();
   const res = await fetch(`${cfg.url}/rest/v1/${path}`, {
     method, keepalive,
     headers: { apikey: cfg.key, Authorization: 'Bearer ' + tok, 'Content-Type': 'application/json', Prefer: prefer || 'return=minimal' },
@@ -181,8 +204,8 @@ async function pull() {
       if (!choice) return 'wait';
     }
     markLinked();
-    if (choice === 'remote') { adopt(remote); dirty = false; return 'adopted'; }
-    if (choice === 'local') { takeOver(remote); return 'merged'; }
+    if (choice === 'remote') { await Points.keep('Before loading your account'); adopt(remote); dirty = false; return 'adopted'; }
+    if (choice === 'local') { await Points.keep('Your account, before it was replaced', remote); takeOver(remote); return 'merged'; }
   }
   if (remote._rev === mine._rev && remote._at === mine._at) return 'same';
   adopt(mergeStates(mine, remote, DEVICE_ID));
@@ -194,6 +217,7 @@ async function pull() {
 /** Make this device's dashboard the one every device uses. */
 export async function useThisDevice() {
   const row = await fetchRemote();
+  if (row) await Points.keep('Your account, before it was replaced', row.state);
   takeOver(row && row.state); markLinked();
   await push();
   lastSync = Date.now(); setState('idle');
@@ -202,8 +226,23 @@ export async function useThisDevice() {
 export async function useAccountCopy() {
   const row = await fetchRemote();
   if (!row) throw new Error('There is no dashboard in your account yet.');
+  await Points.keep('Before loading your account');
   seenStamp = row.updated_at; markLinked();
   adopt(row.state); dirty = false;
+  lastSync = Date.now(); setState('idle');
+}
+/** What each side holds that the other does not, before a replace. */
+export async function compare() {
+  const row = await fetchRemote();
+  const remote = row ? row.state : null;
+  return { localOnly: Points.missingFrom(S(), remote), remoteOnly: Points.missingFrom(remote, S()) };
+}
+/** Keep everything from both: the safe answer whenever the two disagree. */
+export async function combine() {
+  const row = await fetchRemote();
+  markLinked();
+  if (row) { seenStamp = row.updated_at; adopt(mergeStates(S(), row.state, DEVICE_ID)); }
+  await push();
   lastSync = Date.now(); setState('idle');
 }
 const canon = s => JSON.stringify(s, (k, v) => {
@@ -238,7 +277,7 @@ async function cycle(wantPush, leaving = false) {
     lastSync = Date.now();
     setState('idle');
   } catch (e) {
-    const unreachable = /Failed to fetch|NetworkError|Load failed/i.test(e.message);
+    const unreachable = /Failed to fetch|Failed to reach|NetworkError|Load failed/i.test(e.message);
     setState(navigator.onLine === false ? 'offline' : 'error', unreachable ? 'Could not reach your sync project. It will try again.' : e.message);
   } finally {
     busy = false;
@@ -250,7 +289,10 @@ export const pushNow = () => cycle(true);
 const schedulePush = debounce(() => cycle(true), PUSH_DEBOUNCE);
 
 async function start() {
-  if (!signedIn() || !(await config())) { setState('off'); resolveReady(); return; }
+  if (!signedIn()) { setState('off'); resolveReady(); return; }
+  const cfg = await config();
+  if (cfg === undefined) { setState('offline', 'Could not reach your site for the sync settings. It will try again.'); resolveReady(); return; }   // the poll retries
+  if (!cfg) { setState('off'); resolveReady(); return; }
   await cycle(false);
   resolveReady();
 }

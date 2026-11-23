@@ -59,9 +59,12 @@ function capped(a0, a1, cap, gap) {
 }
 /** Draw-in timing for parts laid end to end: each starts as the one before
  *  it is nearly done, so the ring grows from one point, piece by piece. */
-function drawTimes(sweeps, total = 1100) {
+function drawTimes(sweeps, total = 1100, most = 1600) {
   let t = 0;
-  return sweeps.map(sw => { const dur = Math.max(150, Math.min(520, sw / 360 * total)); const d = t; t += dur * 0.82; return { d: Math.round(d), dur: Math.round(dur) }; });
+  const out = sweeps.map(sw => { const dur = Math.max(150, Math.min(520, sw / 360 * total)); const d = t; t += dur * 0.82; return { d, dur }; });
+  // many parts would make it crawl: the whole draw-in is kept to `most` ms, at an even pace to the very last part
+  const end = out.length ? out[out.length - 1].d + out[out.length - 1].dur : 0, k = end > most ? most / end : 1;
+  return out.map(x => ({ d: Math.round(x.d * k), dur: Math.round(Math.max(90, x.dur * k)) }));
 }
 
 /** A band of a ring from angle a0 to a1 (degrees) between radii ri and ro,

@@ -240,9 +240,18 @@ export function startActivity(id, { cardId = null, taskId = null } = {}) {
   invalidate(); save();
   return a;
 }
-/** A break needs challenging when little real work is on the board yet. */
-export const needsEscapeChallenge = a =>
-  S().game.campaign.on && isEscape(a) && !isRest(today()) && focusMsOn(today()) < FOCUS_GATE_MS;
+export const HOLD_MS = 15 * 60000;              // "work 15 minutes first"
+export const HOLD_GRACE_MS = 45 * 60000;        // after which the break is yours for this long, unchallenged
+/** Is a break about to be challenged? Every time, by default (Settings >
+ *  Game: always, during a campaign, or off), except on a rest day and in the
+ *  while after holding the line for the 15 minutes asked. */
+export function needsEscapeChallenge(a) {
+  const st = S(), mode = st.settings.breakCheck || 'always';
+  if (!isEscape(a) || isRest(today()) || mode === 'off') return false;
+  if (mode === 'campaign' && !st.game.campaign.on) return false;
+  const until = st.game.notif.holdUntil || 0, now = Date.now();
+  return !(now >= until && now < until + HOLD_GRACE_MS);
+}
 
 /** Timers left running across midnight or past the cap are closed where
  *  they should have ended, so they neither inflate today nor grow forever. */
@@ -925,7 +934,7 @@ const VOICE = {
     idle: ['Nothing is running right now. Pick one task and start.', "You've been idle for a while. One block gets you moving again.", 'Your day is still open. Start a timer.', "No timer is running. What's the next thing?", 'A short block now is better than a long one later.'],
     behind: ['{rival} is ahead of you. One focused block closes the gap.', "You're behind pace. Start the next block now.", "You're trailing, but the day isn't over."],
     ahead: ["You're ahead of {rival}. Keep going.", "You're in front. Don't ease off yet.", 'Good pace. Hold it.'],
-    escape: ["You've done under 25 minutes of focus today. Do 15 minutes first, then take the break.", 'Is this a break or a way out? Give it 15 minutes first.', 'You can take it, but 15 minutes of work first would feel better.'],
+    escape: ['Do 15 more minutes first, then take the break.', 'Is this a break or a way out? Give it 15 minutes first.', 'You can take it, but 15 minutes of work first would feel better.'],
     pb: ["That's a new record.", "That's your best yet. Now you know you can."],
     morning: ['Your day has started. Begin with the first block.', "Start with the critical task while you're fresh.", 'You know the first move. Make it.'],
     night: ["It's time to close the day. Write down what happened and set tomorrow's first task.", 'Wrap up the day and decide what tomorrow starts with.'],
@@ -950,17 +959,17 @@ const VOICE = {
 };
 /** Every situation that speaks, in the order Settings lists them. */
 export const VOICE_KINDS = [
-  ['idle', 'Nothing is running', 'Sent when no timer has run for a while inside your window.'],
+  ['idle', 'Nothing is running', 'Sent now and then when no timer has run for a while inside your window; less often as your focus adds up.'],
   ['behind', 'You are behind pace', 'Sent when the rival passes you; also shown on Home while you trail.'],
-  ['ahead', 'You are ahead of pace', 'Shown on Home while you lead.'],
+  ['ahead', 'You are ahead of pace', 'Sent the first time each day you pull ahead; also shown on Home while you lead.'],
   ['nomission', 'No mission declared', 'Sent three hours into the window if nothing was declared.'],
-  ['morning', 'Morning brief', 'Shown at the top of the brief.'],
+  ['morning', 'Morning brief', 'Sent at your brief time, and shown at the top of the brief.'],
   ['night', 'Debrief reminder', 'Sent at your debrief time.'],
   ['habits', 'Habits still open', 'Sent at the reminder time. {n} becomes the number left.'],
-  ['escape', 'A break is requested early', 'Shown in the break challenge during a campaign.'],
-  ['pb', 'A record is broken', 'Added to the new-record notification.'],
-  ['social', 'Social media time logged', 'Shown after a debrief that costs XP.'],
-  ['rest', 'Rest day', 'Shown when a rest day is declared.']
+  ['escape', 'A break is requested early', 'Shown in the break challenge when you start a break. When you hold off, a notification says when the 15 minutes are up.'],
+  ['pb', 'A record is broken', 'Sent with the new-record notification, while the app is open somewhere.'],
+  ['social', 'Social media time logged', 'Shown on screen after a debrief that costs XP.'],
+  ['rest', 'Rest day', 'Shown on screen when you declare a rest day.']
 ];
 export const voicePreset = (register, kind) => ((VOICE[register] || VOICE.cold)[kind] || []).slice();
 /** One line for a situation. The owner's own lines (Settings → Notifications)

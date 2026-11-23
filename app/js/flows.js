@@ -9,7 +9,7 @@ import { registerActions, openModal, closeModal, toast, confirmDialog } from './
 import { icon } from './icons.js';
 import { esc, today, addDays, fmtTimer, fmtDur, fmtMins, fmtDate, hmToMin, clamp, safeColor } from './util.js';
 import { ui, refresh } from './bus.js';
-import { notify } from './notify.js';
+import { notify, pushEvent } from './notify.js';
 import * as fx from './fx.js';
 
 export const L = () => S().settings.labels;
@@ -117,6 +117,8 @@ function lockIn(cardId, taskId = null) {
   const gt = taskId ? E.findGoalTask(taskId) : null;
   const card = gt ? null : pickCard(cardId);
   const a = gt ? E.activityForGoal(gt.g, true) : card ? E.activityForCard(card, true) : E.focusActivity(true);
+  // a task whose tag points at a break starts a break: it is challenged like any other
+  if (E.needsEscapeChallenge(a)) { escapeChallenge(a); return; }
   focusCardId = card ? card.id : null;
   focusTaskId = gt ? gt.t.id : card && E.findGoalTask(card.goalTask) ? card.goalTask : null;
   E.startActivity(a.id, { cardId: focusCardId, taskId: focusTaskId });
@@ -127,7 +129,7 @@ const completeGoalTask = id => { if (E.completeGoalTask(id)) save(); };
 function bailCheck() {
   if (Date.now() - focusStart < 5 * 60000) {
     const n = E.logFriction();
-    if (n === 3 || n === 6) notify(`That's ${n} false starts today`, E.voice('idle'));
+    if (n === 3 || n === 6) notify(`That's ${n} false starts today`, E.voice('idle'), { tag: 'hq-friction', key: `friction:${today()}:${n}` });
   }
 }
 export function completeCard(id) {
@@ -269,19 +271,19 @@ function refreshDebrief() {
 /* ══════════════════════ BREAK CHALLENGE ══════════════════════ */
 let escTimer = null;
 function escapeChallenge(a) {
-  const g = S().game, line = E.voice('escape');
+  const g = S().game, line = E.voice('escape'), until = g.notif.holdUntil || 0, holding = until > Date.now();
+  const at = ts => new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   openModal({
-    title: 'Taking a break already?', cancel: '',
-    body: `${line ? `<blockquote class="quote">${esc(line)}<cite>${esc(shadowName())}</cite></blockquote>` : ''}
-      <div class="telemetry">
-        <div><span>Focus logged today</span><b class="tone-bad">${fmtDur(E.focusMsOn(today()))}</b><i>the gate is 25m</i></div>
-        <div><span>Held the line</span><b class="tone-good">${g.holds}</b></div>
-        <div><span>Folded</span><b class="tone-bad">${g.folds}</b></div>
-        <div><span>Requested</span><b>${esc(E.label(a))}</b></div>
+    title: holding ? 'Your 15 minutes are not up yet' : 'Taking a break already?', cancel: '',
+    body: `<div class="esc-score" style="--won:${g.holds + g.folds ? (g.holds / (g.holds + g.folds) * 100).toFixed(1) : 50}%">
+        <div class="esc-n good"><b class="num">${g.holds}</b><span>Stayed strong</span></div>
+        <div class="esc-n bad"><b class="num">${g.folds}</b><span>Gave in</span></div>
+        <div class="esc-bar" aria-hidden="true"><i></i></div>
       </div>
-      <p class="hint">It's your call. Either choice is recorded.</p>`,
+      ${line ? `<blockquote class="quote">${esc(line)}<cite>${esc(shadowName())}</cite></blockquote>` : ''}
+      <div class="esc-meta">${holding ? `Your break is yours at <b>${at(until)}</b>` : `<b>${fmtDur(E.focusMsOn(today()))}</b> of focus today`}</div>`,
     footer: `<button type="button" class="btn ghost" data-act="escape.fold" data-id="${esc(a.id)}">Take it anyway</button>
-             <button type="button" class="btn primary" data-act="escape.hold" autofocus>Work 15 minutes first</button>`
+             <button type="button" class="btn primary" data-act="escape.hold" autofocus>${holding ? 'Keep going' : 'Work 15 minutes first'}</button>`
   });
 }
 
@@ -368,10 +370,16 @@ registerActions({
   'brief.open': openBrief,
   'debrief.open': openDebrief,
   'mission.toggle': d => { toggleObjective(d.path); refreshDebrief(); },
-  'escape.hold': () => {
-    closeModal(); S().game.holds++; save();
+  'escape.hold': async () => {
+    closeModal();
+    const g = S().game, now = Date.now();
+    if ((g.notif.holdUntil || 0) > now) { toast('Good', 'Your break is yours when the 15 minutes are up.', { kind: 'good', ms: 4000 }); return; }
+    g.holds++; g.notif.holdUntil = now + E.HOLD_MS; save();
+    // the follow-up arrives at the right time even with the app closed; while open, the page says it too
+    const title = '15 minutes done', body = 'Take your break now if you still want it.';
+    const pushed = await pushEvent(`hold:${now}`, title, body, { tag: 'hq-break', at: now + E.HOLD_MS });
     clearTimeout(escTimer);
-    escTimer = setTimeout(() => notify('15 minutes done', 'Take your break now if you still want it.'), 15 * 60000);
+    escTimer = setTimeout(() => (pushed ? toast(title, body, { kind: 'good', ms: 11000 }) : notify(title, body, { kind: 'good', tag: 'hq-break' })), E.HOLD_MS);
     toast('Good call', 'Do 15 minutes of work, then the break is yours.', { kind: 'good', ms: 5000 });
   },
   'escape.fold': d => {

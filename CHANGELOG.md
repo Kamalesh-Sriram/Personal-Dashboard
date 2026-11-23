@@ -2,6 +2,30 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## 5.6.0
+
+### Fixed
+
+- **Devices were signed out of sync for no reason, silently.** The page asked the site for its Supabase settings once; if that one request failed (offline for a moment, waking from sleep, a redeploy in progress), it took sync to be "not set up" until reloaded, and the next sign-in renewal then signed the device out. Nothing showed it, so changes made afterwards stayed on that device only. Now a failed request is simply tried again (with the last good settings standing in), only Supabase refusing the sign-in ends it, and a sign-out is never silent: a red cloud in the top bar, a message, and the device's own notification.
+- **Break challenge.** It only ever appeared during a campaign and before 25 minutes of focus, so most breaks started unchallenged, and Lock in on a task tagged with a break skipped it altogether. It now asks every time by default (Settings > Game > Breaks), wherever the break is started from.
+- **Rings stopping short.** The 24-hour ring and the finance ring were cut off part-way when they had many parts to draw. They now draw to the very last part, and a busy day still takes under two seconds.
+- **Red icons in the top bar** showed grey.
+
+### Added
+
+- **Restore points**, kept on each device: one a day and one before anything replaces the dashboard. Settings > Data.
+- **Warnings before a replace.** Load my account's here and Use this device's everywhere say what would be lost and offer Combine both. Combine both is now the first choice when a device first meets an account.
+- **Every notification reaches the device**: records, levels, the month's result, pulling ahead of the rival, false starts, and the end of the 15 minutes after holding off a break are now pushed too.
+- **Gym:** the weekly bars rise in, with the goal line drawing across them.
+- **Pulling ahead of the rival** is worked out in advance while a timer runs, so it arrives with the app closed.
+
+### Changed
+
+- **Nothing is running** is spaced by how much you have done: at most every hour with little done (the new default), further apart as focus hours add up, none once the target is reached, at most five a day.
+- **The break challenge** shows Stayed strong and Gave in side by side over a split bar, then the rival's line and today's focus.
+- **Priority flags** are bigger and sit right after the task's name. Every task title has the same brightness; High tasks are bold.
+- **The notification list** in Settings says how each one reaches you.
+
 ## 5.5.1
 
 ### Fixed

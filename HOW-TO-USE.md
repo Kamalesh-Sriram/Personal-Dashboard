@@ -86,6 +86,16 @@ Where it works:
 
 If the bell says notifications are blocked, allow them for your site in the browser's site settings (the padlock or tune icon in the address bar), and on phones also in the system notification settings.
 
+These reach your device even with the app closed, sent at their time: the morning brief, a missing mission, the debrief, habits still open, a payment tomorrow, the running timer, nothing running, the rival passing you, you pulling ahead of him while a timer runs, and the end of the 15 minutes after you hold off a break.
+
+These are noticed by the app itself, so they reach your device while the app is open somewhere (a tab or the installed app, even minimised or in the background): a new record, a level or rank, how the month ended, false starts, and pulling ahead when no timer is running.
+
+Something you do in the app itself (declaring a rest day, saving a debrief) is shown on screen only, since you are already looking.
+
+**Nothing is running** is a reminder once in a while, not a nag: with little done it comes at most every hour (you can change that), it waits longer as your focus hours add up toward your daily target, it stops once you reach the target, and there are never more than five in a day.
+
+If you are ever signed out of your account, the device tells you with its own notification (a push cannot reach a signed-out device), once when it happens and once a day until you sign in again.
+
 You choose which reminders are sent, and you can rewrite every sentence they use, under **Settings > Notifications**. With sync on, the same page shows when the day's reminders were last scheduled, how many are waiting and when the next one is due. If that line shows an error, press **Schedule again**.
 
 ![Editing what the notifications say](docs/images/settings-lines.jpg)
@@ -199,7 +209,7 @@ A kanban board (it used to be called Board). Drag tasks between columns. On a ph
 
 - **Tags** colour the task and decide where its time goes. Open **Tags** to link each tag to an activity. When you lock in on a task tagged "Thesis", the Thesis timer runs, not the general one.
 - **Activity.** A task can also name its own activity, which wins over its tag's. Leave it on "Follow the tag" for the usual behaviour.
-- **Priority.** Open a task and pick **Low**, **Medium** or **High**. A small flag shows it on the task, in green, yellow or red, beside the tag. On the Tasks tab a High task also has a bold title, and a Low task a lighter one, and High tasks breathe: a soft glow in their tag's colour swells and settles every few seconds. Turn it off under **Settings > Layout > High tasks breathe**. Home's top tasks show only the flag, right after the task's name. A task goes to the top of its column when it is added as High, raised to High, or moved to another column while High; you can still drag it anywhere after that. **None** hides it.
+- **Priority.** Open a task and pick **Low**, **Medium** or **High**. A flag shows it right after the task's name, in green, yellow or red. On the Tasks tab a High task also has a bold title, and High tasks breathe: a soft glow in their tag's colour swells and settles every few seconds. Turn it off under **Settings > Layout > High tasks breathe**. Home's top tasks show only the flag. A task goes to the top of its column when it is added as High, raised to High, or moved to another column while High; you can still drag it anywhere after that. **None** hides it.
 - **Steps.** Open a task and add steps. The task shows a progress bar. Click the bar to tick steps off without opening the task.
 - **Duplicate.** Open a task and press **Duplicate**. A new task opens with the same name, tag, estimate, deadline, notes and steps, ready to edit.
 - **Columns** can be renamed, recoloured, reordered, added and removed. With **Settings > Layout > Colour each column** on (the default), each column takes a faint tint of its own colour; turn it off for plain columns.
@@ -219,6 +229,8 @@ A kanban board (it used to be called Board). Drag tasks between columns. On a ph
 - **Colours.** An activity's editor has nineteen colours, red included, and the last swatch (the rainbow) opens your system's colour picker for any colour at all.
 
 Each activity has a weight: **Deep** earns full XP, **Upkeep** half, **Tracked** a token amount. Mark meals, naps and scrolling as a **break**: breaks never count as work and reset the combo.
+
+**Starting a break is challenged.** Press a break and you are asked to work 15 minutes first. **Take it anyway** starts it at once; **Work 15 minutes first** sends you a notification when the 15 minutes are up, and the break is then yours, unchallenged, for 45 minutes. Either choice is recorded. Choose when this happens under **Settings > Game > Breaks**: always (the default), only during a campaign, or never.
 
 ### Habits
 
@@ -518,7 +530,7 @@ The level is worked out from what is already stored, so it counts the days befor
 A campaign is a fixed-length push (60 days by default). While it runs:
 
 - the whole dashboard switches to the red theme, whatever your own theme is,
-- starting a break with under 25 minutes of focus on the board is challenged first (never blocked),
+- starting a break is challenged first, never blocked, if Settings > Game > Breaks is set to during a campaign (the default is always),
 - the win and loss record counts from the campaign's first day.
 
 Start and end campaigns under **Settings > Game**. Ending one archives the result under Review and restores your own theme.
@@ -570,6 +582,10 @@ What you should do:
 
 **Backup.** **Settings > Data > Export backup** downloads everything as one file. **Import backup** restores it. Without sync, this file is the only copy besides the browser itself, and clearing your browser's site data deletes the dashboard.
 
+**Restore points.** Each device also keeps copies of the dashboard by itself, under **Settings > Data > Restore points**: one at the start of each day, and one just before anything replaces the dashboard (loading your account's copy, sending this device's copy over your account's, importing a backup, or restoring). The newest 14 are kept. Press **Restore** to go back to one; a restore point of what is there now is kept first, and if you are signed in the restored copy is combined with your account's, so nothing there is lost either.
+
+**Signed out without asking.** If a device is ever signed out of your account, the sync icon in the top bar turns into a red crossed-out cloud, a message says so, and Settings > Sync explains it. Everything you change meanwhile stays on that device. Sign in again and it is combined with your account's copy.
+
 **Updating to a newer version.** An update replaces the dashboard's code. Your data is not in the code: it is in your browser, and in your own database if sync is on, so an update does not touch it. How you update depends on how you set your copy up.
 
 *Your copy is a fork on GitHub and Netlify builds from it (the setup in section 1):*
@@ -601,9 +617,11 @@ To hear about new versions, press **Watch** on the original repository on GitHub
 | No notifications on iPhone | Add to Home Screen first, open it from the home screen, then tap the bell. Needs iOS 16.4 or later. |
 | Notifications only arrive while the app is open | Finish Part 5, sign in, and tap the bell again on that device. |
 | Notifications still not arriving | Open `/.netlify/functions/push-health` on your site. Anything marked false is the part to fix. |
-| "Sync is not set up yet" | The five Netlify variables are missing, or the site was not redeployed after adding them. |
+| "Sync is not set up yet" | The five Netlify variables are missing, or the site was not redeployed after adding them. Open `/.netlify/functions/config` on your site: it should show your Supabase address and key. |
+| A red crossed-out cloud in the top bar | This device was signed out. Sign in under Settings > Sync; what you changed meanwhile is kept and combined with your account. |
+| Something is missing | Settings > Data > Restore points: go back to a copy from before it went missing. |
 | Sign-in says the email is not confirmed | Click the link in the confirmation email, or turn off "Confirm email" in Supabase under Authentication. |
-| Two devices show different things | On the device with the right dashboard, open Settings > Sync and press **Use this device's everywhere**. On the other, press **Load my account's here**. |
+| Two devices show different things | Open Settings > Sync on either and press **Load my account's here** or **Use this device's everywhere**. If the copy being replaced holds anything the other does not, you are told what and offered **Combine both**, which keeps everything. |
 | The page looks out of date | Close the app completely and open it again. |
 
 ## 12. Upgrading from version 4

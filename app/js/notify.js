@@ -45,15 +45,29 @@ export function pushState() {
 }
 export const pushSubscribed = () => !!sub;
 
-/** Toast always; system notification only when the app is not on screen
- *  and push is not already going to deliver the same thing. */
+/** Toast always. When the app is not on screen it reaches the device too:
+ *  as a push when this device is registered (unless `planned`, which the
+ *  server already sends at its time), otherwise as a system notification. */
 export function notify(title, body = '', opts = {}) {
   toast(title, body, { ms: 11000, ...opts });
+  if (document.visibilityState === 'visible') return;
+  if (sub && Sync.signedIn()) { if (!opts.planned) pushEvent(opts.key || `${opts.tag || 'hq'}:${today()}:${title}`, title, body, { tag: opts.tag, raw: opts.raw }); return; }
   try {
-    if (sub || !hasNotif || Notification.permission !== 'granted' || document.visibilityState === 'visible') return;
+    if (!hasNotif || Notification.permission !== 'granted') return;
     const o = { body, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag: opts.tag || 'hq' };
     if (reg) reg.showNotification(title, o); else new Notification(title, o);
   } catch { /* Android Chrome throws on `new Notification`; the toast already showed */ }
+}
+
+/** The device's own system notification, with no server involved: for what
+ *  a push cannot carry, such as being signed out of the account. Shows when
+ *  notifications are allowed and the app is open somewhere, even out of sight. */
+export function deviceNotify(title, body = '', tag = 'hq') {
+  try {
+    if (!hasNotif || Notification.permission !== 'granted') return;
+    const o = { body, icon: 'icons/icon-192.png', badge: 'icons/badge-96.png', tag };
+    if (reg) reg.showNotification(title, o); else new Notification(title, o);
+  } catch { /* the toast already showed it */ }
 }
 
 /* ══════════════════════ IN-APP NUDGES ══════════════════════
@@ -62,6 +76,21 @@ export function notify(title, body = '', opts = {}) {
 function idleAllowed() {
   const v = S().settings.notify.idle;
   return v === 'always' || (v === 'campaign' && S().game.campaign.on);
+}
+/** How long a quiet spell may run before "Nothing is running" speaks. With
+ *  little done it is the gap you set; as focus adds up toward the day's
+ *  target it stretches, up to three times as long, and once the target is
+ *  reached it says nothing more. Being ahead of the rival stretches it a
+ *  little further. At most IDLE_MAX reminders a day. */
+const IDLE_MAX = 5;
+export function idleGapMs() {
+  const st = S(), t = today();
+  const target = Math.max(0.5, Number(st.settings.targets.hours) || 6) * 3600000;
+  const done = E.focusMsOn(t) / target;
+  if (done >= 1) return null;
+  let gap = Math.max(20, Number(st.settings.nudgeMins) || 60) * 60000 * (1 + 2 * done);
+  if (st.settings.modules.shadow && E.dayXP(t) > E.shadowPaceNow()) gap *= 1.25;
+  return gap;
 }
 export function nudgeTick() {
   const st = S(), g = st.game, n = g.notif, cfg = st.settings.notify;
@@ -74,19 +103,24 @@ export function nudgeTick() {
   if (!rest && inWindow && idleAllowed() && !E.runningActivity()) {
     const ends = E.sessionsOn(t, false).map(x => x.s.end);
     const since = ends.length ? Math.max(...ends) : (n.dayOpened && n.dayOpenedOn === t ? n.dayOpened : now);
-    if (n.dayOpenedOn !== t) { n.dayOpenedOn = t; n.dayOpened = now; dirty = true; }
-    const gap = st.settings.nudgeMins * 60000;
-    if (now - since > gap && now - (n.lastIdle || 0) > gap) { n.lastIdle = now; dirty = true; notify(name, E.voice('idle') || 'Nothing is running right now.', { tag: 'hq-idle' }); }
+    if (n.dayOpenedOn !== t) { n.dayOpenedOn = t; n.dayOpened = now; n.idleN = 0; dirty = true; }
+    const gap = idleGapMs();
+    if (gap && (n.idleN || 0) < IDLE_MAX && now - since > gap && now - (n.lastIdle || 0) > gap) {
+      n.lastIdle = now; n.idleN = (n.idleN || 0) + 1; dirty = true;
+      notify(name, E.voice('idle') || 'Nothing is running right now.', { tag: 'hq-idle', planned: true });
+    }
   }
 
   if (!rest && st.settings.modules.shadow && cfg.overtake && inWindow) {
     const you = E.dayXP(t), pace = E.shadowPaceNow();
-    if (pace > you && you > 0 && n.overtake !== t) { n.overtake = t; dirty = true; notify(`${name} just passed you`, `${name} is on ${pace} XP and you're on ${you}. ${E.voice('behind')}`.trim(), { tag: 'hq-overtake' }); }
+    if (pace > you && you > 0 && n.overtake !== t) { n.overtake = t; dirty = true; notify(`${name} just passed you`, `${name} is on ${pace} XP and you're on ${you}. ${E.voice('behind')}`.trim(), { tag: 'hq-overtake', planned: true }); }
+    // the other way round: the first time in a day you pull ahead of his pace
+    if (cfg.ahead !== false && you > pace && pace > 0 && n.ahead !== t) { n.ahead = t; dirty = true; notify(`You're ahead of ${name}`, `You're on ${you} XP and ${name} is on ${pace}. ${E.voice('ahead')}`.trim(), { tag: 'hq-ahead', raw: PLAN + `ahead:${t}` }); }
   }
 
   if (!rest && cfg.habits && nowMin >= hm(cfg.habitsAt) && n.habits !== t) {
     const open = E.habitsDue(t).filter(h => h.history[t] !== 'done').length;
-    if (open > 0) { n.habits = t; dirty = true; notify('Habits left today', E.voice('habits', { n: open }) || `You still have ${open} habit${open > 1 ? 's' : ''} to check off today.`, { tag: 'hq-habits' }); }
+    if (open > 0) { n.habits = t; dirty = true; notify('Habits left today', E.voice('habits', { n: open }) || `You still have ${open} habit${open > 1 ? 's' : ''} to check off today.`, { tag: 'hq-habits', planned: true }); }
   }
 
   if (st.settings.modules.mission && !rest) {
@@ -94,8 +128,8 @@ export function nudgeTick() {
     // time; later than that it would interrupt the work it was meant to start.
     const bAt = E.briefMin(), dAt = E.debriefMin();
     if (cfg.brief && n.brief !== t && nowMin >= bAt && nowMin <= bAt + 120 && nowMin < dAt && !modalOpen()) { n.brief = t; dirty = true; runAction('brief.open'); }
-    if (cfg.brief && !E.hasMission(t) && n.nomission !== t && nowMin >= bAt + 180 && nowMin < dAt) { n.nomission = t; dirty = true; notify('No mission yet', E.voice('nomission') || 'Set one so the day has a target.', { tag: 'hq-mission' }); }
-    if (cfg.debrief && nowMin >= dAt && n.debrief !== t && !modalOpen()) { n.debrief = t; dirty = true; notify('Time to close the day', E.voice('night') || 'Write up the day and plan tomorrow.', { tag: 'hq-debrief' }); runAction('debrief.open'); }
+    if (cfg.brief && !E.hasMission(t) && n.nomission !== t && nowMin >= bAt + 180 && nowMin < dAt) { n.nomission = t; dirty = true; notify('No mission yet', E.voice('nomission') || 'Set one so the day has a target.', { tag: 'hq-mission', planned: true }); }
+    if (cfg.debrief && nowMin >= dAt && n.debrief !== t && !modalOpen()) { n.debrief = t; dirty = true; notify('Time to close the day', E.voice('night') || 'Write up the day and plan tomorrow.', { tag: 'hq-debrief', planned: true }); runAction('debrief.open'); }
   }
   // A payment leaving tomorrow, said once, at 10:00 or the first time the app is open after that.
   if (cfg.subs && nowMin >= 10 * 60) {
@@ -105,7 +139,7 @@ export function nudgeTick() {
       const key = 'sub:' + x.id;
       if (n[key] === t) return;
       n[key] = t; dirty = true;
-      notify('Payment tomorrow', `${x.name} will charge ${x.amount} ${x.currency || st.settings.currency} tomorrow.`, { tag: 'hq-sub' });
+      notify('Payment tomorrow', `${x.name} will charge ${x.amount} ${x.currency || st.settings.currency} tomorrow.`, { tag: 'hq-sub', planned: true });
     });
   }
   if (dirty) saveQuiet();
@@ -177,6 +211,23 @@ const flush = async () => {
   try { await fetch('/.netlify/functions/push-now', { method: 'POST', headers: { Authorization: 'Bearer ' + (await Sync.token()) } }); } catch { /* the minute tick will get it */ }
 };
 
+/** Queue one push for an event: now, or at `at` (ms). Each key is sent once.
+ *  Rows are not "plan:" rows, so re-planning the day never removes them. */
+export async function pushEvent(key, title, body = '', { tag = 'hq', at = Date.now(), raw = '' } = {}) {
+  if (!sub || !Sync.signedIn()) return false;
+  try {
+    // `raw` reuses a planned row's key: if the server has not sent it yet it is moved to now, and if
+    // it has, the database refuses the change, so the same news never arrives twice
+    await Sync.rest('POST', 'push_queue?on_conflict=user_id,dedupe_key', [{
+      dedupe_key: raw || 'ev:' + key, send_at: new Date(at).toISOString(), expires_at: null, repeat_sec: null,
+      kind: 'nudge', title, body, tag, ongoing: false, silent: false, data: {}
+    }], `resolution=${raw ? 'merge' : 'ignore'}-duplicates,return=minimal`);
+    if (at <= Date.now() + 2000) flush();
+    return true;
+  } catch { return false; }
+}
+export const pushReady = () => !!sub && Sync.signedIn();
+
 /* ── the plan: everything still ahead of us today ── */
 function pinned(v) {
   try {
@@ -198,11 +249,11 @@ function buildPlan() {
   const rest = E.isRest(t);
 
   if (!rest) {
-    if (idleAllowed() && !running) {
+    const step = idleGapMs(), left = IDLE_MAX - (g.notif.idleN && g.notif.dayOpenedOn === t ? g.notif.idleN : 0);
+    if (idleAllowed() && !running && step && left > 0) {
       const ends = E.sessionsOn(t, false).map(x => x.s.end);
       const base = ends.length ? Math.max(...ends) : Date.now();
-      const step = Math.max(10, st.settings.nudgeMins) * 60000;
-      for (let k = 1, n = 0; k <= 40 && n < 8; k++) {
+      for (let k = 1, n = 0; k <= 40 && n < Math.min(3, left); k++) {
         const when = new Date(base + k * step);
         if (when <= now) continue;
         const m = minOfDay(when.getTime(), t);
@@ -219,6 +270,18 @@ function buildPlan() {
       if (you > 0 && sx > 0 && !running) {
         const cross = w.start + w.total * (you / sx);
         if (cross > nowMin && cross <= w.end) add({ dedupe_key: `overtake:${t}`, send_at: atMin(cross), title: `${name} just passed you`, body: E.voice('behind') || "You're behind pace.", tag: 'hq-overtake' });
+      }
+    }
+    if (st.settings.modules.shadow && cfg.ahead !== false && running && g.notif.ahead !== t) {
+      // With a work timer running you gain XP at a steady rate and he at his, so the minute you
+      // pass his pace can be worked out now and sent with the app closed. Re-planned on any change.
+      const you = E.dayXP(t), sx = E.shadowXP(t), pace = E.shadowPaceNow(), x = st.settings.xp;
+      const tier = E.TIERS[E.tierOf(running)], combo = E.dayScore(t).combo.mult;
+      const rate = E.countsAsFocus(running) ? x.perHour / 60 * tier.mult * combo * E.blockRate(running, { date: t, dur: E.COMBO.minMs, live: true }) : 0;
+      const his = sx / Math.max(1, w.total);
+      if (you <= pace && rate > his) {
+        const at = nowMin + (pace - you) / (rate - his) + 1;
+        if (at > nowMin && at <= w.end) add({ dedupe_key: `ahead:${t}`, send_at: atMin(at), title: `You're ahead of ${name}`, body: E.voice('ahead') || "You're ahead of pace. Keep going.", tag: 'hq-ahead' });
       }
     }
     if (st.settings.modules.mission) {
@@ -267,9 +330,9 @@ function buildPlan() {
 let lastPrint = '';
 function fingerprint() {
   const st = S(), t = today(), r = E.runningActivity();
-  return [t, st.game.campaign.on, st.settings.window.start, st.settings.window.end, st.settings.nudgeMins, JSON.stringify(st.settings.notify),
+  return [t, st.game.campaign.on, st.settings.window.start, st.settings.window.end, st.settings.nudgeMins, JSON.stringify(st.settings.notify), Math.round(E.focusMsOn(t) / 900000),
     r ? r.id + '@' + r.lastStart + '@' + E.runningTaskName(r) : '-', E.hasMission(t), E.isRest(t), st.game.notif.debrief === t,
-    E.habitsDue(t).filter(h => h.history[t] !== 'done').length, Math.round(E.dayXP(t) / 25),
+    E.habitsDue(t).filter(h => h.history[t] !== 'done').length, Math.round(E.dayXP(t) / 25), st.game.notif.ahead === t, Math.round(E.dayScore(t).combo.mult * 10),
     (st.subs || []).map(x => x.id + ':' + x.anchor + ':' + (x.remind !== false)).join(',')].join('|');
 }
 /** What the last planning run did, for Settings > Notifications. */

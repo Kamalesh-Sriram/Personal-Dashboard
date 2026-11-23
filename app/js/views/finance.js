@@ -75,7 +75,7 @@ function catsHtml(t, cur) {
   if (!t.rows.length) return '<div class="empty">Nothing was spent in this period.</div>';
   const rows = t.rows.filter(r => r.v > 0), sum = rows.reduce((n, r) => n + r.v, 0) || 1, on = picked();
   const parts = rows.map(r => ({ id: r.id || '-', label: catOf(r.id).name, value: r.v, color: catOf(r.id).color }));
-  const draw = ui.finDraw !== false; ui.finDraw = false;
+  const draw = ui.finDraw !== false || ui.entering; ui.finDraw = false;
   const chosen = t.rows.filter(r => on.includes(r.id || '-')), chosenSum = chosen.reduce((n, r) => n + r.v, 0);
   return `<div class="fin-pie">
       <div class="pie-wrap">${donut(parts, { on, act: 'fin.filter', draw })}
@@ -232,7 +232,7 @@ export default {
     const cur = mainCurrency(d.txs), all = d.txs.filter(t => t.cur === cur), other = d.txs.length - all.length;
     const year = ui.finView === 'year', ym = month(), y = +ym.slice(0, 4), cats = Fin.cats();
     const set = year ? F.inYear(all, y) : F.inMonth(all, ym);
-    const drawChart = ui.finDraw !== false;
+    const drawChart = ui.finDraw !== false || ui.entering;
     const prevYm = (() => { const p = new Date(y, +ym.slice(5) - 2, 1); return `${p.getFullYear()}-${pad(p.getMonth() + 1)}`; })();
     const t = F.totals(set, cats), prev = F.totals(year ? F.inYear(all, y - 1) : F.inMonth(all, prevYm), cats);
     const loose = set.filter(x => !x.cat).length, links = (s.bank && s.bank.links) || [], active = links.filter(l => l.status === 'active'), expired = links.filter(l => l.status === 'expired');

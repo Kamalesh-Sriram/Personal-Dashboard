@@ -118,7 +118,7 @@ function liftsHtml(workouts, exs) {
 function weeksHtml(wk) {
   const g = goal(), top = Math.max(g, ...wk.map(w => w.count)) * 1.2, pct = v => (v / top * 100).toFixed(2);
   const tone = (w, i) => (w.count >= g ? 'won' : i === wk.length - 1 ? 'now' : 'lost');
-  return `<div class="gym-weeks" style="--goal:${pct(g)}%">${wk.map((w, i) => `<div class="gym-week" title="Week of ${fmtDay(w.start)}: ${w.count} workout${w.count === 1 ? '' : 's'}, ${tonnes(w.vol)}${w.count >= g ? ', goal met' : i === wk.length - 1 ? ', under way' : ', below your goal'}">
+  return `<div class="gym-weeks ${ui.entering ? 'draw' : ''}" style="--goal:${pct(g)}%">${wk.map((w, i) => `<div class="gym-week" style="--i:${i}" title="Week of ${fmtDay(w.start)}: ${w.count} workout${w.count === 1 ? '' : 's'}, ${tonnes(w.vol)}${w.count >= g ? ', goal met' : i === wk.length - 1 ? ', under way' : ', below your goal'}">
       <div class="gym-week-bar"><i class="${tone(w, i)}" style="height:${pct(w.count)}%"></i><u class="gym-goal-line" aria-hidden="true"></u></div>
       <b>${w.count || '·'}</b></div>`).join('')}</div>`;
 }

@@ -30,10 +30,10 @@ function cardHtml(c, colId) {
   const run = E.runningActivity(), live = run && run.runCardId === c.id;
   const dl = c.deadline ? daysBetween(today(), c.deadline) : null;
   return `<article class="kcard ${tag ? 'tagged' : ''} ${live ? 'live' : ''} ${c.pri && colId !== 'done' ? 'p-' + c.pri : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-card="${esc(c.id)}" data-flip="c-${esc(c.id)}" data-act="card.edit" data-id="${esc(c.id)}" tabindex="0">
-    <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}" title="${esc(tag.name)}"><i></i><span class="ell">${esc(tag.name)}</span></span>` : ''}${colId !== 'done' ? priHtml(c.pri) : ''}<span class="grow"></span>
+    <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}" title="${esc(tag.name)}"><i></i><span class="ell">${esc(tag.name)}</span></span>` : ''}<span class="grow"></span>
         ${colId !== 'done' ? `<button class="icon-btn sm" data-act="lock.in" data-card="${esc(c.id)}" title="${esc(L().lockIn)} on this task" aria-label="Start timer">${icon(live ? 'zap' : 'play')}</button>
         <button class="icon-btn sm" data-act="card.complete" data-id="${esc(c.id)}" title="Mark done" aria-label="Mark done">${icon('check')}</button>` : ''}</div>
-    <div class="kcard-t">${esc(c.text)}</div>
+    <div class="kcard-t">${esc(c.text)}${c.pri && colId !== 'done' ? ` ${priHtml(c.pri)}` : ''}</div>
     ${subs.length ? `<button class="sub-prog" data-act="card.subs" data-id="${esc(c.id)}" title="Show steps" aria-expanded="${open.has(c.id)}">
         <div class="bar thin grow"><i style="width:${sd / subs.length * 100}%"></i></div><span>${sd}/${subs.length}</span></button>` : ''}
     ${subs.length && open.has(c.id) ? `<div class="kcard-subs">${subs.map(s => `<button class="kcard-sub ${s.done ? 'done' : ''}" data-act="card.subToggle" data-id="${esc(c.id)}" data-sub="${esc(s.id)}">

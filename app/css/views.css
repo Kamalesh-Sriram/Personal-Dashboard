@@ -186,11 +186,11 @@ button.hud-cell:hover { border-color: var(--line-2); }
 /* priority: a small flag in green, yellow or red */
 .pri { --p: var(--text-3); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--p); }
 .pri-low { --p: #3FD98A; } .pri-med { --p: #F2C94C; } .pri-high { --p: #FF5A52; }
-.pri svg { width: 12px; height: 12px; fill: color-mix(in srgb, var(--p) 30%, transparent); stroke-width: 2.2; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--p) 45%, transparent)); }
+.pri svg { width: 15px; height: 15px; fill: color-mix(in srgb, var(--p) 30%, transparent); stroke-width: 2.2; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--p) 45%, transparent)); }
 .kcard-top .tag + .pri { margin-left: 8px; }
 .kcard-top .tag { min-width: 0; } .kcard-top .tag i, .kcard-top .pri { flex: none; }
-/* High: a semi-bold title. Low: a lighter title. Medium stays as every other task. */
-.kcard.p-high .kcard-t { font-weight: 600; color: var(--text); }
+/* High: a semi-bold title. Every title keeps the same brightness. */
+.kcard.p-high .kcard-t { font-weight: 600; }
 /* High tasks breathe (Settings > Layout): a soft glow in the tag's colour that
    swells and settles every few seconds. Off with motion off. */
 .board.breathe .kcard.p-high { animation: pri-breathe 3.6s ease-in-out infinite; }
@@ -201,9 +201,8 @@ button.hud-cell:hover { border-color: var(--line-2); }
 }
 :root[data-motion="off"] .board.breathe .kcard.p-high { animation: none; }
 .board.breathe .kcard.p-high.dragging { animation: none; }
-.kcard.p-low .kcard-t { font-weight: 400; color: color-mix(in srgb, var(--text) 68%, transparent); }
 /* on Home's top tasks the flag sits right after the name, and nothing else changes */
-.task-t .pri { margin-left: 6px; vertical-align: -1px; }
+.task-t .pri, .kcard-t .pri { margin-left: 6px; vertical-align: -2px; }
 .pri-seg button { display: inline-flex; align-items: center; gap: 7px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .kcard.dragging { opacity: .3; }
@@ -529,6 +528,11 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 /* the goal, drawn across every week: each bar carries a piece, reaching over the gaps */
 .gym-goal-line { position: absolute; left: -3px; right: -3px; bottom: var(--goal); height: 0; border-top: 1.5px dashed color-mix(in srgb, var(--text) 55%, transparent); pointer-events: none; z-index: 1; }
 .gym-week:first-child .gym-goal-line { left: 0; } .gym-week:last-child .gym-goal-line { right: 0; }
+/* opening the tab: the weeks rise one after another from the left, the goal line drawing across just behind */
+:root:not([data-motion="off"]) .gym-weeks.draw .gym-week-bar i { transform-origin: 50% 100%; animation: bar-up .6s cubic-bezier(.2, .8, .2, 1) calc(var(--i) * 45ms + 120ms) both; }
+:root:not([data-motion="off"]) .gym-weeks.draw .gym-goal-line { transform-origin: 0 50%; animation: goal-draw .28s ease-out calc(var(--i) * 45ms + 260ms) both; }
+:root:not([data-motion="off"]) .gym-weeks.draw .gym-week b { animation: fade .4s ease calc(var(--i) * 45ms + 300ms) both; }
+@keyframes goal-draw { from { transform: scaleX(0); opacity: 0; } to { transform: scaleX(1); opacity: 1; } }
 .gym-week-bar i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--accent) 45%, var(--card-3)); }
 .gym-week-bar i.now { background: var(--accent); box-shadow: 0 0 12px -2px var(--accent-glow); }
 /* against the weekly goal: green when met, red when not (the week under way stays in the accent until it is) */
@@ -744,3 +748,14 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .g-notes.shut .g-notes-h .goal-chev { transform: none; }
 .g-notes-h:hover .label { color: var(--text-2); }
 @media (max-width: 560px) { .g-link-add { flex-wrap: wrap; } .g-link-add .input { flex-basis: 100%; } }
+/* the break challenge: two counts side by side over a split bar, then the rival's line and today's focus */
+.esc-score { display: grid; grid-template-columns: 1fr 1fr; row-gap: 14px; padding: 6px 0 2px; }
+.esc-n { display: flex; flex-direction: column; align-items: center; gap: 6px; }
+.esc-n + .esc-n { border-left: 1px solid var(--line); }
+.esc-n b { font-size: 34px; line-height: 1; letter-spacing: -0.02em; }
+.esc-n.good b { color: var(--good); } .esc-n.bad b { color: var(--bad); }
+.esc-n span { font-size: 10.5px; font-weight: 600; letter-spacing: .12em; text-transform: uppercase; color: var(--text-3); }
+.esc-bar { grid-column: 1 / -1; height: 4px; border-radius: 2px; background: color-mix(in srgb, var(--bad) 70%, transparent); overflow: hidden; }
+.esc-bar i { display: block; height: 100%; width: var(--won); background: var(--good); border-radius: 2px 0 0 2px; }
+.esc-meta { font-size: 13px; color: var(--text-3); text-align: center; }
+.esc-meta b { color: var(--text); font-weight: 600; }

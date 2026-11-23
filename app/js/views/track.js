@@ -19,7 +19,8 @@ const minOf = (ts, date) => minOfDay(ts, date);
 const dayLen = () => 1440 + dayOffsetMin();
 /** The ring draws itself in when the day shown changes; other redraws leave it still. */
 let ringDay = null;
-const drawRing = () => { const d = viewDate(), go = ringDay !== d; ringDay = d; return go; };
+let ringDrawnAt = 0;
+const drawRing = () => { const d = viewDate(), go = ringDay !== d || ui.entering; ringDay = d; if (go) ringDrawnAt = Date.now(); return go; };
 
 function tileHtml(a) {
   const t = today(), ms = E.actMsOn(a, t), run = a.isRunning;
@@ -189,7 +190,7 @@ function openActivity(a) {
       <div class="field"><label>Colour</label><div class="swatches" id="act-c">${COLORS.map(c => `<button type="button" class="swatch sm ${c.toLowerCase() === (color || '').toLowerCase() ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="${c}"></button>`).join('')}
           <label class="swatch sm custom ${COLORS.some(c => c.toLowerCase() === (color || '').toLowerCase()) ? '' : 'on'}" title="Any colour" style="--cc:${safeColor(color)}"><input type="color" value="${safeColor(color)}" id="act-cc" aria-label="Pick any colour"></label></div></div>
       <label class="row"><input type="checkbox" name="isEscape" ${cur.isEscape ? 'checked' : ''}> <span>This is a break: a meal, a nap, scrolling</span></label>
-      <div class="hint">Breaks never count as work and reset the combo. During a campaign, starting one with under 25 minutes of focus on the board is challenged (never blocked).</div>`,
+      <div class="hint">Breaks never count as work and reset the combo. Starting one asks you to work 15 minutes first, never blocks (Settings > Game > Breaks).</div>`,
     onMount: el => {
       const note = el.querySelector('#act-w-note'), seg = el.querySelector('#act-w'), sw = el.querySelector('#act-c');
       const paint = () => { seg.innerHTML = tierUi(); note.textContent = `${Math.round(S().settings.xp.perHour * E.TIERS[weight].mult * 10) / 10} XP per hour. ${E.TIERS[weight].note}`; };
@@ -288,7 +289,8 @@ export default {
     root.querySelectorAll('[data-live-act]').forEach(el => { const a = S().activities.find(x => x.id === el.dataset.liveAct); if (a) el.textContent = fmtTimer(E.actMsOn(a, today())); });
     const rb = root.querySelector('[data-live-run]');
     if (rb && run) rb.textContent = fmtTimer(Date.now() - run.lastStart);
-    if (viewDate() === today() && new Date().getSeconds() % 20 === 0) { const r = root.querySelector('#track-ring'); if (r && !r.matches(':hover')) r.innerHTML = ringHtmlFor(today()); }
+    // the ring is refreshed every 20 seconds, but never while it is still drawing itself in
+    if (viewDate() === today() && new Date().getSeconds() % 20 === 0 && Date.now() - ringDrawnAt > 4000) { const r = root.querySelector('#track-ring'); if (r && !r.matches(':hover')) r.innerHTML = ringHtmlFor(today()); }
   }
 };
 

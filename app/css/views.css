@@ -202,7 +202,7 @@ button.hud-cell:hover { border-color: var(--line-2); }
 :root[data-motion="off"] .board.breathe .kcard.p-high { animation: none; }
 .board.breathe .kcard.p-high.dragging { animation: none; }
 /* on Home's top tasks the flag sits right after the name, and nothing else changes */
-.task-t .pri, .kcard-t .pri { margin-left: 6px; vertical-align: -2px; }
+.task-t .pri { margin-left: 6px; vertical-align: -2px; }
 .pri-seg button { display: inline-flex; align-items: center; gap: 7px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .kcard.dragging { opacity: .3; }

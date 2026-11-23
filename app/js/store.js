@@ -13,7 +13,7 @@ import { today, uid, slug, deepClone, setDayOffset, dayOffsetFor } from './util.
 import { mergeStates } from './merge.js';
 import { DEFAULT_CATS } from './fincalc.js';
 
-export const APP_VERSION = '5.6.2';
+export const APP_VERSION = '5.6.3';
 export const LS_KEY = 'hq.v5.state';
 const DEVICE_KEY = 'hq.v5.device';
 

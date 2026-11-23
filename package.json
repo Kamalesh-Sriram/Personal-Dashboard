@@ -1,6 +1,6 @@
 {
   "name": "personal-dashboard",
-  "version": "5.6.2",
+  "version": "5.6.3",
   "description": "A private, self-hosted personal dashboard: tasks, time tracking, habits, goals and a rival built from your own track record.",
   "private": true,
   "type": "module",

@@ -2,6 +2,12 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## 5.6.3
+
+### Changed
+
+- **Tasks:** the priority flag is back beside the tag, still at its larger size. Home's top tasks keep it after the task's name.
+
 ## 5.6.2
 
 ### Changed

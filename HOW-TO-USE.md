@@ -188,6 +188,7 @@ Everything for today on one page: your main goals, you against the rival, the mi
 - **The month's record** sits under the dial: one cell per day, green for a day you won, red for one you lost, blue for a rest day. Under it, **Days to win** shows how many of the days left you need to win the month (6/8 means win 6 of the 8 left), beside your **win streak**. It reads Won once the month is secured. The record starts again on the 1st. Press the record to open the calendar.
 - The dial has three rings. The outer ticks are your working day, lit as it passes. The share of the day that is left, and the time, is written above the dial. The thick arc is your XP. The thin arc and the notch are the rival's pace now and his target. Each ring's colour can be changed under **Settings > Look > Home dial**.
 - **Rest day** (top of the dial card) marks today as not scored. See [rest days](#rest-days).
+- **Campaign** (top of the dial card) starts a campaign: give it a name, a start date and a length. While one runs the button reads **End campaign**, which concludes it after you confirm. It is the same as Settings > Game. See [campaign](#campaign).
 - The **logbook** has four entries: sleep, session ratings, efficacy, and the debrief. Each one you fill in earns a little XP. Tap any of them to fill it in.
 
 ### Tasks
@@ -198,7 +199,7 @@ A kanban board (it used to be called Board). Drag tasks between columns. On a ph
 
 - **Tags** colour the task and decide where its time goes. Open **Tags** to link each tag to an activity. When you lock in on a task tagged "Thesis", the Thesis timer runs, not the general one.
 - **Activity.** A task can also name its own activity, which wins over its tag's. Leave it on "Follow the tag" for the usual behaviour.
-- **Priority.** Open a task and pick **Low**, **Medium** or **High**. A small flag shows it on the task, in green, yellow or red, beside the tag (also on Home's top tasks). **None** hides it.
+- **Priority.** Open a task and pick **Low**, **Medium** or **High**. A small flag shows it on the task, in green, yellow or red, beside the tag. On the Tasks tab a High task also has a bold title, and a Low task a lighter one, and High tasks breathe: a soft glow in their tag's colour swells and settles every few seconds. Turn it off under **Settings > Layout > High tasks breathe**. Home's top tasks show only the flag, right after the task's name. A task goes to the top of its column when it is added as High, raised to High, or moved to another column while High; you can still drag it anywhere after that. **None** hides it.
 - **Steps.** Open a task and add steps. The task shows a progress bar. Click the bar to tick steps off without opening the task.
 - **Duplicate.** Open a task and press **Duplicate**. A new task opens with the same name, tag, estimate, deadline, notes and steps, ready to edit.
 - **Columns** can be renamed, recoloured, reordered, added and removed. With **Settings > Layout > Colour each column** on (the default), each column takes a faint tint of its own colour; turn it off for plain columns.

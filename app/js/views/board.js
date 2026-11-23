@@ -30,7 +30,7 @@ function cardHtml(c, colId) {
   const run = E.runningActivity(), live = run && run.runCardId === c.id;
   const dl = c.deadline ? daysBetween(today(), c.deadline) : null;
   return `<article class="kcard ${tag ? 'tagged' : ''} ${live ? 'live' : ''} ${c.pri && colId !== 'done' ? 'p-' + c.pri : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-card="${esc(c.id)}" data-flip="c-${esc(c.id)}" data-act="card.edit" data-id="${esc(c.id)}" tabindex="0">
-    <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}${colId !== 'done' ? priHtml(c.pri, true) : ''}<span class="grow"></span>
+    <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}" title="${esc(tag.name)}"><i></i><span class="ell">${esc(tag.name)}</span></span>` : ''}${colId !== 'done' ? priHtml(c.pri) : ''}<span class="grow"></span>
         ${colId !== 'done' ? `<button class="icon-btn sm" data-act="lock.in" data-card="${esc(c.id)}" title="${esc(L().lockIn)} on this task" aria-label="Start timer">${icon(live ? 'zap' : 'play')}</button>
         <button class="icon-btn sm" data-act="card.complete" data-id="${esc(c.id)}" title="Mark done" aria-label="Mark done">${icon('check')}</button>` : ''}</div>
     <div class="kcard-t">${esc(c.text)}</div>
@@ -121,14 +121,21 @@ function openCard({ card = null, col = 'today', draft = null }) {
       const text = d.text.trim();
       if (!text) return false;
       const fields = { text, tagId: d.tagId || null, activityId: d.activityId || null, est: Math.max(0, parseInt(d.est) || 0) || null, deadline: d.deadline || null, pri: pri || null, notes: d.notes.trim(), subs: subs.filter(s => s.t.trim()).map(s => ({ ...s, t: s.t.trim() })) };
+      // A task that becomes High (added as High, raised to High, or moved
+      // while High) goes to the top of its column. From there it can be
+      // dragged anywhere; nothing re-sorts it again.
+      const toTop = fields.pri === 'high' && d.col !== 'done';
       if (card) {
+        const wasHigh = card.pri === 'high';
         Object.assign(card, fields); touch(card);
         const f = E.findCard(card.id);
-        if (f && f.col !== d.col) { save(); E.moveCard(card.id, d.col); return; }
+        if (f && f.col !== d.col) { save(); E.moveCard(card.id, d.col, toTop ? 0 : null); return; }
+        if (f && toTop && !wasHigh && f.index > 0) { E.moveCard(card.id, d.col, 0); return; }
       } else {
         const nc = touch({ id: uid(), ...fields });
         if (d.col === 'done') nc.doneAt = today();
-        (st.cards[d.col] || st.cards.today).push(nc);
+        const list = st.cards[d.col] || st.cards.today;
+        if (toTop) list.unshift(nc); else list.push(nc);
       }
       E.invalidate(); save();
     }
@@ -231,7 +238,7 @@ const view = {
         <button class="btn sm ghost" data-act="board.tags">${icon('list')} Tags</button>
         <button class="btn sm ghost" data-act="board.columns">${icon('board')} Columns</button>
         <button class="btn sm primary" data-act="card.new" data-col="today">${icon('plus')} New task <span class="kbd" style="border-color:currentColor;color:inherit;opacity:.7">N</span></button></div>
-      <div class="board ${st.settings.colTint ? 'tinted' : ''}" data-scroll="board">${st.columns.map(columnHtml).join('')}</div>`;
+      <div class="board ${st.settings.colTint ? 'tinted' : ''} ${st.settings.priGlow ? 'breathe' : ''}" data-scroll="board">${st.columns.map(columnHtml).join('')}</div>`;
   },
   mount(root) { const b = root.querySelector('.board'); if (b) wireDrag(b); },
   newCard(col = 'today') { openCard({ col }); }

@@ -111,14 +111,17 @@ a { color: var(--accent-text); }
 .lv-name { font: 700 10.5px/1 var(--font-sans); letter-spacing: .16em; text-transform: uppercase; color: var(--rk); }
 .lv-bar { display: block; height: 3px; border-radius: 2px; background: color-mix(in srgb, var(--text) 14%, transparent); overflow: hidden; }
 .lv-bar i { display: block; height: 100%; border-radius: 2px; background: var(--rk); box-shadow: 0 0 8px var(--rk); transition: width .5s cubic-bezier(.2, .8, .2, 1); }
-.top-meta { display: flex; gap: 22px; align-items: center; }
+.top-meta { display: flex; gap: 22px; align-items: flex-start; }
 .meta-l { font: 600 10px/1 var(--font-sans); letter-spacing: .09em; text-transform: uppercase; color: var(--text-3); margin-bottom: 5px; }
 .meta-v { font: 600 15px/1 var(--font-display); white-space: nowrap; }
 #clock { font-variant-numeric: tabular-nums; min-width: 8ch; }
 .status { display: inline-flex; align-items: center; gap: 7px; }
+/* block-level in the top bar, so its line is exactly as tall as the time and date beside it */
+.meta-v.status { display: flex; height: 1em; line-height: inherit; }
 .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--text-3); }
 .status.live .status-dot { background: var(--good); box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 22%, transparent); }
-.status.run .status-dot { background: var(--accent); box-shadow: 0 0 0 4px var(--accent-soft); }
+/* a running timer: the dot takes the activity's own colour, in any theme */
+.status.run .status-dot { background: var(--run, var(--accent)); box-shadow: 0 0 0 4px color-mix(in srgb, var(--run, var(--accent)) 22%, transparent); }
 .status.rest .status-dot { background: var(--info); }
 .top-actions { display: flex; gap: 6px; }
 

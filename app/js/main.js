@@ -53,7 +53,7 @@ const sideOpen = () => (isDrawer() ? ui.drawer : !!S().settings.sidebarOpen);
 
 function statusInfo() {
   const a = E.runningActivity(), t = today();
-  if (a) return { cls: 'run', text: `${E.label(a)} · ${fmtTimer(Date.now() - a.lastStart)}`, act: 'focus.show', title: 'Your timer is running. Open the focus view.' };
+  if (a) return { cls: 'run', color: safeColor(a.color, ''), text: `${E.label(a)} · ${fmtTimer(Date.now() - a.lastStart)}`, act: 'focus.show', title: 'Your timer is running. Open the focus view.' };
   if (E.isRest(t)) return { cls: 'rest', text: 'Rest day' };
   const w = E.winMinutes(), n = E.nowMinutes();
   if (n < w.start) return { cls: '', text: 'Before hours' };
@@ -80,7 +80,7 @@ function renderTop() {
     <div class="top-meta">
       <div><div class="meta-l">Local time</div><div class="meta-v" id="clock">${clockText()}</div></div>
       <div><div class="meta-l">Date</div><div class="meta-v">${esc(new Date().toLocaleDateString(undefined, { weekday: 'short', day: 'numeric', month: 'short' }))}</div></div>
-      <div><div class="meta-l">Status</div><div class="meta-v status ${s.cls}" id="status" ${s.act ? `data-act="${s.act}" role="button" tabindex="0" title="${esc(s.title)}" style="cursor:pointer"` : ''}><i class="status-dot"></i><span>${esc(s.text)}</span></div></div>
+      <div><div class="meta-l">Status</div><div class="meta-v status ${s.cls}" id="status" style="${s.color ? `--run:${s.color};` : ''}${s.act ? 'cursor:pointer' : ''}" ${s.act ? `data-act="${s.act}" role="button" tabindex="0" title="${esc(s.title)}"` : ''}><i class="status-dot"></i><span>${esc(s.text)}</span></div></div>
     </div>
     <div class="top-actions">
       ${sy.signedIn ? `<button class="icon-btn ${sy.state === 'error' ? 'tone-bad' : ''}" data-act="nav.go" data-tab="settings" data-sub="sync" title="${esc(syncTitle)}" aria-label="${esc(syncTitle)}">${icon(sy.state === 'error' || sy.state === 'offline' ? 'cloudOff' : 'cloud')}</button>` : ''}
@@ -103,6 +103,10 @@ function renderStrip() {
  *  On every other redraw, anything that changed place glides there. */
 function renderView(entering = false) {
   const root = $('view'), view = VIEWS[ui.tab] || VIEWS.home;
+  // The tab makes its entrance again when what was drawn is replaced while it
+  // was still coming in, or when it was only a loading placeholder: otherwise
+  // the real content would snap into place with no motion at all.
+  if (!entering && (fx.entering() || root.querySelector('[data-loading]'))) entering = true;
   // keep inner scroll positions, the focused field and unsaved typing across a re-render
   const scrolls = {}, typed = {};
   root.querySelectorAll('[data-scroll]').forEach(el => { scrolls[el.dataset.scroll] = [el.scrollLeft, el.scrollTop]; });
@@ -154,8 +158,8 @@ function route() {
   ui.tab = tab;
   if (isDrawer()) ui.drawer = false;
   deferred = false;
+  if (changed) window.scrollTo(0, 0);            // before drawing, so the entrance measures the new page from the top
   renderAll(changed);
-  if (changed) window.scrollTo(0, 0);
 }
 let firstRoute = true;
 
@@ -163,7 +167,7 @@ let firstRoute = true;
 function tick() {
   const c = $('clock'); if (c) c.textContent = clockText();
   const s = $('status');
-  if (s) { const i = statusInfo(); if (i.cls !== lastStatusCls) renderTop(); else s.lastElementChild.textContent = i.text; }
+  if (s) { const i = statusInfo(); if (i.cls !== lastStatusCls) renderTop(); else { s.lastElementChild.textContent = i.text; if (i.color) s.style.setProperty('--run', i.color); } }
   const v = VIEWS[ui.tab];
   if (v && v.tick && !document.hidden) v.tick($('view'));
 }

@@ -44,6 +44,7 @@ const P = {
   download: '<path d="M12 4v11M7 11l5 5 5-5M4 20h16"/>',
   upload: '<path d="M12 16V5M7 9l5-5 5 5M4 20h16"/>',
   refresh: '<path d="M20 11a8 8 0 0 0-14.5-4L4 9M4 4v5h5M4 13a8 8 0 0 0 14.5 4L20 15M20 20v-5h-5"/>',
+  crosshair: '<circle cx="12" cy="12" r="7.5"/><circle cx="12" cy="12" r="1.6"/><path d="M12 2.5v4M12 17.5v4M2.5 12h4M17.5 12h4"/>',
   flag: '<path d="M5 21V4M5 4h11l-2 4 2 4H5"/>',
   note: '<path d="M6 3h9l4 4v14H6z"/><path d="M14 3v5h5M9 13h7M9 17h5"/>',
   gauge: '<path d="M4 17a8.5 8.5 0 1 1 16 0"/><path d="m12 14 4-5"/>',

@@ -47,6 +47,10 @@ i.v.W { background: var(--good); } i.v.L { background: var(--bad); } i.v.R { bac
 .home-row .week { flex: 1; align-items: stretch; }
 .home-row .week-bar { flex: 1; height: auto; min-height: 86px; }
 .home-duel { display: flex; flex-direction: column; }
+/* the header keeps its title on one line: on a narrow card, Campaign and Rest day show only their icons */
+.home-duel { container-type: inline-size; }
+.home-duel > .card-h .eyebrow { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+@container (max-width: 380px) { .home-duel > .card-h .btn .lbl { display: none; } .home-duel > .card-h .btn { padding: 0 8px; } }
 .home-duel #home-duel { flex: 1; display: flex; flex-direction: column; justify-content: space-between; }
 .home-duel .mini-stats { margin-top: 14px; }
 .dgs { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 10px; }
@@ -184,7 +188,22 @@ button.hud-cell:hover { border-color: var(--line-2); }
 .pri-low { --p: #3FD98A; } .pri-med { --p: #F2C94C; } .pri-high { --p: #FF5A52; }
 .pri svg { width: 12px; height: 12px; fill: color-mix(in srgb, var(--p) 30%, transparent); stroke-width: 2.2; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--p) 45%, transparent)); }
 .kcard-top .tag + .pri { margin-left: 8px; }
-.kcard.p-high:not(.tagged) { border-color: color-mix(in srgb, #FF5A52 35%, var(--line)); }
+.kcard-top .tag { min-width: 0; } .kcard-top .tag i, .kcard-top .pri { flex: none; }
+/* High: a semi-bold title. Low: a lighter title. Medium stays as every other task. */
+.kcard.p-high .kcard-t { font-weight: 600; color: var(--text); }
+/* High tasks breathe (Settings > Layout): a soft glow in the tag's colour that
+   swells and settles every few seconds. Off with motion off. */
+.board.breathe .kcard.p-high { animation: pri-breathe 3.6s ease-in-out infinite; }
+.board.breathe .kcard.p-high:not(.tagged) { --c: #FF5A52; }
+@keyframes pri-breathe {
+  0%, 100% { box-shadow: inset 0 0 20px -14px var(--c), 0 0 0 0 transparent; border-color: color-mix(in srgb, var(--c) 42%, transparent); }
+  50% { box-shadow: inset 0 0 22px -10px var(--c), 0 0 16px -3px color-mix(in srgb, var(--c) 55%, transparent); border-color: color-mix(in srgb, var(--c) 80%, transparent); }
+}
+:root[data-motion="off"] .board.breathe .kcard.p-high { animation: none; }
+.board.breathe .kcard.p-high.dragging { animation: none; }
+.kcard.p-low .kcard-t { font-weight: 400; color: color-mix(in srgb, var(--text) 68%, transparent); }
+/* on Home's top tasks the flag sits right after the name, and nothing else changes */
+.task-t .pri { margin-left: 6px; vertical-align: -1px; }
 .pri-seg button { display: inline-flex; align-items: center; gap: 7px; }
 .sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .kcard.dragging { opacity: .3; }
@@ -207,10 +226,10 @@ button.hud-cell:hover { border-color: var(--line-2); }
 
 /* ── track ── */
 .track { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: var(--gap); align-items: start; }
-/* The running timer. Solid, so it reads the same over any backdrop: the
-   activity's colour is a faint edge glow, a live dot and the label, never a wash. */
-.run-bar { position: relative; display: flex; align-items: center; gap: 16px; padding: 14px 18px; margin-bottom: var(--gap); border-radius: var(--r-card); border: 1px solid color-mix(in srgb, var(--c) 34%, var(--line)); background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, var(--card)), var(--card) 60%); box-shadow: var(--shadow), 0 10px 30px -22px var(--c); overflow: hidden; isolation: isolate; }
-:root[data-bg="on"] .run-bar { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, var(--card)), var(--card) 60%); }
+/* The running timer. Opaque, so it reads the same over any backdrop, and
+   filled with a tint of the activity's colour, strongest at the left. */
+.run-bar { position: relative; display: flex; align-items: center; gap: 16px; padding: 14px 18px; margin-bottom: var(--gap); border-radius: var(--r-card); border: 1px solid color-mix(in srgb, var(--c) 32%, var(--line)); background: linear-gradient(105deg, color-mix(in srgb, var(--c) 15%, var(--card)), color-mix(in srgb, var(--c) 8%, var(--card)) 55%, color-mix(in srgb, var(--c) 5%, var(--card))); box-shadow: var(--shadow), inset 0 1px 0 color-mix(in srgb, var(--c) 18%, transparent); overflow: hidden; isolation: isolate; }
+:root[data-bg="on"] .run-bar { background: linear-gradient(105deg, color-mix(in srgb, var(--c) 15%, var(--card)), color-mix(in srgb, var(--c) 8%, var(--card)) 55%, color-mix(in srgb, var(--c) 5%, var(--card))); }
 .run-pulse { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 60%, transparent); animation: run-pulse 1.8s ease-out infinite; }
 @keyframes run-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px transparent; } }
 :root[data-motion="off"] .run-pulse { animation: none; }

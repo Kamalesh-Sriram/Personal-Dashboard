@@ -227,7 +227,7 @@ export default {
   },
   render() {
     const ready = ensure(), d = Fin.cached(), s = Fin.status;
-    if (!ready || !d) return `<div class="view-h"><h2>Finance</h2></div><div class="card empty">Loading your transactions.</div>`;
+    if (!ready || !d) return `<div class="view-h"><h2>Finance</h2></div><div class="card empty" data-loading>Loading your transactions.</div>`;
     if (!d.txs.length) return `<div class="view-h"><h2>Finance</h2></div>${setupHtml()}`;
     const cur = mainCurrency(d.txs), all = d.txs.filter(t => t.cur === cur), other = d.txs.length - all.length;
     const year = ui.finView === 'year', ym = month(), y = +ym.slice(0, 4), cats = Fin.cats();

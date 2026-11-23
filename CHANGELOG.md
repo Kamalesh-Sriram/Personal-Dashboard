@@ -2,6 +2,26 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## 5.5.0
+
+### Fixed
+
+- **Tab animations sometimes skipped.** Opening a tab within a second of another cut its entrance short, and a redraw during the entrance (a sync, a save, Finance or Gym finishing loading) made the content snap into place. Every tab now makes its full entrance each time it is opened.
+- **Priority flags broke the task card layout.** A card now shows only the coloured flag, and a long tag name stays on one line. The Low, Medium and High names are in the task editor.
+- **The top bar's Status was out of line** with Local time and Date.
+
+### Changed
+
+- **High tasks stand out on the Tasks tab.** A bold title (and a lighter one for Low), and a soft glow in the tag's colour that breathes; turn the glow off under Settings > Layout. A task goes to the top of its column when it is added as High, raised to High, or moved while High, and can be dragged anywhere after that.
+- **Home's top tasks** show priority only as the flag, right after the task's name.
+- **The running bar on Track** is filled with a soft tint of the activity's colour instead of near black, and stays opaque.
+- **The Status dot** takes the running activity's own colour, in every theme.
+- **Campaigns have their own icon**, a crosshair, so they no longer share the priority flag.
+
+### Added
+
+- **Start or end a campaign from Home**, with the Campaign button on the You vs The Shadow card.
+
 ## 5.4.0
 
 ### Fixed

@@ -40,7 +40,7 @@ function lookHtml() {
       ${row('Dashboard name', 'Shown at the top of every page and as the browser tab title.', text('profile.name', st.profile.name, 'maxlength="40"'))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Theme</span></div>
-      ${camp ? `<div class="notice">${icon('flag')} A campaign is running, so the red campaign theme is in force. Your own theme below returns the moment the campaign ends.</div>` : ''}
+      ${camp ? `<div class="notice">${icon('crosshair')} A campaign is running, so the red campaign theme is in force. Your own theme below returns the moment the campaign ends.</div>` : ''}
       ${row('Mode', 'System follows your device and switches by itself at night.', seg('settings.theme', [['system', 'System'], ['light', 'Light'], ['dark', 'Dark']], s.theme))}
       ${row('Accent colour', 'Used for buttons, progress and highlights. Text on it switches between black and white automatically.',
         `<div class="swatches">${ACCENTS.map(([n, c]) => `<button class="swatch ${s.accent.toLowerCase() === c.toLowerCase() ? 'on' : ''}" style="background:${c}" data-act="set.accent" data-c="${c}" title="${n}" aria-label="${n}"></button>`).join('')}
@@ -79,6 +79,7 @@ function layoutHtml() {
       ${row('Style', 'Rail keeps a slim strip of icons at the left that expands to show names. Hidden removes it entirely until you press the menu button. Phones always use the hidden style.', seg('settings.sidebar', [['rail', 'Icon rail'], ['hidden', 'Hidden']], s.sidebar))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Tasks</span></div>
+      ${row('High tasks breathe', 'A soft glow in the task\'s tag colour that swells and settles, so High tasks catch your eye. Follows the motion setting.', toggle('settings.priGlow', s.priGlow))}
       ${row('Colour each column', 'Washes every column on the Tasks tab in its own colour, so Today, Next and the rest are told apart at a glance. Change the colours under Columns on that tab.', toggle('settings.colTint', s.colTint))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Tabs</span><span class="tiny dim">order sets the 1-9 shortcuts</span></div>
@@ -169,11 +170,11 @@ function gameHtml() {
       ${c.on
         ? `${row('Started', 'Changing this restarts the scoreboard from the new date.', `<input class="input" type="date" value="${c.start}" max="${today()}" data-change="set.campStart" aria-label="Campaign start">`)}
            ${row('Length (days)', '', num('game.campaign.len', c.len, 1, 730))}
-           <div class="row" style="margin-top:14px"><button class="btn danger" data-act="campaign.conclude">${icon('flag')} Conclude campaign</button></div>`
+           <div class="row" style="margin-top:14px"><button class="btn danger" data-act="campaign.conclude">${icon('crosshair')} Conclude campaign</button></div>`
         : `<form class="row wrap" data-campaign style="margin-top:8px;align-items:flex-end">
              <div class="field"><label>Start</label><input class="input" type="date" name="start" value="${today()}" max="${today()}" required></div>
              <div class="field"><label>Length (days)</label><input class="input" type="number" name="len" value="${c.len}" min="1" max="730" style="width:110px" required></div>
-             <button class="btn primary" type="submit">${icon('flag')} Start campaign</button></form>`}
+             <button class="btn primary" type="submit">${icon('crosshair')} Start campaign</button></form>`}
     </section>`;
 }
 function notifyHtml() {

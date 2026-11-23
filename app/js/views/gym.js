@@ -235,7 +235,7 @@ function openFocus() {
 export default {
   render() {
     const ready = ensure(), d = Gym.cached(), s = Gym.status;
-    if (!ready || !d) return `<div class="view-h"><h2>Gym</h2></div><div class="card empty">Loading your training history.</div>`;
+    if (!ready || !d) return `<div class="view-h"><h2>Gym</h2></div><div class="card empty" data-loading>Loading your training history.</div>`;
     if (!d.workouts.length) return `<div class="view-h"><h2>Gym</h2></div>${setupHtml()}`;
     const exs = G.exercises(d.workouts), sum = G.summary(d.workouts), hevy = d.source === 'hevy', og = d.source === 'opengym' && d.syncedAt && d.ogRev != null;
     return `<div class="view-h"><h2>Gym</h2>

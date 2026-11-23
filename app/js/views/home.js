@@ -2,7 +2,7 @@
    next task to lock in on, habits, and the logbook. */
 import { S, save, touch } from '../store.js';
 import * as E from '../engine.js';
-import { registerActions, toast, openModal } from '../ui.js';
+import { registerActions, runAction, toast, openModal } from '../ui.js';
 import { icon } from '../icons.js';
 import { esc, today, addDays, fmtDur, fmtMins, fmtDate, fmtTimer, clamp, uid, safeColor, daysBetween } from '../util.js';
 import { ui, refresh } from '../bus.js';
@@ -98,8 +98,8 @@ function lockHtml() {
     const live = running && running.runCardId === c.id;
     return `<div class="task ${tag ? 'tagged' : ''} ${isSel ? 'sel' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-act="home.select" data-nofx data-id="${esc(c.id)}" data-flip="c-${esc(c.id)}" role="button" tabindex="0" aria-pressed="${isSel}">
       <button class="check" data-act="card.complete" data-id="${esc(c.id)}" title="Mark as done" aria-label="Mark as done">${icon('check')}</button>
-      <div class="grow"><div class="task-t">${esc(c.text)}</div>
-        <div class="task-m">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}${priHtml(c.pri, true)}
+      <div class="grow"><div class="task-t">${esc(c.text)}${c.pri ? ` ${priHtml(c.pri)}` : ''}</div>
+        <div class="task-m">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}
           ${c.est ? `<span>${fmtMins(c.est)}</span>` : ''}
           ${c.deadline ? `<span class="${c.deadline < today() ? 'tone-bad' : ''}">due ${fmtDate(c.deadline, { day: 'numeric', month: 'short' })}</span>` : ''}</div></div>
       <button class="icon-btn sm" data-act="lock.in" data-card="${esc(c.id)}" title="Start this task" aria-label="Start this task">${icon('play')}</button>
@@ -194,7 +194,8 @@ export default {
       <section class="card home-goals" aria-label="Main goals">${goalsHtml()}</section>
       <section class="card home-duel" aria-label="Today's score">
         <div class="card-h"><span class="eyebrow">${st.settings.modules.shadow ? `You vs ${esc(L().shadow)}` : 'Today'}</span>
-          <button class="btn sm ${rest ? 'primary' : 'ghost'}" data-act="rest.toggle" title="A rest day is not scored. You have ${b.left} of ${b.allowed} left this week.">${icon('moon')} ${rest ? 'Rest day on' : 'Rest day'}</button>
+          <button class="btn sm ghost" data-act="home.campaign" aria-label="${st.game.campaign.on ? 'End campaign' : 'Start a campaign'}" title="${st.game.campaign.on ? `End ${esc(st.game.campaign.name)}` : 'Start a campaign'}">${icon('crosshair')}<span class="lbl">${st.game.campaign.on ? 'End campaign' : 'Campaign'}</span></button>
+          <button class="btn sm ${rest ? 'primary' : 'ghost'}" data-act="rest.toggle" aria-label="${rest ? 'Rest day on' : 'Rest day'}" title="A rest day is not scored. You have ${b.left} of ${b.allowed} left this week.">${icon('moon')}<span class="lbl">${rest ? 'Rest day on' : 'Rest day'}</span></button>
           ${st.settings.modules.shadow ? `<button class="icon-btn sm" data-act="home.shadowInfo" title="Today's numbers" aria-label="Today's numbers">${icon('help')}</button>` : ''}</div>
         <div id="home-duel">${duelHtml()}</div>
         ${st.settings.modules.shadow ? monthHtml(t.slice(0, 7), { link: true, line: false }) : ''}
@@ -242,6 +243,22 @@ export default {
 };
 
 registerActions({
+  // start a campaign from Home, or end the one running (the same steps as Settings > Game)
+  'home.campaign': () => {
+    const c = S().game.campaign;
+    if (c.on) { runAction('campaign.conclude'); return; }
+    openModal({
+      title: 'Start a campaign', submit: 'Start campaign',
+      body: `<div class="field"><label>Name</label><input class="input" name="name" value="${esc(c.name || 'War Mode')}" maxlength="30" required autofocus></div>
+        <div class="form-row"><div class="field"><label>Start</label><input class="input" type="date" name="start" value="${today()}" max="${today()}" required></div>
+          <div class="field"><label>Length (days)</label><input class="input" type="number" name="len" value="${c.len || 60}" min="1" max="730" required></div></div>`,
+      onSubmit: d => {
+        const name = d.name.trim(); if (!name) return false;
+        E.startCampaign({ name, start: d.start && d.start <= today() ? d.start : today(), len: Math.max(1, Math.min(730, parseInt(d.len) || 60)) });
+        toast(`${name} has begun`, 'The red theme is on until it ends.', { ms: 6000 });
+      }
+    });
+  },
   'home.select': (d, e) => { if (e && e.target.closest('button')) return; ui.selCard = d.id; ui.selPulse = d.id; fx.sound('lift'); refresh(); },
   'home.goal': (d, e, el) => E.setDayGoal(today(), +d.i, { t: el.value.trim() }),
   // Open one more line and put the cursor in it. If a line is already empty, use that one.

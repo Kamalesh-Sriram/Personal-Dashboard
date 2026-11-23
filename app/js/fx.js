@@ -162,9 +162,16 @@ export function glide(root, before, { hold = 0, fresh = true } = {}) {
 
 /* ── a tab opening: its panels rise into place one after another ── */
 const BLOCKS = '.card, .hud-cell, .kcol, .hab, .run-bar, .view-h, .set-tabs, .month-card';
+let enterTimer = 0, enterUntil = 0;
+/** True while the tab on screen is still making its entrance. */
+export const entering = () => performance.now() < enterUntil;
 export function enter(root) {
   const level = motion();
-  if (level === 'off') return;
+  // One entrance at a time: the timer of a tab opened a moment ago must not
+  // end this one early (it did, when tabs were switched quickly).
+  clearTimeout(enterTimer);
+  if (level === 'off') { enterUntil = 0; root.classList.remove('entering'); return; }
+  enterUntil = performance.now() + ENTER_MS;
   let i = 0;
   root.querySelectorAll(BLOCKS).forEach(el => {
     if (el.parentElement.closest(BLOCKS) && !el.matches('.view-h')) return;       // only the outermost panels
@@ -172,9 +179,12 @@ export function enter(root) {
     el.style.setProperty('--i', Math.min(i++, 12));
     el.classList.add(level === 'full' ? 'rise' : 'fade');
   });
+  root.classList.remove('entering');
+  void root.offsetWidth;                          // restart the CSS animations, even when the class was already there
   root.classList.add('entering');
   countUp(root);
-  setTimeout(() => {
+  enterTimer = setTimeout(() => {
+    enterUntil = 0;
     root.classList.remove('entering');
     root.querySelectorAll('.rise, .fade').forEach(el => { el.classList.remove('rise', 'fade'); el.style.removeProperty('--i'); });
   }, ENTER_MS);

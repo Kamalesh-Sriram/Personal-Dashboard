@@ -152,6 +152,17 @@ export function weeks(workouts, n = 12, now = Date.now()) {
   workouts.forEach(w => { const i = idx.get(weekStart(w.start)); if (i != null) { out[i].count++; out[i].vol += volumeOf(w); } });
   return out;
 }
+/** Weeks that met the weekly goal, out of every week since the first
+ *  workout. The week under way counts once it has met the goal. */
+export function weeksWon(workouts, goal, now = Date.now()) {
+  if (!workouts.length) return { won: 0, of: 0 };
+  const by = new Map();
+  workouts.forEach(w => { const k = weekStart(w.start); by.set(k, (by.get(k) || 0) + 1); });
+  const first = Math.min(...by.keys()), cur = weekStart(now);
+  const of = Math.max(1, Math.round((cur - first) / (7 * DAY)) + 1);
+  const won = [...by.entries()].filter(([k, n]) => k <= cur && n >= Math.max(1, goal)).length;
+  return { won, of };
+}
 export function summary(workouts, now = Date.now()) {
   const within = (a, b) => workouts.filter(w => w.start >= a && w.start < b);
   const last30 = within(now - 30 * DAY, now + DAY), prev30 = within(now - 60 * DAY, now - 30 * DAY);
@@ -230,8 +241,9 @@ export function guessSplit(workouts) {
 }
 /** Where you are in the split: line the cycle up with your latest workouts
  *  (the longest run that matches, counting back from the last one) and take
- *  the slot after it. Then build that session from the last time you did it. */
-export function nextWorkout(workouts, split) {
+ *  the slot after it. Then build that session from the last time you did it.
+ *  `pick` (a slot) builds that one instead; `due` is still the slot that is up next. */
+export function nextWorkout(workouts, split, pick = null) {
   const hist = [...workouts].sort((a, b) => a.start - b.start), n = (split || []).length;
   if (!n || !hist.length) return null;
   let best = -1, bestRun = -1;
@@ -242,11 +254,13 @@ export function nextWorkout(workouts, split) {
     }
     if (run > bestRun) { bestRun = run; best = k; }
   }
-  const slot = bestRun > 0 ? (best + 1) % n : 0, title = split[slot];
+  const due = bestRun > 0 ? (best + 1) % n : 0;
+  const chosen = pick != null && pick >= 0 && pick < n && pick !== due;
+  const slot = chosen ? pick : due, title = split[slot];
   // the same slot one cycle ago, if that workout carries this title; otherwise the latest with the title
   const same = hist.filter(w => norm(w.title) === norm(title));
   const cycleAgo = hist[hist.length - n];
-  const template = cycleAgo && norm(cycleAgo.title) === norm(title) ? cycleAgo : same[same.length - 1] || null;
+  const template = !chosen && cycleAgo && norm(cycleAgo.title) === norm(title) ? cycleAgo : same[same.length - 1] || null;
   const all = new Map(exercises(hist).map(e => [e.key, e]));
   const items = !template ? [] : template.ex.map(x => {
     const sets = x.sets.filter(s => s.t !== 'warmup' && ((s.reps || 0) > 0 || (s.sec || 0) > 0));
@@ -257,5 +271,5 @@ export function nextWorkout(workouts, split) {
       kg: s ? s.kg : lastTop.kg || 0, reps: s ? s.reps : lastTop.reps || 0, sec: s && s.kind === 'time' ? Math.round((lastTop.sec || 0) * 1.05) : 0,
       last: lastTop, text: s ? s.text : 'Same as last time.' };
   }).filter(Boolean);
-  return { title, slot, of: n, known: bestRun > 0, template, lastDone: same.length ? same[same.length - 1].start : 0, items };
+  return { title, slot, due, of: n, known: bestRun > 0, template, lastDone: same.length ? same[same.length - 1].start : 0, items };
 }

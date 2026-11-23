@@ -22,7 +22,14 @@ export const COMBO = { gapMs: 10 * 60000, minMs: 5 * 60000, step: 0.2, cap: 3 };
 export const MIN_SESSION_MS = 15 * 1000;       // shorter is a mis-tap
 export const MAX_RUN_MS = 12 * 3600000;        // a forgotten timer is capped, not trusted
 export const FOCUS_GATE_MS = 25 * 60000;       // focus needed before a break goes unchallenged
-export const LOCK_MIN_MS = 90 * 1000;          // lock-in minimum before exit unlocks
+export const LOCK_MIN_MS = 90 * 1000;          // lock-in minimum before exit unlocks (the default; see lockMs)
+/** How long a Lock in holds before Stop unlocks. Settings > Day & scoring. */
+export const lockMs = () => clamp(Number(S().settings.lockSecs ?? 90), 0, 3600) * 1000;
+/** From this day on, a deep block pays in proportion to how focused it was
+ *  (see blockRate). Earlier blocks keep paying as they always did, so the
+ *  rule does not rewrite levels already earned. */
+export const RATED_FROM = '2026-11-23';
+export const UNRATED_RATE = 0.6;                // a deep block not rated yet pays as a 3/5
 
 export const HABIT_DIFF = {
   trivial: { label: 'Trivial', gain: 50, loss: 15, days: 21 },
@@ -144,6 +151,17 @@ export function runningTaskName(a = runningActivity()) {
   if (f) return f.card.text;
   const g = findGoalTask(a.runTaskId);
   return g ? g.t.name : '';
+}
+
+/** What share of its full XP a block pays. Only a 5/5 deep block pays in
+ *  full; a 4/5 pays 80%, and so on down. A deep block of five minutes or more
+ *  that has not been rated yet (a running one included) pays as a 3/5, so
+ *  rating it is always worth doing. Everything else, and anything before
+ *  RATED_FROM, pays in full. */
+export function blockRate(a, s) {
+  if (!isDeep(a) || s.date < RATED_FROM) return 1;
+  if (s.eff != null) return clamp(s.eff, 0, 1);
+  return s.dur >= COMBO.minMs || s.live ? UNRATED_RATE : 1;
 }
 
 /** Duration-weighted mean of the sessions that were rated (0..1), or null. */
@@ -430,7 +448,8 @@ export function toggleHabit(id, date = today()) {
   if (!h) return 0;
   const before = habitStats(h).xp;
   if (h.history[date] === 'done') {
-    if (date === today()) delete h.history[date];
+    // a habit done on a day it was not due was a bonus: undoing it leaves no miss
+    if (date === today() || !isHabitDueOn(h, date)) delete h.history[date];
     else h.history[date] = isRest(date) ? 'rest' : 'missed';
   } else h.history[date] = 'done';
   touch(h); invalidate(); save();
@@ -530,7 +549,7 @@ export function dayScore(date) {
     const x = S().settings.xp;
     const walk = comboWalk(date);
     let focus = 0;
-    walk.list.forEach(it => { focus += (it.s.dur / 3600000) * TIERS[tierOf(it.a)].mult * it.mult * x.perHour; });
+    walk.list.forEach(it => { focus += (it.s.dur / 3600000) * TIERS[tierOf(it.a)].mult * it.mult * blockRate(it.a, it.s) * x.perHour; });
     const habits = habitsDoneOn(date) * x.habit;
     const tasks = tasksDoneOn(date) * x.task;
     const eff = (efficiencyOn(date) || 0) * x.efficiency;
@@ -1015,7 +1034,7 @@ export function levelDay(date, mult = 1) {
     }
   }
   st.habits.forEach(h => { if (h.lvXp > 0 && h.history[date] === 'done') p.linked += Math.round(h.lvXp); });
-  const deepMs = sessionsOn(date).reduce((n, { a, s }) => n + (isDeep(a) ? s.dur : 0), 0);
+  const deepMs = sessionsOn(date).reduce((n, { a, s }) => n + (isDeep(a) ? s.dur * blockRate(a, s) : 0), 0);
   p.deep = Math.round(Math.min(c.deepCap, deepMs / 3600000) * c.deepHour);
   st.goals.forEach(g => {
     const ms = g.milestones || [], cleared = ms.filter(m => msDoneOn(m, date)).length;

@@ -11,7 +11,7 @@ import * as E from './engine.js';
 import { applyTheme, loadBgImage } from './theme.js';
 import { initDelegation, registerActions, toast, modalOpen, openModal } from './ui.js';
 import { icon } from './icons.js';
-import { esc, today, fmtTimer, fmtDate, pad, safeColor } from './util.js';
+import { esc, today, addDays, fmtTimer, fmtDate, pad, safeColor } from './util.js';
 import { ui, setRefresh, go } from './bus.js';
 import { VIEWS, TAB_META } from './views/index.js';
 import { focusOpen, stopAndRate } from './flows.js';
@@ -169,9 +169,13 @@ function tick() {
 }
 function announceSettlement(r) {
   if (!r.settled.length) return;
-  const st = S(), L = st.settings.labels;
-  if (r.settled.length <= 3) {
-    const d = r.settled[r.settled.length - 1];
+  const st = S(), L = st.settings.labels, n = st.game.notif, y = addDays(today(), -1);
+  // Said once, for yesterday, the first time the dashboard is opened on a
+  // new day. A day settled again later (after a sync brought in more of its
+  // facts, say) is re-scored quietly.
+  const d = r.settled[r.settled.length - 1];
+  if (d.date === y && (n.ann || '') < y) {
+    n.ann = y; saveQuiet();
     const body = d.v === 'R' ? 'Nothing was scored.'
       : `You scored ${d.x} XP and ${L.shadow} scored ${d.s}.` + (d.ex != null ? ` You finished ${d.ex}% of your mission.` : '');
     toast(`${fmtDate(d.date)}: ${d.v === 'R' ? 'rest day' : d.v === 'W' ? 'you won' : 'you lost'}`, body, { kind: d.v === 'W' ? 'good' : '', ms: 12000, sound: d.v === 'W' ? 'win' : '' });

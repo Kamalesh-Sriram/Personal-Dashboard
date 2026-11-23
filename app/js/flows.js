@@ -16,7 +16,7 @@ export const L = () => S().settings.labels;
 const shadowName = () => L().shadow;
 
 /* ── the month's record: one cell per day, and what it takes to win it ── */
-export function monthHtml(month, { link = false } = {}) {
+export function monthHtml(month, { link = false, line: showLine = true } = {}) {
   const b = E.monthBoard(month), cur = month === today().slice(0, 7), n = esc(shadowName());
   const name = new Date(+month.slice(0, 4), +month.slice(5) - 1, 1).toLocaleDateString(undefined, { month: 'long' });
   const title = { W: 'won', L: 'lost', R: 'rest day', T: 'today' };
@@ -29,7 +29,7 @@ export function monthHtml(month, { link = false } = {}) {
   else line = `${b.need}/${b.open} days needed to win.`;
   const inner = `<div class="month-h"><span class="eyebrow">${esc(name)}</span><span class="month-rec"><b class="tone-good">${b.w}</b> won<span class="dim"> · </span><b class="tone-bad">${b.l}</b> lost${b.r ? `<span class="dim"> · ${b.r} rest</span>` : ''}</span></div>
     <div class="month-days" style="--n:${b.days.length}">${cells}</div>
-    <div class="month-s">${line}</div>`;
+    ${showLine ? `<div class="month-s">${line}</div>` : ''}`;
   return link ? `<button class="month" data-act="nav.go" data-tab="calendar" title="Open the calendar">${inner}</button>` : `<div class="month">${inner}</div>`;
 }
 
@@ -94,7 +94,8 @@ function tickFocus() {
   if (!t) return;
   t.textContent = fmtTimer(Date.now() - a.lastStart);
   const hint = document.getElementById('focus-hint'), stop = document.getElementById('focus-stop'), hide = document.getElementById('focus-hide');
-  if (el < E.LOCK_MIN_MS) hint.textContent = `You can stop in ${Math.ceil((E.LOCK_MIN_MS - el) / 1000)}s`;
+  const lock = E.lockMs(), left = Math.ceil((lock - el) / 1000);
+  if (el < lock) hint.textContent = `You can stop in ${left >= 60 ? `${Math.floor(left / 60)}:${String(left % 60).padStart(2, '0')}` : left + 's'}`;
   else { if (stop.disabled) { stop.disabled = false; hide.disabled = false; } hint.textContent = 'You can stop whenever you like now.'; }
 }
 function openFocus() {
@@ -340,7 +341,7 @@ registerActions({
   'focus.done': () => { const id = focusCardId, task = focusTaskId; closeFocus(); stopAndRate(); if (id) completeCard(id); else if (task) completeGoalTask(task); fx.sound('done'); toast('Task done', 'Start another block soon to keep your combo.', { kind: 'good', ms: 4500 }); },
   'focus.stop': () => { bailCheck(); closeFocus(); stopAndRate(); },
   'focus.hide': () => closeFocus(),
-  'focus.show': () => { const a = E.runningActivity(); if (a) { focusCardId = a.runCardId || null; focusTaskId = a.runTaskId || null; openFocus(); focusStart = Date.now() - E.LOCK_MIN_MS; tickFocus(); } },
+  'focus.show': () => { const a = E.runningActivity(); if (a) { focusCardId = a.runCardId || null; focusTaskId = a.runTaskId || null; openFocus(); focusStart = Date.now() - E.lockMs(); tickFocus(); } },
   'focus.sub': d => {
     const f = focusCardId && E.findCard(focusCardId);
     const s = f && (f.card.subs || []).find(x => x.id === d.id);

@@ -9,15 +9,18 @@ export const ui = {
   sessView: 'list',       // Track: list | timeline
   trackDate: null,        // Track: day being viewed
   habOpen: new Set(),     // Habits: expanded maps
+  habNotes: new Set(),    // Habits: notes open
   habEdit: false,
   calMonth: null,         // Calendar: 'YYYY-MM'
   goalOpen: new Set(),
+  goalNotesShut: new Set(), // Goals: notes and links folded away
   journalDate: null,
   journalQuery: '',
   settingsTab: 'look',
   shopQuery: '', shopKind: '', shopAll: false,   // Shopping: search, the list new items go to
   gymQuery: '', gymAll: false,          // Gym: exercise search, show the full list
-  finMonth: null, finView: 'month', finQuery: '', finCat: '', finDraw: true, finScroll: false,   // Finance
+  finMonth: null, finView: 'month', finQuery: '', finCats: [], finSel: new Set(), finDay: null, finDraw: true, finScroll: false,   // Finance
+  ringSel: null,          // Track: the block picked on the 24-hour ring
   gymExOpen: false, selPulse: null
 };
 

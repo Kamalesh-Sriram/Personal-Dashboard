@@ -430,3 +430,48 @@ test('clearing a milestone stamps the day, and unticking takes the stamp away', 
   m.tasks[1].done = false; E.stampMilestone(m);
   assert.equal(m.doneAt, undefined);
 });
+
+/* ── 5.4 ── */
+test('merge: copies of a day that agree on the result are kept, whatever else differs', () => {
+  const [local, remote] = pair();
+  local.game.days[Y] = { x: 207, h: 3.1, v: 'W', s: 152, ex: 50 };
+  remote.game.days[Y] = { v: 'W', x: 207, s: 152, ex: 50, nd: 0, h: 3.1 };   // another field order, an extra field
+  const m = mergeStates(local, remote, 'dev');
+  assert.ok(m.game.days[Y]);
+  assert.equal(m.game.days[Y].v, 'W');
+});
+
+test('merge: the last announced day only moves forward', () => {
+  const [local, remote] = pair();
+  local.game.notif.ann = addDays(T, -1);
+  remote.game.notif.ann = addDays(T, -7);
+  remote._rev = 99;                                                        // the older stamp is on the newer copy
+  assert.equal(mergeStates(local, remote, 'dev').game.notif.ann, addDays(T, -1));
+});
+
+test('a deep block pays by its focus rating; an unrated one as a 3/5', () => {
+  const a = activity('deep');
+  const s = session(T, 9, 0, 10, 0);
+  fresh(st => { st.activities.push(a); a.sessions.push(s); });
+  const full = S().settings.xp.perHour;
+  assert.equal(E.dayScore(T).focus, Math.round(full * E.UNRATED_RATE));
+  s.eff = 1; E.invalidate();
+  assert.equal(E.dayScore(T).focus, full);
+  s.eff = 0.4; E.invalidate();
+  assert.equal(E.dayScore(T).focus, Math.round(full * 0.4));
+});
+
+test('focus rating does not change blocks from before the rule began', () => {
+  const a = activity('deep'), d = addDays(E.RATED_FROM, -1);
+  fresh(st => { st.activities.push(a); a.sessions.push(session(d, 9, 0, 10, 0, { eff: 0.2 })); });
+  assert.equal(E.blockRate(a, a.sessions[0]), 1);
+});
+
+test('a habit can be done on a day it is not due, and undone without a miss', () => {
+  const h = { ...habit('h', addDays(T, -10)), schedule: { type: 'weekdays', days: [] } };
+  fresh(st => st.habits.push(h));
+  assert.ok(E.toggleHabit('h') > 0);
+  assert.equal(h.history[T], 'done');
+  E.toggleHabit('h', T);
+  assert.equal(h.history[T], undefined);
+});

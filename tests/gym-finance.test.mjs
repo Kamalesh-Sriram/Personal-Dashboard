@@ -164,4 +164,9 @@ test('the coach finds your place in the split and builds the next session from t
   assert.equal(after.title, 'Lower'); assert.equal(after.slot, 3);
   assert.deepEqual(after.items.map(i => i.name), ['Deadlift']);
   assert.equal(G.nextWorkout([], split), null);
+  // you can pick another session: it is built from the last time you did it, and the due one is still known
+  const arms = G.nextWorkout(hist, split, 4);
+  assert.equal(arms.title, 'Arms'); assert.equal(arms.slot, 4); assert.equal(arms.due, 2);
+  assert.deepEqual(arms.items.map(i => i.name), ['Curl']);
+  assert.equal(G.nextWorkout(hist, split, 2).slot, 2);                          // picking the due one changes nothing
 });

@@ -13,7 +13,7 @@ import { today, uid, slug, deepClone, setDayOffset, dayOffsetFor } from './util.
 import { mergeStates } from './merge.js';
 import { DEFAULT_CATS } from './fincalc.js';
 
-export const APP_VERSION = '5.3.0';
+export const APP_VERSION = '5.4.0';
 export const LS_KEY = 'hq.v5.state';
 const DEVICE_KEY = 'hq.v5.device';
 
@@ -104,6 +104,9 @@ export function defaultSettings() {
     modules: { shadow: true, mission: true, rank: true },
     restPerWeek: 1,
     nudgeMins: 45,
+    lockSecs: 90,               // how long a Lock in holds before Stop unlocks
+    finChart: 'together',       // Finance, day by day: together (shown as Mixed) | split
+    colTint: true,              // Tasks: each column washed in its own colour
     notify: { idle: 'campaign', overtake: true, habits: true, habitsAt: '20:00', brief: true, debrief: true, subs: true, timer: true },
     xp: { ...DEFAULT_XP },
     ratings: ['Morning routine', 'Deep work', 'Health', 'Sleep quality', 'Relationships']
@@ -124,7 +127,7 @@ export function defaultState() {
     activities: [],
     habits: [],
     goals: [],
-    gym: { split: [], focus: [] },            // your split, in order, and the lifts you follow (the history itself is on the device: see gym.js)
+    gym: { split: [], focus: [], weekGoal: 3 },            // your split, in order, and the lifts you follow (the history itself is on the device: see gym.js)
     shopping: [],                              // { id, name, kind, qty, bought, boughtAt, expires, life, expired }
     finance: { cats: deepClone(DEFAULT_CATS), rules: [] },   // the transactions themselves are not in this document (see fin.js)
     subs: [],

@@ -48,40 +48,81 @@ export function duelDial({ you, shadow, pace, dayFrac, showShadow = true, rest =
   </svg>`;
 }
 
+/** Degrees a round stroke cap reaches past the end of an arc. */
+const capDeg = (sw, r) => (sw / 2) / r * 180 / Math.PI;
+/** Trim an arc so its round caps land inside [a0, a1] with `gap` degrees
+ *  spare; one too short for that becomes a dot at its middle. */
+function capped(a0, a1, cap, gap) {
+  let b0 = a0 + cap + gap / 2, b1 = a1 - cap - gap / 2;
+  if (b1 - b0 < 0.02) { const m = (a0 + a1) / 2; b0 = m - 0.01; b1 = m + 0.01; }
+  return [b0, b1];
+}
+/** Draw-in timing for parts laid end to end: each starts as the one before
+ *  it is nearly done, so the ring grows from one point, piece by piece. */
+function drawTimes(sweeps, total = 1100) {
+  let t = 0;
+  return sweeps.map(sw => { const dur = Math.max(150, Math.min(520, sw / 360 * total)); const d = t; t += dur * 0.82; return { d: Math.round(d), dur: Math.round(dur) }; });
+}
+
+/** A band of a ring from angle a0 to a1 (degrees) between radii ri and ro,
+ *  with its four corners rounded. Unlike a round stroke cap this stays
+ *  exactly inside its angles, so a 20-minute block on a clock face still
+ *  covers 20 minutes. */
+export function sectorPath(cx, cy, ro, ri, a0, a1, rmax = 4.5) {
+  const D = Math.PI / 180, span = Math.max(0.05, a1 - a0);
+  const half = Math.sin(Math.min(span * D / 2, Math.PI / 2));
+  const rc = Math.max(0, Math.min(rmax, (ro - ri) / 2 - 0.01, ri * half / (1 - half) * 0.95, ro * half / (1 + half) * 0.95));
+  const to = Math.asin(rc / (ro - rc)) / D, ti = Math.asin(rc / (ri + rc)) / D;
+  const eo = Math.sqrt((ro - rc) ** 2 - rc * rc), ei = Math.sqrt((ri + rc) ** 2 - rc * rc);
+  const P = (r, a) => polar(cx, cy, r, a).join(' ');
+  const lo = span - 2 * to > 180 ? 1 : 0, li = span - 2 * ti > 180 ? 1 : 0;
+  return `M${P(eo, a0)}A${rc} ${rc} 0 0 1 ${P(ro, a0 + to)}A${ro} ${ro} 0 ${lo} 1 ${P(ro, a1 - to)}A${rc} ${rc} 0 0 1 ${P(eo, a1)}`
+    + `L${P(ei, a1)}A${rc} ${rc} 0 0 1 ${P(ri, a1 - ti)}A${ri} ${ri} 0 ${li} 0 ${P(ri, a0 + ti)}A${rc} ${rc} 0 0 1 ${P(ei, a0)}Z`;
+}
+
 /**
- * 24-hour ring for Track. Midnight at the top, clockwise. Each session is
- * an arc in its activity's colour; the productive window is the faint band
- * behind; the hand is now. Arcs are buttons (data-act) for editing.
+ * 24-hour ring for Track. Midnight at the top, clockwise. Each session is a
+ * band with softly rounded corners in its activity's colour, glowing a
+ * little; the productive window is the brighter band behind; the hand is
+ * now. Blocks draw in from midnight, one after the other, and grow outward
+ * when pointed at or picked. The figure in the middle is HTML laid over the
+ * ring (see track.js), so pointing at a block can name it there.
  */
-export function dayRing({ sessions, win, nowMin = null, center = '', centerSub = '', h24 = true }) {
-  const cx = 150, cy = 150, R = 112, toA = m => -90 + (m / 1440) * 360;
+export function dayRing({ sessions, win, nowMin = null, h24 = true, sel = null }) {
+  const cx = 150, cy = 150, R = 112, SW = 20, ro = R + SW / 2, ri = R - SW / 2, toA = m => -90 + (m / 1440) * 360;
   let marks = '';
   for (let h = 0; h < 24; h++) {
     const a = toA(h * 60), major = h % 6 === 0;
-    const [x0, y0] = polar(cx, cy, major ? 130 : 133, a), [x1, y1] = polar(cx, cy, 138, a);
-    marks += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--line-2)" stroke-width="${major ? 1.8 : 1}" stroke-linecap="round"/>`;
+    const [x0, y0] = polar(cx, cy, major ? 130 : 133, a), [x1, y1] = polar(cx, cy, 137, a);
+    marks += `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--line-2)" stroke-width="${major ? 1.8 : 1}" stroke-linecap="round" opacity="${major ? 1 : .7}"/>`;
     if (major) {
       const [tx, ty] = polar(cx, cy, 149, a);
       const lbl = h24 ? String(h).padStart(2, '0') : (h === 0 ? '12a' : h === 12 ? '12p' : h < 12 ? h + 'a' : (h - 12) + 'p');
-      marks += `<text x="${tx}" y="${ty + 3.5}" text-anchor="middle" font-size="10" style="fill:var(--text-3)">${lbl}</text>`;
+      marks += `<text x="${tx}" y="${ty + 3.5}" text-anchor="middle" font-size="10" font-weight="600" style="fill:var(--text-3)">${lbl}</text>`;
     }
   }
-  const arcs = sessions.map(s => {
-    const a0 = toA(s.startMin), a1 = toA(Math.max(s.endMin, s.startMin + 2));
-    return `<path d="${arcPath(cx, cy, R, a0, a1)}" stroke="${safeColor(s.color)}" stroke-opacity="${s.opacity}" stroke-width="22" fill="none"
-      ${s.act ? `data-act="${s.act}" data-id="${esc(s.id)}" data-start="${s.start}" style="cursor:pointer"` : ''}><title>${esc(s.title)}</title></path>`;
+  const times = drawTimes(sessions.map(s => (Math.max(s.endMin, s.startMin + 2) - s.startMin) / 4), 1300);
+  let masks = '';
+  const arcs = sessions.map((s, i) => {
+    let a0 = toA(s.startMin), a1 = toA(Math.max(s.endMin, s.startMin + 2));
+    if (a1 - a0 > 1.2) { a0 += 0.3; a1 -= 0.3; }                     // a hair of space between blocks that touch
+    const c = safeColor(s.color), id = `rgm${i}`;
+    masks += `<mask id="${id}" maskUnits="userSpaceOnUse" x="-20" y="-20" width="340" height="340"><path class="ring-draw" pathLength="1" d="${arcPath(cx, cy, R, a0 - 0.5, a1 + 0.5)}" stroke="#fff" stroke-width="${SW + 16}" fill="none" style="--d:${times[i].d}ms;--t:${times[i].dur}ms"/></mask>`;
+    return `<g class="ring-seg ${sel != null && String(sel) === String(s.start) ? 'on' : ''}" style="--i:${i};--o:${s.opacity};color:${c}" stroke="${c}"
+      data-seg="${i}" data-id="${esc(s.id)}" data-start="${s.start}" data-live="${s.live ? 1 : ''}" data-name="${esc(s.name)}" data-range="${esc(s.range)}" data-dur="${esc(s.dur)}"
+      tabindex="0" role="button" aria-label="${esc(s.title)}"><path d="${sectorPath(cx, cy, ro, ri, a0, a1)}" mask="url(#${id})"/></g>`;
   }).join('');
   let hand = '';
   if (nowMin !== null) {
-    const [x0, y0] = polar(cx, cy, 94, toA(nowMin)), [x1, y1] = polar(cx, cy, 130, toA(nowMin));
-    hand = `<line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--text)" stroke-width="2.5" stroke-linecap="round"/>`;
+    const a = toA(nowMin), [x0, y0] = polar(cx, cy, ri - 9, a), [x1, y1] = polar(cx, cy, ro + 4, a);
+    hand = `<g class="ring-hand"><line x1="${x0}" y1="${y0}" x2="${x1}" y2="${y1}" stroke="var(--text)" stroke-width="2" stroke-linecap="round"/><circle cx="${x0}" cy="${y0}" r="3" fill="var(--text)"/></g>`;
   }
-  return `<svg class="dial" viewBox="-8 -8 316 316" role="img" aria-label="24-hour view of tracked time">
-    <circle cx="${cx}" cy="${cy}" r="${R}" stroke="var(--card-2)" stroke-width="22" fill="none"/>
-    <path d="${arcPath(cx, cy, R, toA(win.start), toA(win.end))}" stroke="var(--card-3)" stroke-width="22" fill="none"/>
-    ${marks}${arcs}${hand}
-    <text x="150" y="150" text-anchor="middle" font-size="34" font-weight="650" letter-spacing="-1.2">${esc(center)}</text>
-    <text x="150" y="172" text-anchor="middle" font-size="11.5" style="fill:var(--text-2)">${esc(centerSub)}</text>
+  return `<svg class="dial ring24" viewBox="-8 -8 316 316" role="img" aria-label="24-hour view of tracked time">
+    <defs>${masks}</defs>
+    <circle cx="${cx}" cy="${cy}" r="${R}" stroke="var(--card-2)" stroke-width="${SW}" fill="none"/>
+    <path d="${arcPath(cx, cy, R, toA(win.start), toA(win.end))}" stroke="var(--card-3)" stroke-width="${SW}" fill="none"/>
+    <circle cx="${cx}" cy="${cy}" r="${ri - 14}" stroke="var(--line)" stroke-width="1" fill="none"/>
+    ${marks}<g class="ring-segs">${arcs}</g>${hand}
   </svg>`;
 }
 
@@ -117,17 +158,39 @@ export function shareBar(parts) {
   return `<div class="share">${parts.filter(p => p.value > 0).map(p => `<i style="width:${(p.value / total * 100).toFixed(2)}%;background:${safeColor(p.color)}" title="${esc(p.label)}"></i>`).join('')}</div>`;
 }
 
-/** A donut chart. parts: [{ id, label, value, color }]. Each slice is its own
- *  path, so it can lift on hover and be pressed. `on` marks a chosen slice. */
-export function donut(parts, { on = null, act = '', draw = false } = {}) {
-  const list = parts.filter(p => p.value > 0), total = list.reduce((n, p) => n + p.value, 0) || 1;
-  const cx = 120, cy = 120, r = 82, gap = list.length > 1 ? 1.6 : 0;
+/** Sweeps for a ring of rounded parts. Every part gets at least `min`
+ *  degrees, so a small one stays a short pill instead of vanishing into a
+ *  dot; the rest share what is left in proportion. */
+function ringSweeps(values, min) {
+  const n = values.length, total = values.reduce((a, v) => a + v, 0) || 1;
+  if (n * min >= 360) return values.map(() => 360 / n);
+  let small = values.map(() => false), sw = values.map(v => v / total * 360);
+  for (let k = 0; k < 6; k++) {
+    small = sw.map((x, i) => small[i] || x < min);
+    const fixed = small.filter(Boolean).length * min, big = values.reduce((a, v, i) => a + (small[i] ? 0 : v), 0) || 1;
+    sw = values.map((v, i) => (small[i] ? min : v / big * (360 - fixed)));
+  }
+  return sw;
+}
+/** A donut chart. parts: [{ id, label, value, color }]. Each slice is its
+ *  own rounded, glowing arc, so it can grow on hover and be pressed. `on`
+ *  lists the chosen slices. With `draw`, the ring grows in from the top,
+ *  one slice after the next. */
+export function donut(parts, { on = [], act = '', draw = false, label = 'Spending by category' } = {}) {
+  const list = parts.filter(p => p.value > 0);
+  const cx = 120, cy = 120, r = 86, SW = 20, cap = capDeg(SW, r), gap = list.length > 1 ? 3.4 : 0;
+  const sweeps = list.length > 1 ? ringSweeps(list.map(p => p.value), 2 * cap + gap + 3) : [360];
+  const times = drawTimes(sweeps);
   let a = -90;
   const segs = list.map((p, i) => {
-    const sweep = p.value / total * 360, a0 = a + gap / 2, a1 = Math.max(a0 + 0.6, a + sweep - gap / 2);
-    a += sweep;
-    return `<path class="seg ${on === p.id ? 'on' : ''}" pathLength="1" d="${arcPath(cx, cy, r, a0, a1)}" stroke="${safeColor(p.color)}" style="--i:${i};color:${safeColor(p.color)}" data-seg="${i}" ${act ? `data-act="${act}" data-cat="${esc(p.id)}" role="button" tabindex="0" aria-label="${esc(p.label)}"` : ''}><title>${esc(p.label)}</title></path>`;
+    const [a0, a1] = list.length > 1 ? capped(a, a + sweeps[i], cap, gap) : [-90, 269.99];
+    a += sweeps[i];
+    const c = safeColor(p.color);
+    return `<path class="seg ${on.includes(p.id) ? 'on' : ''}" pathLength="1" d="${arcPath(cx, cy, r, a0, a1)}" stroke="${c}" style="--i:${i};--d:${times[i].d}ms;--t:${times[i].dur}ms;color:${c}" data-seg="${i}" ${act ? `data-act="${act}" data-cat="${esc(p.id)}" role="button" tabindex="0" aria-pressed="${on.includes(p.id)}" aria-label="${esc(p.label)}"` : ''}><title>${esc(p.label)}</title></path>`;
   }).join('');
-  return `<svg class="pie ${draw ? 'draw' : ''}" viewBox="0 0 240 240" role="img" aria-label="Spending by category">
-    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card-3)" stroke-width="30" opacity=".5"/>${segs}</svg>`;
+  return `<svg class="pie ${draw ? 'draw' : ''} ${on.length ? 'picking' : ''}" viewBox="0 0 240 240" role="img" aria-label="${esc(label)}">
+    <circle cx="${cx}" cy="${cy}" r="${r}" fill="none" stroke="var(--card-3)" stroke-width="${SW}" opacity=".35"/>
+    <circle cx="${cx}" cy="${cy}" r="${r - SW / 2 - 12}" fill="none" stroke="var(--line)" stroke-width="1"/>
+    <circle cx="${cx}" cy="${cy}" r="${r + SW / 2 + 9}" fill="none" stroke="var(--line)" stroke-width="1" opacity=".6"/>
+    ${segs}</svg>`;
 }

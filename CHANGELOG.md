@@ -2,9 +2,34 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
-## Unreleased
+## 5.4.0
+
+### Fixed
+
+- **"You won" kept appearing.** Yesterday's result was announced again whenever a sync re-scored a day, which happened after almost any change: writing goals, adding a task. Two devices that froze a day with the same result but stored it slightly differently made every sync throw the day away and score it again. A day is now only re-scored when the copies disagree on the result itself, and the result is announced once, the first time the dashboard opens on a new day, on any device.
+- **Calendar lines going missing** on some screens. The lines were gaps between the days, and at a zoom such as 125% or 150% (most phones) a gap could round to nothing. They are borders now, which always draw.
+
+### Changed
+
+- **Board is now Tasks.** Same tab, same place, same shortcut.
+- **Deep work pays by focus rating.** A 5/5 block pays in full, a 4/5 80%, and so on down; one not rated yet pays as a 3/5. Day XP and level XP both. Only blocks from 23 November 2026 on, so levels already earned stay where they are.
+- **Home:** the combo sits in its own cell on the right of the Lock in block, split off by a thin line, and turns green above 1.0×. Its old place under the dial shows **Days to win** the month (6/8), and the sentence that said the same is gone. A picked top task is outlined in its tag's colour, in any theme.
+- **Track:** the running timer is a solid bar with a live dot; press anywhere on it to stop. The 24-hour ring has rounded blocks that keep their exact times, glow in their colour, draw in from midnight one by one, and grow when pointed at or pressed, naming the session in the middle with an Edit button.
+- **Finance:** the ring has rounded, gapped, glowing slices that grow in one after the next. Day by day moved to the top right: one column per date, each labelled, the bars almost touching, and the totals for the day you point at or press. Two views: **Mixed** (one bar a day shaded red for spending to green for income; spending sets the scale and a bigger day is cut with a break mark and its amount) and **Split** (spending above a line, income below, each on its own scale).
+- **Finance, less text:** the uncategorised notice is just the count and Show, and the hints beside Where it went and under the chart are gone.
+- **Calendar:** the legend line under the month is gone.
 
 ### Added
+
+- **Task priority**, Low, Medium or High, shown as a small green, yellow or red flag.
+- **Gym: a weekly goal.** Set how many workouts a week you aim for. The weekly bars now show the number of workouts, the goal is a line across them, and each week's bar is green when it met the goal and red when it fell short, and **Weeks won** (all the weeks that met it) replaces weeks in a row. Press any session in your split to lay that one out instead of the one due. The next workout shows each exercise's target as sets x reps | weight, and the explanations under it are gone.
+- **Coloured columns on the Tasks tab:** each column takes a faint tint of its own colour. Turn it off under Settings > Layout.
+- **Lock in hold time** is a setting (Settings > Day & scoring), from 0 seconds to an hour.
+- **Activity colours:** nineteen, red included, plus a picker for any colour.
+- **Habits can be ticked on a day they are not due**, and earn their XP.
+- **Habit notes**, under each habit.
+- **Goal and milestone notes and links.** A goal's notes and links fold away; folded or closed, the note's first line shows beside the name and the links as chips under the progress. A milestone's are edited from its pencil and shown the same way.
+- **Finance:** pick several categories to see their total together; tick several transactions and give them one category at once.
 
 - **Gym: openGym without a server.** openGym's automatic backups, copied by a sync app on your phone (FolderSync) into a private storage bucket such as Cloudflare R2, are read by the Gym tab: it checks for a newer backup each time you open the tab, and every device gets the same history. Set it up under Gym in HOW-TO-USE.md.
 - **Gym: openGym's WebDAV backup**, for iPhone, where no sync app can copy the backup folder. openGym uploads a backup to a WebDAV drive such as Koofr once a day, and the Gym tab reads the newest one.

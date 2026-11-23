@@ -98,14 +98,27 @@ const mergeMax = (p, s) => {
 };
 
 /** Settled verdicts are frozen, but two devices can freeze the same day
- *  from different information. Where they disagree the entry is dropped,
- *  and the app re-settles that day from the merged facts. */
+ *  from different information. Where they disagree on the result itself
+ *  (won or lost, either score) the entry is dropped, and the app re-settles
+ *  that day from the merged facts. Copies that only differ in a detail, or
+ *  in the order their fields were written (an older app version), keep the
+ *  primary's: dropping those made every sync re-settle the same day. */
+const VERDICT_KEYS = ['v', 'x', 's'];
 function mergeVerdicts(p, s) {
   const out = { ...(s || {}) };
   Object.keys(p || {}).forEach(d => {
-    if (out[d] && JSON.stringify(out[d]) !== JSON.stringify(p[d])) delete out[d];
-    else out[d] = p[d];
+    const a = out[d], b = p[d];
+    if (a && b && VERDICT_KEYS.some(k => a[k] !== b[k])) delete out[d];
+    else out[d] = b;
   });
+  return out;
+}
+/** Rate-limit stamps. The one that says which settled day was last announced
+ *  only moves forward, so an older copy cannot make it announce again. */
+function mergeNotif(p, s) {
+  const out = { ...(s || {}), ...(p || {}) };
+  const ann = [(p || {}).ann, (s || {}).ann].filter(Boolean).sort().pop();
+  if (ann) out.ann = ann;
   return out;
 }
 
@@ -141,7 +154,7 @@ export function mergeStates(local, remote, deviceId = '') {
     missions: mergeMap(pg.missions, sg.missions),
     friction: mergeMax(pg.friction, sg.friction),
     combo: mergeMax(pg.combo, sg.combo),
-    notif: mergeMap(pg.notif, sg.notif),
+    notif: mergeNotif(pg.notif, sg.notif),
     holds: Math.max(pg.holds || 0, sg.holds || 0),
     folds: Math.max(pg.folds || 0, sg.folds || 0),
     campaigns: (pg.campaigns || []).length >= (sg.campaigns || []).length ? (pg.campaigns || []) : (sg.campaigns || [])

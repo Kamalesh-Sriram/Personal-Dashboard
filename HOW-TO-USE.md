@@ -153,11 +153,11 @@ The dashboard is built around one loop. It takes about two minutes in the mornin
 
 1. **Write out your main goals.** These are the big ones you are working toward, not today's tasks. The strip at the top of Home is empty every morning and shows what you wrote last time in faint text. Typing them out again keeps them in front of you, and each one earns a little XP. Add as many as you like.
 2. **Declare the mission.** The morning brief opens by itself near the start of your day. Name one critical objective, up to three primary ones, and a fallback (the least you will accept from today).
-3. **Press Lock in.** It starts the timer on the top task in your Today list and fills the screen with it. Stopping is locked for the first 90 seconds, which is usually all it takes to get going. When the task is finished, press **Mark task as done**: the timer stops and the task is ticked off.
+3. **Press Lock in.** It starts the timer on the top task in your Today list and fills the screen with it. Stopping is locked for the first 90 seconds, which is usually all it takes to get going. Change how long under **Settings > Day & scoring > How long Lock in holds** (0 lets you stop at once). When the task is finished, press **Mark task as done**: the timer stops and the task is ticked off.
 
 **During the day**
 
-4. **Keep a timer running.** Start and stop activities on the Track tab, or lock in on tasks. Back-to-back blocks build a combo that multiplies your XP.
+4. **Keep a timer running.** Start and stop activities on the Track tab, or lock in on tasks. Back-to-back blocks build a combo that multiplies your XP. **Rate each Deep block** when it stops: a block pays its full XP only at 5/5 (see [XP](#xp)).
 5. **Check off habits** as you do them.
 6. **Watch the dial.** The thick arc is your XP. The thin arc is where your rival is right now. The notch is where he will finish.
 
@@ -165,7 +165,9 @@ The dashboard is built around one loop. It takes about two minutes in the mornin
 
 7. **Debrief.** Thirty minutes before your day ends, the debrief opens. Tick off what you actually did, write what went right, what went wrong and the fix, and declare tomorrow's critical objective. Tomorrow morning becomes a confirmation instead of a decision.
 
-When the day rolls over it is scored: a win if you beat the rival, a loss if not. Finished tasks are cleared from the board's Done column.
+When the day rolls over it is scored: a win if you beat the rival, a loss if not. Finished tasks are cleared from the Done column on the Tasks tab.
+
+The result of the day before is announced once: the first time you open the dashboard on a new day, on whichever device you open it. It is not repeated later that day or on your other devices.
 
 ## 7. The tabs, one by one
 
@@ -177,26 +179,29 @@ The tabs live in the strip on the left. Press the arrows at the top of the strip
 
 Everything for today on one page: your main goals, you against the rival, the mission, the Lock in button with your top three tasks, how many habits are left, and the logbook.
 
+- **The combo** has its own cell on the right of the Lock in block, behind a thin line: 1.0× when nothing is chained, and green once back-to-back blocks push it higher.
+
 - **Your level** is at the left of the top bar on every tab, with your rank and the bar to the next level, in your rank's colour. Press it for your stats: where today's level XP came from, the last 14 days, and the ranks. See [level and rank](#level-and-rank).
-- **Top tasks** are the first three in the board's Today column. Drag them to reorder. Click one to select it: the whole bar lights up to show which one is chosen. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
+- **Top tasks** are the first three in the Today column of the Tasks tab, each with its tag and priority flag. Drag them to reorder. Click one to select it: it is outlined in its tag's colour (in any theme, campaign included) to show which one is chosen. **Lock in** always starts the selected task, and the line under the button says which activity will be timed.
 - Press the question mark on the dial card for today's numbers: where your XP came from and how the rival's target was set.
 - **Main goals** are the lasting ones. Write them out each morning; yesterday's show faintly as a prompt. Press **Add goal** for another line, and the cross on a line to remove it.
-- **The month's record** sits under the dial: one cell per day, green for a day you won, red for one you lost, blue for a rest day. The line under it says how many more days you need to win the month. The record starts again on the 1st. Press it to open the calendar.
+- **The month's record** sits under the dial: one cell per day, green for a day you won, red for one you lost, blue for a rest day. Under it, **Days to win** shows how many of the days left you need to win the month (6/8 means win 6 of the 8 left), beside your **win streak**. It reads Won once the month is secured. The record starts again on the 1st. Press the record to open the calendar.
 - The dial has three rings. The outer ticks are your working day, lit as it passes. The share of the day that is left, and the time, is written above the dial. The thick arc is your XP. The thin arc and the notch are the rival's pace now and his target. Each ring's colour can be changed under **Settings > Look > Home dial**.
 - **Rest day** (top of the dial card) marks today as not scored. See [rest days](#rest-days).
 - The **logbook** has four entries: sleep, session ratings, efficacy, and the debrief. Each one you fill in earns a little XP. Tap any of them to fill it in.
 
-### Board
+### Tasks
 
-![The Board tab](docs/images/board.jpg)
+![The Tasks tab](docs/images/board.jpg)
 
-A kanban board. Drag tasks between columns. On a phone, press and hold a task, then drag.
+A kanban board (it used to be called Board). Drag tasks between columns. On a phone, press and hold a task, then drag.
 
 - **Tags** colour the task and decide where its time goes. Open **Tags** to link each tag to an activity. When you lock in on a task tagged "Thesis", the Thesis timer runs, not the general one.
 - **Activity.** A task can also name its own activity, which wins over its tag's. Leave it on "Follow the tag" for the usual behaviour.
+- **Priority.** Open a task and pick **Low**, **Medium** or **High**. A small flag shows it on the task, in green, yellow or red, beside the tag (also on Home's top tasks). **None** hides it.
 - **Steps.** Open a task and add steps. The task shows a progress bar. Click the bar to tick steps off without opening the task.
 - **Duplicate.** Open a task and press **Duplicate**. A new task opens with the same name, tag, estimate, deadline, notes and steps, ready to edit.
-- **Columns** can be renamed, recoloured, reordered, added and removed.
+- **Columns** can be renamed, recoloured, reordered, added and removed. With **Settings > Layout > Colour each column** on (the default), each column takes a faint tint of its own colour; turn it off for plain columns.
 - The **Done** column empties itself each morning. Turn that off under **Settings > Day & scoring** if you prefer to clear it by hand.
 
 ### Track
@@ -204,12 +209,13 @@ A kanban board. Drag tasks between columns. On a phone, press and hold a task, t
 ![The Track tab](docs/images/track.jpg)
 
 - Click an activity to start its timer. Click it again to stop. Only one runs at a time.
-- While a timer runs, a ribbon at the top shows what is running, when it started and for how long. Press anywhere on it to stop.
+- While a timer runs, a solid bar at the top shows what is running (with a pulsing dot in its colour), when it started and for how long. Press anywhere on it to stop.
 - Drag an activity to reorder it within its group. On a phone, press and hold first.
-- The **24-hour ring** shows your day at a glance: each arc is a session, the lighter band is your working hours, the line is now. "Largest gap" is the longest stretch of your working hours with nothing logged.
+- The **24-hour ring** shows your day at a glance: each block is a session in its activity's colour, starting and ending exactly where it did; the lighter band is your working hours, the line is now. The blocks draw in from midnight, one after the other. Point at a block and it grows and the middle of the ring names it, with its times and length. Press it to keep it picked: the others dim and an **Edit** button appears in the middle. Press it again to let go. "Largest gap" is the longest stretch of your working hours with nothing logged.
 - Switch the session list to **Timeline** for a strip view with one lane per kind of activity.
 - Click any session to correct its times. Use **Log time by hand** for something you forgot to track.
-- Rate each session of a **Deep** activity from 1 to 5 with the dots. Ratings feed your efficiency figure and the logbook. Upkeep and Tracked time are not rated.
+- Rate each session of a **Deep** activity from 1 to 5 with the dots. The rating decides how much XP the block pays (5/5 is full; see [XP](#xp)), and feeds your efficiency figure and the logbook. Upkeep and Tracked time are not rated.
+- **Colours.** An activity's editor has nineteen colours, red included, and the last swatch (the rainbow) opens your system's colour picker for any colour at all.
 
 Each activity has a weight: **Deep** earns full XP, **Upkeep** half, **Tracked** a token amount. Mark meals, naps and scrolling as a **break**: breaks never count as work and reset the combo.
 
@@ -218,6 +224,8 @@ Each activity has a weight: **Deep** earns full XP, **Upkeep** half, **Tracked**
 ![The Habits tab](docs/images/habits.jpg)
 
 - Each habit shows its **streak** and its **XP level** in full view, and what checking it today will earn.
+- **Not due today?** You can still tick it, and it still earns its XP. It moves to **Done today** marked "done on a day off". Unticking it leaves no miss behind.
+- **Notes.** Press the page icon on a habit to open its notes: why it matters, how you do it, what makes it easier. They save when you click away. Once written, the first line shows faintly beside the habit's name; press it to open the notes.
 - A habit can also pay **level XP** directly. Open the habit's editor and fill in **Level XP when done**: that amount goes to your level every day you tick it, on top of the share for habits as a whole.
 - A habit you tick moves down to **Done today**. Drag a habit to change the order within its section. On a phone, press and hold first.
 - The **clean-sweep chain** counts consecutive days on which you did every habit that was due. Each day in the chain adds to the bonus.
@@ -230,12 +238,14 @@ A goal breaks into milestones, and a milestone into tasks. Progress is counted a
 
 - **Time.** Press play on a task to time it. The time shows on the task, adds up on its milestone, and adds up again on the goal. A milestone with no tasks can be timed directly.
 - **Activity.** Edit a goal to choose which activity its time is logged under, so gym work is not counted as deep work.
-- **Send to the board.** Press the board icon next to a task to put it in today's list. Time on that card counts toward the goal task, and finishing the card ticks the task off.
+- **Send to Tasks.** Press the board icon next to a task to put it in today's list. Time on that card counts toward the goal task, and finishing the card ticks the task off.
+- **Notes and links.** An open goal ends with **Notes and links**: its notes (what done looks like, anything to remember) and its links. Paste an address and, if you like, a name, and press **Link**: it opens in a new tab. `example.com` gets `https://` added for you; anything that is not a web address is refused. Press the section's header to fold it away. While a goal is closed, or its section is folded, the note's first line shows faintly beside the goal's name and the links show as small chips under its progress line.
+- **Milestone notes and links.** Press the pencil on a milestone to edit its name, notes and links. The note's first line shows beside the milestone's name, and its links as chips under it.
 - The panel on the right shows overall progress, time spent in total and in the last 7 days, time per goal, and the next open task of each goal.
 
 ### Calendar
 
-The month at a glance. Days you won are green, days you lost are red, rest days are blue, each with its XP, focused hours and sleep. The bar at the top is the month's record and what it takes to win it. Open any day to see the detail, log sleep, mark it as a rest day, or pin an emoji to it.
+The month at a glance. Days you won are green and marked Won, days you lost are red and marked Lost, rest days are blue, each with its XP, focused hours and sleep. The bar at the top is the month's record and what it takes to win it. Open any day to see the detail, log sleep, mark it as a rest day, or pin an emoji to it.
 
 ### Gym
 
@@ -243,8 +253,8 @@ Your training history, and what to try next time.
 
 The tab reads from top to bottom in the order you use it: how the last weeks went, what to do next, the lifts you follow beside your latest workouts, and everything else folded away at the bottom.
 
-- **Last 12 weeks** shows weekly volume and how many workouts each week had, with four numbers under it: this week, volume over 30 days, records this month, and weeks in a row.
-- **Next workout** is your coach. Tell it your split once (**Set your split**): the sessions in the order you do them, using the names your workouts have in your gym app. The same name can repeat, so upper, lower, upper, lower, arms is five lines. It then works out where you are in the cycle from your latest workouts and lays out the next session from the last time you did that one: each exercise, how many working sets, and the reps and weight to aim for.
+- **Last 12 weeks** shows how many workouts each week had: a bar's height is the count, so weeks with the same number stand level (point at one for its volume). Set your **goal** of workouts a week with the − and + beside the title (3 to start with); it is drawn as a dashed line across the weeks. A week that met it is green, one that fell short is red, and the week under way keeps the accent colour until it meets it. Four numbers sit under it: this week, volume over 30 days, records this month, and **weeks won**, how many weeks since your first workout met the goal.
+- **Next workout** is your coach. Tell it your split once (**Set your split**): the sessions in the order you do them, using the names your workouts have in your gym app. The same name can repeat, so upper, lower, upper, lower, arms is five lines. It then works out where you are in the cycle from your latest workouts and lays out the next session from the last time you did that one (press another session's name to lay that one out instead; the one due next keeps a dashed outline, and your pick holds until you log a workout): each exercise with what to aim for beside it, as sets x reps | weight (for example 3 x 9 | 75 kg).
 - The targets follow double progression: stay at a weight and add reps until every set reaches the top of your rep range, then add weight and start again from fewer reps. Three sessions without progress at one weight and it suggests backing off by a tenth for a week.
 - **Your lifts** are the exercises you want to follow. Press **Choose lifts**, or the plus beside any exercise in the list at the bottom. Until you choose, it shows the ones you do most often.
 - **Recent workouts** sits beside your lifts and shows as many as it takes to stand level with them.
@@ -346,8 +356,13 @@ Where your money goes, by month and by year.
 
 - **Categories.** Each transaction is sorted into a category by the merchant's name. When one is wrong, pick the right category in the list. You are then asked whether to do the same for everything from that merchant: press **Always** and a rule is saved. Rules you make come before the built-in guesses, and a category you chose by hand is never changed by a rule.
 - Transfers and savings are left out of both spending and income.
-- **Where it went** is a ring with one slice per category. Point at a slice, or at its line in the list beside it, and the slice lifts and the middle of the ring names it. Press it and the transactions under it show only that category; press it again for everything.
-- **Day by day** (or **Month by month** in the year view) runs across the bottom. Switch between **Month** and **Year** at the top right.
+- **Day by day** sits at the top right, beside the four totals: one column for each date of the month, each with its date under it, the bars almost touching. Choose between two views with the switch on the card (it is remembered):
+  - **Mixed:** one bar a day, its colour running from red (only spending) through amber to green (only income). Your spending sets the scale, so ordinary days fill the chart; a bigger day, such as a salary or the rent, is cut at the top with a small break mark and its amount written above it.
+  - **Split:** spending rises from a middle line in red and income hangs below it in green, each on its own scale, so neither squashes the other.
+
+  The amounts run up the side in round steps. Point at a day to see its totals above the chart; press it to keep that day picked, which also shows only that day's transactions in the list (press it again, or **Clear**, to let go). With nothing picked, the line above the chart is your average spending a day. In the year view this is **Month by month**: press a month to open it. Switch between **Month** and **Year** at the top right.
+- **Where it went** is a ring with one rounded, glowing slice per category; it grows in from the top, one slice after the next. Point at a slice, or at its line in the list beside it, and the slice grows and the middle of the ring names it. **Press slices to pick them, as many as you like**: the middle and the line under the list add up what you picked, and the transactions show only those categories. Press a picked one again to drop it, or **Clear** for everything.
+- **Sort many at once.** Tick the box at the start of each transaction (or **Select all shown**), choose a category in the bar that appears and press **Set category**. They count as sorted by hand, so no rule moves them later.
 - The cog opens categories, your rules, linked banks and the option to remove all transactions.
 
 With sync on, your transactions are kept in your own database as well as on the device, so every device shows the same. Without sync they stay on the device you imported them on.
@@ -416,7 +431,7 @@ The week in numbers, a weekly self-rating, the journal, and your long-term recor
 
 | What | XP |
 |---|---|
-| An hour of Deep work | 14 |
+| An hour of Deep work | 14 at 5/5 focus (see below) |
 | An hour of Upkeep | 7 |
 | An hour of Tracked time | about 2 |
 | A habit checked | 12 |
@@ -426,6 +441,8 @@ The week in numbers, a weekly self-rating, the journal, and your long-term recor
 | Each logbook entry | 3 |
 | Each main goal written out | 2, for up to 5 goals |
 | Social media beyond 20 minutes | minus 0.4 per minute |
+
+**Deep work pays by how focused it was.** From 23 November 2026, a Deep block of five minutes or more pays its full XP only when you rate it 5/5; 4/5 pays 80%, 3/5 60%, 2/5 40% and 1/5 20%. A block you have not rated yet, the running one included, pays as a 3/5, so rating is always worth doing: a 4 or a 5 earns more. The same share applies to the level XP for Deep work. Blocks from before that date keep paying as they always did, so your level does not move.
 
 Back-to-back work blocks (at most 10 minutes apart, at least 5 minutes each) build a **combo**: 1.2x for the second block, 1.4x for the third, up to 3x. A longer gap or a break resets it.
 

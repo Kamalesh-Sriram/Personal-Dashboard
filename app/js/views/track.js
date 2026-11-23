@@ -9,12 +9,17 @@ import { ui, refresh } from '../bus.js';
 import { dayRing } from '../charts.js';
 import { makeSortable, reorderWithin } from '../drag.js';
 
-const COLORS = ['#E0B25A', '#F2793A', '#F26D63', '#EE5D8C', '#8B7CF6', '#6FB1F0', '#2BC4E0', '#56CFB2', '#5FCB8B', '#A3C94F', '#C9A27A', '#9AA0A8'];
+/* Nineteen to choose from, red to grey around the wheel. Any other colour
+   can be picked with the last swatch. */
+const COLORS = ['#FF453A', '#F26D63', '#FF6B3D', '#F2793A', '#F5A623', '#E0B25A', '#FFD93D', '#A3C94F', '#5FCB8B', '#2BF0A0', '#56CFB2', '#2BC4E0', '#6FB1F0', '#3D7BFF', '#8B7CF6', '#C58AF9', '#EE5D8C', '#C9A27A', '#9AA0A8'];
 const viewDate = () => ui.trackDate || today();
 const h24 = () => S().settings.clock24;
 /** Minutes into the day a session belongs to. A late day runs past 1440. */
 const minOf = (ts, date) => minOfDay(ts, date);
 const dayLen = () => 1440 + dayOffsetMin();
+/** The ring draws itself in when the day shown changes; other redraws leave it still. */
+let ringDay = null;
+const drawRing = () => { const d = viewDate(), go = ringDay !== d; ringDay = d; return go; };
 
 function tileHtml(a) {
   const t = today(), ms = E.actMsOn(a, t), run = a.isRunning;
@@ -67,20 +72,63 @@ function dayData(date) {
   if (tail - cursor > biggest) { biggest = tail - cursor; at = cursor; }
   return { w, rows, biggest, at };
 }
-function ringHtmlFor(date) {
+function ringHtmlFor(date, draw = false) {
   const { w, rows, biggest, at } = dayData(date);
   const sessions = rows.map(({ a, s }) => {
     const m0 = minOf(s.start, date), m1 = Math.min(dayLen(), m0 + s.dur / 60000), tier = E.tierOf(a);
-    return { startMin: m0, endMin: m1, color: a.color, opacity: tier === 'deep' ? 1 : tier === 'upkeep' ? 0.75 : 0.45,
-      title: `${a.name} · ${fmtMinOfDay(m0, h24())}-${fmtMinOfDay(m1, h24())} · ${fmtDur(s.dur)}`, act: s.live ? '' : 'session.edit', id: a.id, start: s.start };
+    const range = `${fmtMinOfDay(m0, h24())} to ${s.live ? 'now' : fmtMinOfDay(m1, h24())}`;
+    return { startMin: m0, endMin: m1, color: a.color, opacity: tier === 'deep' ? 1 : tier === 'upkeep' ? 0.8 : 0.5, live: !!s.live,
+      name: E.label(a), range, dur: fmtDur(s.dur), title: `${a.name} · ${range} · ${fmtDur(s.dur)}`, id: a.id, start: s.start };
   });
-  const tracked = E.trackedMsOn(date);
-  return `${dayRing({ sessions, win: w, nowMin: date === today() ? E.nowMinutes() : null, center: fmtDur(tracked), centerSub: 'tracked', h24: h24() })}
+  const tracked = fmtDur(E.trackedMsOn(date));
+  const sel = sessions.find(x => String(x.start) === String(ui.ringSel)) || null;
+  return `<div class="ring-wrap ${draw ? 'draw' : ''}" data-total="${esc(tracked)}">${dayRing({ sessions, win: w, nowMin: date === today() ? E.nowMinutes() : null, h24: h24(), sel: sel ? sel.start : null })}
+      <div class="ring-mid" id="ring-mid">${ringMid(sel && { ...sel, color: safeColor(sel.color), picked: true }, tracked)}</div></div>
     <div class="ring-stats">
       <div><span>Focus</span><b>${fmtDur(E.focusMsOn(date))}</b></div>
       <div><span>Largest gap</span><b class="tone-${biggest >= 120 ? 'bad' : biggest >= 60 ? 'warn' : 'good'}">${fmtDur(biggest * 60000)}</b>${biggest > 0 ? `<i>from ${fmtMinOfDay(at, h24())}</i>` : ''}</div>
       <div><span>First deep block</span><b>${E.ttfbFor(date) === null ? '-' : '+' + E.ttfbFor(date) + 'm'}</b></div>
     </div>`;
+}
+/** The middle of the ring: the day's total, or the block pointed at or
+ *  picked. A picked block that has ended also gets an Edit button. */
+function ringMid(s, total) {
+  if (!s) return `<b class="ring-big">${esc(total)}</b><span class="ring-sub">tracked</span>`;
+  return `<span class="ring-name ell" style="color:${esc(s.color)}">${esc(s.name)}</span><b class="ring-big">${esc(s.dur)}</b><span class="ring-sub">${esc(s.range)}</span>
+    ${s.picked && !s.live ? `<button class="btn sm ghost ring-edit" data-act="session.edit" data-id="${esc(s.id)}" data-start="${esc(s.start)}">${icon('edit')} Edit</button>` : ''}`;
+}
+const segInfo = (seg, picked) => ({ id: seg.dataset.id, start: seg.dataset.start, live: !!seg.dataset.live, name: seg.dataset.name, dur: seg.dataset.dur, range: seg.dataset.range, color: seg.getAttribute('stroke'), picked });
+/** Point at a block to name it in the middle; press it to keep it named. The
+ *  box survives the ring being redrawn every few seconds, so this is wired once. */
+function wireRing(box) {
+  if (!box || box.dataset.wired) return;
+  box.dataset.wired = '1';
+  const show = seg => {
+    const m = box.querySelector('#ring-mid'), wrap = box.querySelector('.ring-wrap'), p = box.querySelector('.ring-seg.on');
+    if (!m || !wrap) return;
+    const t = seg || p;
+    m.innerHTML = t ? ringMid(segInfo(t, t === p), '') : ringMid(null, wrap.dataset.total);
+  };
+  box.addEventListener('pointerover', e => {
+    const seg = e.target.closest('.ring-seg');
+    if (!seg) return;
+    box.querySelectorAll('.ring-seg.hot').forEach(x => { if (x !== seg) x.classList.remove('hot'); });
+    seg.classList.add('hot'); show(seg);
+  });
+  box.addEventListener('pointerout', e => {
+    const seg = e.target.closest('.ring-seg');
+    if (seg && !(e.relatedTarget && e.relatedTarget.closest && e.relatedTarget.closest('.ring-seg') === seg)) { seg.classList.remove('hot'); show(null); }
+  });
+  const pick = seg => {
+    const was = seg.classList.contains('on');
+    box.querySelectorAll('.ring-seg.on').forEach(x => x.classList.remove('on'));
+    if (!was) seg.classList.add('on');
+    ui.ringSel = was ? null : seg.dataset.start;
+    const svg = box.querySelector('.ring24'); if (svg) svg.classList.toggle('picking', !was);
+    show(was ? null : seg);
+  };
+  box.addEventListener('click', e => { const seg = e.target.closest('.ring-seg'); if (seg) pick(seg); });
+  box.addEventListener('keydown', e => { const seg = e.target.closest('.ring-seg'); if (seg && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); pick(seg); } });
 }
 
 function sessionsHtml(date) {
@@ -138,7 +186,8 @@ function openActivity(a) {
         <div class="field"><label>Icon (optional)</label><input class="input" name="emoji" value="${esc(cur.emoji || '')}" maxlength="4" style="text-align:center;font-size:20px"></div>
         <div class="field"><label>Name</label><input class="input" name="name" value="${esc(cur.name)}" maxlength="40" required autofocus></div></div>
       <div class="field"><label>XP weight</label><div class="seg" id="act-w">${tierUi()}</div><div class="hint" id="act-w-note"></div></div>
-      <div class="field"><label>Colour</label><div class="swatches" id="act-c">${COLORS.map(c => `<button type="button" class="swatch sm ${c === color ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="${c}"></button>`).join('')}</div></div>
+      <div class="field"><label>Colour</label><div class="swatches" id="act-c">${COLORS.map(c => `<button type="button" class="swatch sm ${c.toLowerCase() === (color || '').toLowerCase() ? 'on' : ''}" style="background:${c}" data-c="${c}" aria-label="${c}"></button>`).join('')}
+          <label class="swatch sm custom ${COLORS.some(c => c.toLowerCase() === (color || '').toLowerCase()) ? '' : 'on'}" title="Any colour" style="--cc:${safeColor(color)}"><input type="color" value="${safeColor(color)}" id="act-cc" aria-label="Pick any colour"></label></div></div>
       <label class="row"><input type="checkbox" name="isEscape" ${cur.isEscape ? 'checked' : ''}> <span>This is a break: a meal, a nap, scrolling</span></label>
       <div class="hint">Breaks never count as work and reset the combo. During a campaign, starting one with under 25 minutes of focus on the board is challenged (never blocked).</div>`,
     onMount: el => {
@@ -146,6 +195,8 @@ function openActivity(a) {
       const paint = () => { seg.innerHTML = tierUi(); note.textContent = `${Math.round(S().settings.xp.perHour * E.TIERS[weight].mult * 10) / 10} XP per hour. ${E.TIERS[weight].note}`; };
       seg.addEventListener('click', e => { const b = e.target.closest('[data-w]'); if (b) { weight = b.dataset.w; paint(); } });
       sw.addEventListener('click', e => { const b = e.target.closest('[data-c]'); if (b) { color = b.dataset.c; sw.querySelectorAll('.swatch').forEach(x => x.classList.toggle('on', x === b)); } });
+      const cc = el.querySelector('#act-cc');
+      cc.addEventListener('input', () => { color = cc.value; const l = cc.closest('.swatch'); l.style.setProperty('--cc', color); sw.querySelectorAll('.swatch').forEach(x => x.classList.toggle('on', x === l)); });
       paint();
     },
     onSubmit: d => {
@@ -208,9 +259,10 @@ export default {
     return `<div class="view-h"><h2>Track</h2>
         <button class="btn sm ghost" data-act="session.new">${icon('clock')} Log time by hand</button>
         <button class="btn sm primary" data-act="activity.new">${icon('plus')} Activity</button></div>
-      ${run ? `<button class="run-bar" data-act="track.stop" style="--c:${safeColor(run.color)}" aria-label="Stop ${esc(run.name)}">
+      ${run ? `<button class="run-bar" data-act="track.stop" style="--c:${safeColor(run.color)}" aria-label="Stop ${esc(run.name)}" title="Press anywhere to stop">
+          <span class="run-pulse" aria-hidden="true"></span>
           ${run.emoji ? `<span class="tile-e">${esc(run.emoji)}</span>` : ''}
-          <span class="run-main"><b class="run-n ell">${esc(run.name)}</b>
+          <span class="run-main"><span class="run-k">Running</span><b class="run-n ell">${esc(run.name)}</b>
             <span class="run-s ell">Started ${fmtClock(run.lastStart, h24())}${E.runningTaskName(run) ? ' · ' + esc(E.runningTaskName(run)) : ''}</span></span>
           <span class="run-side"><b class="num run-t" data-live-run>${fmtTimer(Date.now() - run.lastStart)}</b>
             <span class="run-hint">Press anywhere to stop</span></span></button>` : ''}
@@ -220,7 +272,7 @@ export default {
             <button class="icon-btn sm" data-act="track.day" data-d="-1" aria-label="Previous day">${icon('left')}</button>
             <button class="btn sm ghost" data-act="track.day" data-d="0" ${isToday ? 'disabled' : ''}>Today</button>
             <button class="icon-btn sm" data-act="track.day" data-d="1" ${isToday ? 'disabled' : ''} aria-label="Next day">${icon('right')}</button></div>
-          <div id="track-ring">${ringHtmlFor(date)}</div></section>
+          <div id="track-ring">${ringHtmlFor(date, drawRing())}</div></section>
       </div>
       <section class="card" style="margin-top:var(--gap)"><div class="card-h"><span class="eyebrow">Sessions · ${isToday ? 'today' : fmtDate(date)}</span>
           ${segHtml('track.view', [['list', 'List'], ['timeline', 'Timeline']], ui.sessView)}</div>
@@ -229,13 +281,14 @@ export default {
   mount(root) {
     const box = root.querySelector('#track-tiles');
     if (box) wireSort(box);
+    wireRing(root.querySelector('#track-ring'));
   },
   tick(root) {
     const run = E.runningActivity();
     root.querySelectorAll('[data-live-act]').forEach(el => { const a = S().activities.find(x => x.id === el.dataset.liveAct); if (a) el.textContent = fmtTimer(E.actMsOn(a, today())); });
     const rb = root.querySelector('[data-live-run]');
     if (rb && run) rb.textContent = fmtTimer(Date.now() - run.lastStart);
-    if (viewDate() === today() && new Date().getSeconds() % 20 === 0) { const r = root.querySelector('#track-ring'); if (r) r.innerHTML = ringHtmlFor(today()); }
+    if (viewDate() === today() && new Date().getSeconds() % 20 === 0) { const r = root.querySelector('#track-ring'); if (r && !r.matches(':hover')) r.innerHTML = ringHtmlFor(today()); }
   }
 };
 

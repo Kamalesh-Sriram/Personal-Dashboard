@@ -11,7 +11,7 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 ## What it does
 
 - **Home.** Your main goals, you against your rival, today's mission, a one-press Lock in on your top tasks, habits, and a daily logbook.
-- **Board.** A kanban board. Tasks carry a tag, estimate, deadline, notes and steps, and can be duplicated. A task's tag decides which activity its time is logged under.
+- **Tasks.** A kanban board. Tasks carry a tag, priority, estimate, deadline, notes and steps, and can be duplicated. A task's tag decides which activity its time is logged under.
 - **Track.** Activity timers, a 24-hour ring of your day, a timeline, and editable sessions.
 - **Habits.** Streaks and XP levels in plain sight, a clean-sweep chain for doing all of them, and habit maps.
 - **Goals, Calendar, Subscriptions, Review.** Milestones with time tracking, a month view, recurring payments, and the week in numbers with a journal.
@@ -21,9 +21,9 @@ It is a plain web app with no build step and no dependencies. Fork it, connect i
 - **A game layer you can rename or switch off.** A rival that adapts to your last week, missions and execution, a level from 1 to 100 with ranks you name and colour, rest days, and fixed-length campaigns with their own red theme.
 - **Yours to shape.** Light, dark or system theme, any accent colour, five typefaces, your own background image, renameable labels, editable notification wording, reorderable tabs, motion and sound you can turn down or off.
 
-| Board | Track |
+| Tasks | Track |
 |---|---|
-| ![Board](docs/images/board.jpg) | ![Track](docs/images/track.jpg) |
+| ![Tasks](docs/images/board.jpg) | ![Track](docs/images/track.jpg) |
 
 | Habits | On a phone |
 |---|---|

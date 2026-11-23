@@ -140,6 +140,16 @@ export async function setCategory(id, cat, always = false) {
   try { await pushRows(touched); } catch (e) { status.error = e.message; changed(); }
   return touched.length;
 }
+/** Put many transactions in one category at once, as if each was chosen by hand. */
+export async function setCategories(ids, cat) {
+  await load();
+  const want = new Set(ids), touched = data.txs.filter(t => want.has(t.id));
+  touched.forEach(t => { t.cat = cat; t.man = true; });
+  if (!touched.length) return 0;
+  await store();
+  try { await pushRows(touched); } catch (e) { status.error = e.message; changed(); }
+  return touched.length;
+}
 export async function reapplyRules() {
   await load();
   const touched = F.recategorise(data.txs, rules());

@@ -85,22 +85,39 @@ details.lines textarea { margin-bottom: 8px; font-size: 13px; }
 .obj-tier { font: 700 10px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; width: 62px; flex: none; }
 .obj-t { flex: 1; min-width: 0; overflow-wrap: anywhere; }
 .obj.done .obj-t { color: var(--text-3); text-decoration: line-through; }
-.lockin {
-  width: 100%; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 16px 14px;
-  border: 1px solid var(--accent); border-radius: var(--r-ctl); color: var(--text);
+/* Lock in and the combo share one frame, split by a thin line: the button
+   takes the width, the combo sits in its own cell on the right. */
+.lock-row {
+  width: 100%; display: flex; align-items: stretch; overflow: hidden; padding: 0; color: var(--text); text-align: center; cursor: pointer;
+  border: 1px solid var(--accent); border-radius: var(--r-ctl);
   background: linear-gradient(135deg, color-mix(in srgb, var(--accent) 24%, transparent), color-mix(in srgb, var(--accent) 5%, transparent));
-  box-shadow: 0 0 26px -8px var(--accent-glow), inset 0 0 22px -12px var(--accent-glow); transition: background-color .12s, box-shadow .12s;
+  box-shadow: 0 0 26px -8px var(--accent-glow), inset 0 0 22px -12px var(--accent-glow); transition: box-shadow .12s;
 }
-.lockin:hover { background-color: color-mix(in srgb, var(--accent) 16%, transparent); box-shadow: 0 0 34px -6px var(--accent-glow), inset 0 0 26px -10px var(--accent-glow); }
+.lock-row:hover .lockin, .lock-row:hover .lock-combo { background-color: color-mix(in srgb, var(--accent) 12%, transparent); }
+.lock-row:active { transform: scale(.995); }
+.lock-row:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.lock-row:hover { box-shadow: 0 0 34px -6px var(--accent-glow), inset 0 0 26px -10px var(--accent-glow); }
+.lockin {
+  flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 5px; padding: 18px 14px;
+  border: 0; border-radius: 0; color: var(--text); background: transparent; transition: background-color .12s;
+}
 .lockin-t { display: inline-flex; align-items: center; gap: 9px; font: 700 17px/1 var(--font-display); letter-spacing: .14em; text-transform: uppercase; color: var(--accent-text); text-shadow: 0 0 18px var(--accent-glow); }
 .lockin-t svg { width: 18px; height: 18px; }
 .lockin-s { font-size: 12.5px; color: var(--text-2); max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .lockin.running .lockin-t { text-transform: none; letter-spacing: 0; }
+.lock-combo { flex: none; width: 116px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; padding: 10px 8px; border-left: 1px solid color-mix(in srgb, var(--accent) 55%, transparent); text-align: center; transition: background-color .12s; }
+.lock-combo b { font-size: 22px; line-height: 1; color: var(--text); font-variant-numeric: tabular-nums; transition: color .2s, text-shadow .2s; }
+.lock-combo span { font-size: 9.5px; line-height: 1.3; letter-spacing: .1em; text-transform: uppercase; color: var(--text-3); }
+.lock-combo.up b { color: var(--good); text-shadow: 0 0 14px color-mix(in srgb, var(--good) 55%, transparent); }
+@media (max-width: 560px) { .lock-combo { width: 88px; } .lock-combo b { font-size: 19px; } .lock-combo span { font-size: 8.5px; } }
+.mini-stats b small { font-size: .62em; color: var(--text-3); font-weight: 600; }
 .tasks { margin-top: 12px; display: flex; flex-direction: column; gap: 6px; }
 .task { display: flex; align-items: center; gap: 10px; padding: 9px 10px; border: 1px solid var(--line); border-radius: var(--r-ctl); cursor: pointer; background: transparent; transition: border-color .12s, background-color .12s; }
 .task:hover { background: var(--card-2); }
 /* the task Lock in will start: marked quietly, never filled with the accent */
 .task.sel { border-color: var(--line-2); box-shadow: inset 0 0 0 1px var(--line-2); }
+/* a tagged task is marked in its tag's colour, whatever the theme or campaign */
+.task.tagged.sel { border-color: var(--c); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--c) 60%, transparent), 0 0 16px -8px var(--c); }
 .task.sel .task-t { font-weight: 600; }
 .task.live { border-color: var(--good); }
 .task-t { font-weight: 500; overflow-wrap: anywhere; }
@@ -146,6 +163,13 @@ button.hud-cell:hover { border-color: var(--line-2); }
 .board { display: flex; gap: 12px; overflow-x: auto; padding-bottom: 10px; align-items: flex-start; min-height: 60vh; }
 .kcol { flex: 1 1 0; min-width: 204px; max-width: 420px; background: color-mix(in srgb, var(--card) 70%, transparent); border: 1px solid var(--line); border-radius: var(--r-card); display: flex; flex-direction: column; max-height: calc(100dvh - 150px); }
 .kcol-h { display: flex; align-items: center; gap: 8px; padding: 12px 10px 8px 14px; }
+/* Colour each column (Settings > Layout): a faint wash of the column's colour,
+   a touch stronger under the header, and a faint edge. No glow. Cards keep
+   their own surface, so tags still read on top. */
+.board.tinted .kcol { border-color: color-mix(in srgb, var(--cc) 16%, var(--line));
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--cc) 7%, var(--card)), color-mix(in srgb, var(--cc) 3%, var(--card)) 50%, color-mix(in srgb, var(--cc) 2%, var(--card))); }
+.board.tinted .kcol-h { border-bottom: 1px solid color-mix(in srgb, var(--cc) 12%, transparent); margin-bottom: 6px; padding-bottom: 10px; }
+:root[data-bg="on"] .board.tinted .kcol { background: linear-gradient(to bottom, color-mix(in srgb, var(--cc) 7%, color-mix(in srgb, var(--card) var(--glass), transparent)), color-mix(in srgb, var(--cc) 2%, color-mix(in srgb, var(--card) var(--glass), transparent))); }
 .kcards { display: flex; flex-direction: column; gap: 8px; padding: 4px 8px 10px; overflow-y: auto; min-height: 60px; flex: 1; }
 .kcard { display: flex; flex-direction: column; gap: 7px; padding: 11px 12px 8px; background: color-mix(in srgb, var(--card-2) 80%, transparent); border: 1px solid var(--line); border-radius: var(--r-ctl); cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; transition: border-color .12s; }
 .kcard:hover { border-color: var(--line-2); }
@@ -155,6 +179,14 @@ button.hud-cell:hover { border-color: var(--line-2); }
 .kcard.tagged .bar > i { background: var(--c); box-shadow: 0 0 8px -1px var(--c); }
 .task.tagged { border-left: 3px solid var(--c); background: color-mix(in srgb, var(--c) 7%, transparent); }
 .kcard.live { border-color: var(--good); }
+/* priority: a small flag in green, yellow or red */
+.pri { --p: var(--text-3); display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 600; letter-spacing: .02em; color: var(--p); }
+.pri-low { --p: #3FD98A; } .pri-med { --p: #F2C94C; } .pri-high { --p: #FF5A52; }
+.pri svg { width: 12px; height: 12px; fill: color-mix(in srgb, var(--p) 30%, transparent); stroke-width: 2.2; filter: drop-shadow(0 0 4px color-mix(in srgb, var(--p) 45%, transparent)); }
+.kcard-top .tag + .pri { margin-left: 8px; }
+.kcard.p-high:not(.tagged) { border-color: color-mix(in srgb, #FF5A52 35%, var(--line)); }
+.pri-seg button { display: inline-flex; align-items: center; gap: 7px; }
+.sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 .kcard.dragging { opacity: .3; }
 .kcard-t { font-weight: 400; font-size: 13.5px; line-height: 1.4; color: color-mix(in srgb, var(--text) 88%, transparent); overflow-wrap: anywhere; }
 .kcard .tag { font-weight: 500; letter-spacing: .01em; }
@@ -175,16 +207,26 @@ button.hud-cell:hover { border-color: var(--line-2); }
 
 /* ── track ── */
 .track { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(280px, 1fr); gap: var(--gap); align-items: start; }
-.run-bar { display: flex; align-items: center; gap: 14px; padding: 12px 16px; margin-bottom: var(--gap); border-radius: var(--r-card); border: 1px solid var(--c); background: color-mix(in srgb, var(--c) 12%, transparent); box-shadow: 0 0 26px -10px var(--c); }
-button.run-bar { width: 100%; color: var(--text); text-align: left; cursor: pointer; transition: background-color .12s, box-shadow .12s; }
-button.run-bar:hover { background: color-mix(in srgb, var(--c) 19%, transparent); box-shadow: 0 0 32px -8px var(--c); }
-.run-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 5px; }
-.run-n { font: 650 20px/1.15 var(--font-display); letter-spacing: -0.01em; }
-.run-s { font-size: 14px; color: var(--text-2); }
-.run-side { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; flex: none; }
-.run-t { font-size: 30px; font-variant-numeric: tabular-nums; }
-.run-hint { font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--text-3); }
-/* ── the month's record ── */
+/* The running timer. Solid, so it reads the same over any backdrop: the
+   activity's colour is a faint edge glow, a live dot and the label, never a wash. */
+.run-bar { position: relative; display: flex; align-items: center; gap: 16px; padding: 14px 18px; margin-bottom: var(--gap); border-radius: var(--r-card); border: 1px solid color-mix(in srgb, var(--c) 34%, var(--line)); background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, var(--card)), var(--card) 60%); box-shadow: var(--shadow), 0 10px 30px -22px var(--c); overflow: hidden; isolation: isolate; }
+:root[data-bg="on"] .run-bar { background: linear-gradient(90deg, color-mix(in srgb, var(--c) 9%, var(--card)), var(--card) 60%); }
+.run-pulse { flex: none; width: 10px; height: 10px; border-radius: 50%; background: var(--c); box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 60%, transparent); animation: run-pulse 1.8s ease-out infinite; }
+@keyframes run-pulse { 0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--c) 55%, transparent); } 70%, 100% { box-shadow: 0 0 0 9px transparent; } }
+:root[data-motion="off"] .run-pulse { animation: none; }
+.run-main { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.run-k { font: 700 10px/1 var(--font-sans); letter-spacing: .12em; text-transform: uppercase; color: var(--c); }
+.run-n { font: 650 19px/1.2 var(--font-display); letter-spacing: -0.01em; color: var(--text); }
+.run-s { font-size: 12.5px; color: var(--text-2); }
+.run-t { flex: none; font-size: 32px; line-height: 1; font-variant-numeric: tabular-nums; color: var(--text); letter-spacing: -0.02em; }
+button.run-bar { width: 100%; color: var(--text); text-align: left; cursor: pointer; transition: border-color .15s, box-shadow .15s, background-color .15s; }
+button.run-bar:hover { border-color: color-mix(in srgb, var(--c) 60%, var(--line)); box-shadow: var(--shadow), 0 12px 34px -18px var(--c); }
+button.run-bar:active { transform: scale(.995); }
+.run-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
+.run-hint { font-size: 10.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); transition: color .15s; }
+button.run-bar:hover .run-hint { color: var(--bad); }
+@media (max-width: 560px) { .run-bar { gap: 12px; padding-left: 18px; } .run-t { font-size: 26px; } .run-hint { font-size: 9.5px; } }
+
 .month { display: block; width: 100%; margin-top: 16px; padding: 14px 0 0; border: 0; border-top: 1px solid var(--line); background: transparent; color: inherit; text-align: left; }
 button.month { cursor: pointer; }
 .month-h { display: flex; align-items: baseline; gap: 10px; margin-bottom: 9px; }
@@ -227,6 +269,20 @@ button.month:hover .month-s { color: var(--text); }
 .tiles.sorting, .tiles.sorting .tile-main { cursor: grabbing; }
 .tiles.sorting .tile-edit, .tiles.sorting .tile-s { opacity: 0; }
 @media (hover: none) { .tile-edit { opacity: .55; } .tile-s { opacity: .7; } }
+/* The 24-hour ring: rounded, glowing blocks that grow from midnight in
+   order, and widen when pointed at or picked. The middle is HTML on top. */
+.ring-wrap { position: relative; max-width: 330px; margin: 0 auto; }
+.ring24 { overflow: visible; }
+.ring-seg { fill: currentColor; stroke: none !important; opacity: var(--o, 1); cursor: pointer; outline: none; transform-box: view-box; transform-origin: 150px 150px; filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 50%, transparent)); transition: transform .24s cubic-bezier(.2, .8, .2, 1), opacity .2s, filter .2s; }
+.ring-seg:hover, .ring-seg.hot, .ring-seg.on, .ring-seg:focus-visible { opacity: 1; transform: scale(1.07); filter: drop-shadow(0 0 10px currentColor); }
+.ring24.picking .ring-seg:not(.on):not(.hot) { opacity: calc(var(--o, 1) * .4); }
+:root:not([data-motion="off"]) .ring-wrap.draw .ring-draw, :root:not([data-motion="off"]) .entering .ring-draw { stroke-dasharray: 1 1; animation: seg-draw var(--t) cubic-bezier(.33, .1, .3, 1) calc(var(--d) + 120ms) both; }
+.ring-hand { pointer-events: none; }
+.ring-mid { position: absolute; inset: 24%; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px; text-align: center; pointer-events: none; }
+.ring-mid .ring-edit { pointer-events: auto; margin-top: 6px; height: 26px; padding: 0 10px; font-size: 12px; }
+.ring-big { font: 650 clamp(24px, 3.2vw, 32px)/1.05 var(--font-display); letter-spacing: -0.02em; font-variant-numeric: tabular-nums; }
+.ring-sub { font-size: 11.5px; color: var(--text-2); }
+.ring-name { max-width: 100%; font: 700 11px/1.2 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; }
 .ring-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin-top: 6px; text-align: center; }
 .ring-stats span { display: block; font-size: 10.5px; letter-spacing: .07em; text-transform: uppercase; color: var(--text-3); font-weight: 600; }
 .ring-stats b { font: 650 16px/1.5 var(--font-display); } .ring-stats i { display: block; font-style: normal; font-size: 11px; color: var(--text-3); }
@@ -251,7 +307,7 @@ button.month:hover .month-s { color: var(--text); }
 .habs { display: flex; flex-direction: column; gap: 10px; }
 .hab { display: grid; grid-template-columns: auto minmax(0, 1.5fr) 118px minmax(0, 1.3fr) auto; gap: 16px; align-items: center; padding: 14px 16px; background: var(--card-grad, var(--card)); border: 1px solid var(--line); border-left: 3px solid var(--c); border-radius: var(--r-card); box-shadow: var(--shadow); }
 :root[data-bg="on"] .hab { background: color-mix(in srgb, var(--card) var(--glass), transparent); -webkit-backdrop-filter: blur(22px); backdrop-filter: blur(22px); }
-.hab.off { opacity: .62; }
+.hab.off:not(.done) { opacity: .62; }
 
 .hab { cursor: grab; user-select: none; -webkit-user-select: none; -webkit-touch-callout: none; }
 .hab-sec { margin: 22px 0 10px; }
@@ -336,8 +392,14 @@ button.month:hover .month-s { color: var(--text); }
 /* ── calendar ── */
 .cal-h { display: grid; grid-template-columns: repeat(7, 1fr); border-bottom: 1px solid var(--line); }
 .cal-h span { padding: 10px 8px; font: 600 11px/1 var(--font-sans); letter-spacing: .08em; text-transform: uppercase; color: var(--text-3); }
-.cal-g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 1px; background: var(--line); }
-.cal-c { display: flex; flex-direction: column; gap: 2px; min-height: 104px; padding: 8px 9px; border: 0; background: var(--card); color: var(--text); text-align: left; min-width: 0; transition: background-color .12s; }
+/* The lines are each cell's own right and bottom border. They used to be 1px gaps with the
+   background showing through, and at a fractional zoom (125%, 150%, most phones) a gap between
+   fractional-width columns could round to nothing: some lines vanished on some screens. */
+.cal-g { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); }
+.cal-g > .cal-c { border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); border-radius: 0; }
+.cal-g > .cal-c:nth-child(7n) { border-right: 0; }
+.cal-g > .cal-c:nth-last-child(-n + 7) { border-bottom: 0; }
+.cal-c { display: flex; flex-direction: column; gap: 2px; min-height: 104px; padding: 8px 9px; border: 0; box-sizing: border-box; background: var(--card); color: var(--text); text-align: left; min-width: 0; transition: background-color .12s; }
 :root[data-bg="on"] .cal-c { background: color-mix(in srgb, var(--card) 92%, transparent); }
 .cal-c:hover { background: var(--card-2); }
 .cal-c.out { color: var(--text-3); } .cal-c.out .cal-x, .cal-c.out .cal-s { opacity: .5; }
@@ -425,8 +487,10 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .coach-h { display: flex; align-items: baseline; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
 .coach-t { font: 700 24px/1.1 var(--font-display); color: var(--accent-text); text-shadow: 0 0 18px var(--accent-glow); }
 .coach-split { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
-.coach-split span { padding: 3px 10px; border-radius: 11px; border: 1px solid var(--line); font-size: 11.5px; color: var(--text-3); }
-.coach-split span.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.coach-split button { padding: 3px 10px; border-radius: 11px; border: 1px solid var(--line); background: transparent; font-size: 11.5px; color: var(--text-3); cursor: pointer; transition: border-color .15s, color .15s, background-color .15s; }
+.coach-split button:hover { border-color: var(--line-2); color: var(--text-2); }
+.coach-split button.on { border-color: var(--accent); color: var(--accent-text); background: var(--accent-soft); }
+.coach-split button.due { border-style: dashed; border-color: color-mix(in srgb, var(--accent) 45%, var(--line)); }
 .li.coach-row { width: 100%; border-left: 0; border-right: 0; border-bottom: 0; background: transparent; color: inherit; text-align: left; padding: 11px 6px; transition: background-color .12s; }
 .li.coach-row:hover:not(:disabled) { background: var(--card-2); } .li.coach-row:disabled { cursor: default; }
 .coach-do { flex: none; text-align: right; font: 650 14.5px/1.2 var(--font-display); font-variant-numeric: tabular-nums; white-space: nowrap; }
@@ -442,8 +506,18 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .gym-weeks { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; }
 .gym-week { display: flex; flex-direction: column; align-items: center; gap: 5px; }
 .gym-week-bar { width: 100%; height: 84px; display: flex; align-items: flex-end; }
+.gym-week-bar { position: relative; }
+/* the goal, drawn across every week: each bar carries a piece, reaching over the gaps */
+.gym-goal-line { position: absolute; left: -3px; right: -3px; bottom: var(--goal); height: 0; border-top: 1.5px dashed color-mix(in srgb, var(--text) 55%, transparent); pointer-events: none; z-index: 1; }
+.gym-week:first-child .gym-goal-line { left: 0; } .gym-week:last-child .gym-goal-line { right: 0; }
 .gym-week-bar i { display: block; width: 100%; border-radius: 4px 4px 2px 2px; background: color-mix(in srgb, var(--accent) 45%, var(--card-3)); }
 .gym-week-bar i.now { background: var(--accent); box-shadow: 0 0 12px -2px var(--accent-glow); }
+/* against the weekly goal: green when met, red when not (the week under way stays in the accent until it is) */
+.gym-week-bar i.won { background: color-mix(in srgb, var(--good) 62%, var(--card-3)); }
+.gym-week-bar i.lost { background: color-mix(in srgb, var(--bad) 55%, var(--card-3)); }
+.gym-goal { display: inline-flex; align-items: center; gap: 6px; }
+.gym-goal b { min-width: 16px; text-align: center; font-size: 15px; }
+.gym-goal .icon-btn { width: 26px; height: 26px; font-size: 15px; line-height: 1; }
 .gym-week b { font-size: 11.5px; font-weight: 600; color: var(--text-2); }
 .line-chart { display: block; width: 100%; height: auto; }
 .notice.good { border-color: color-mix(in srgb, var(--good) 45%, transparent); }
@@ -458,13 +532,16 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .fin-pie { display: grid; grid-template-columns: minmax(220px, 340px) minmax(0, 1fr); gap: 34px; align-items: center; }
 .pie-wrap { position: relative; width: 100%; max-width: 340px; margin: 0 auto; }
 .pie { display: block; width: 100%; height: auto; overflow: visible; }
-.pie .seg { fill: none; stroke-width: 30; cursor: pointer; transform-origin: 120px 120px; transition: stroke-width .16s cubic-bezier(.2, .8, .2, 1), transform .16s cubic-bezier(.2, .8, .2, 1), opacity .16s; outline: none; }
-.pie .seg:hover, .pie .seg.hot, .pie .seg.on, .pie .seg:focus-visible { stroke-width: 40; transform: scale(1.045); filter: drop-shadow(0 0 10px currentColor); }
-.pie:has(.seg.on) .seg:not(.on):not(.hot):not(:hover) { opacity: .35; }
-.pie.draw .seg, .entering .pie .seg { stroke-dasharray: 1 1; animation: arc-fill .6s cubic-bezier(.2, .8, .2, 1) both; animation-delay: calc(var(--i) * 55ms); }
-.pie-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px; pointer-events: none; text-align: center; padding: 0 26%; }
+.pie .seg { fill: none; stroke-width: 20; stroke-linecap: round; cursor: pointer; outline: none; filter: drop-shadow(0 0 6px color-mix(in srgb, currentColor 60%, transparent)); transition: stroke-width .22s cubic-bezier(.2, .8, .2, 1), opacity .2s, filter .2s; }
+.pie .seg:hover, .pie .seg.hot, .pie .seg.on, .pie .seg:focus-visible { stroke-width: 28; filter: drop-shadow(0 0 13px currentColor); }
+.pie.picking .seg:not(.on):not(.hot):not(:hover) { opacity: .3; }
+:root:not([data-motion="off"]) .pie.draw .seg, :root:not([data-motion="off"]) .entering .pie .seg { stroke-dasharray: 1 1; animation: seg-draw var(--t) cubic-bezier(.33, .1, .3, 1) calc(var(--d) + 80ms) both; }
+.pie-mid { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 5px; pointer-events: none; text-align: center; padding: 0 27%; }
+.pie-ico { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 50%; background: var(--card-2); border: 1px solid var(--line); color: var(--text-2); margin-bottom: 4px; }
+.pie-ico svg { width: 16px; height: 16px; }
+.pie-txt { display: flex; flex-direction: column; align-items: center; gap: 5px; }
 .pie-mid b { font: 700 clamp(18px, 2.4vw, 26px)/1.1 var(--font-display); }
-.pie-mid span { font-size: 12px; color: var(--text-3); }
+.pie-mid span { font-size: 11px; letter-spacing: .1em; text-transform: uppercase; font-weight: 600; color: var(--text-3); }
 .fin-cat.hot { background: var(--card-2); }
 .fin-cats { display: flex; flex-direction: column; gap: 2px; }
 .fin-cat { display: flex; align-items: center; gap: 10px; width: 100%; padding: 8px 8px; border: 1px solid transparent; border-radius: var(--r-ctl); background: transparent; color: inherit; text-align: left; transition: background-color .12s; }
@@ -485,7 +562,7 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .fin-tx:first-child { border-top-color: transparent; }
 .fin-d { flex: none; width: 52px; font-size: 12px; color: var(--text-3); }
 .fin-n { font-size: 13.5px; }
-.fin-tx select.fin-sel { flex: none; width: 168px; height: 30px; padding: 0 8px; font-size: 12.5px; background: transparent; }
+.fin-tx select.fin-sel { flex: none; width: 168px; height: 30px; padding: 0 32px 0 10px; font-size: 12.5px; background-color: transparent; background-position: right 11px center; }
 .fin-tx select.fin-sel.none { border-style: dashed; color: var(--text-3); }
 .fin-tx select.fin-sel option { background: var(--card); color: var(--text); }
 .fin-a { flex: none; min-width: 92px; text-align: right; font-weight: 600; font-size: 13.5px; font-variant-numeric: tabular-nums; }
@@ -535,3 +612,116 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
   .set-c { justify-content: flex-start; width: 100%; }
   .tl-l { width: 52px; } .tl-grid { left: 52px; }
 }
+
+/* ── Finance, 5.4: the stats beside the daily chart, picked categories, bulk sorting ── */
+.fin-top { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr); gap: var(--gap); align-items: stretch; }
+.fin-stats { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--gap); }
+.fin-stats .stat { min-width: 0; }
+.fin-stats .stat b.num { font-size: 22px; overflow-wrap: anywhere; }
+.fin-chart { display: flex; flex-direction: column; min-width: 0; }
+.fin-chart .fin-year { flex: 1; }
+.fd-read { display: flex; align-items: baseline; gap: 10px; min-height: 30px; margin: -2px 0 6px; flex-wrap: wrap; }
+.fd-read b { font: 650 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
+.fd-when { font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
+.fd-in-v { font-size: 13px; color: var(--good); font-weight: 600; }
+.fd-read .btn { margin-left: auto; align-self: center; }
+.fd-plot { flex: 1; display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 8px; min-height: 220px; }
+.fd-y { position: relative; min-width: 34px; margin-bottom: 22px; }
+.fd-y span { position: absolute; right: 0; transform: translateY(50%); font-size: 10.5px; color: var(--text-3); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.fd-area { position: relative; display: flex; flex-direction: column; min-height: 168px; container-type: inline-size; }
+.fd-grid { position: absolute; left: 0; right: 0; top: 0; bottom: 22px; pointer-events: none; }
+.fd-grid i { position: absolute; left: 0; right: 0; height: 1px; background: var(--line); }
+.fd-grid i.base { background: var(--line-2); }
+/* one column per date: the bar fills the column, a bright cap on top, fading to the floor */
+.fd-cols { position: relative; flex: 1; display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 3px; }
+.fd-col { display: grid; grid-template-rows: minmax(0, 1fr) 22px; min-width: 0; padding: 0; border: 0; border-radius: 6px 6px 0 0; background: transparent; color: var(--text-3); cursor: pointer; }
+.fd-bar { position: relative; display: block; border-radius: 5px 5px 0 0; transition: background-color .15s; }
+/* A bar: a deep body in the day's colour, a bright glowing cap on its end,
+   solid most of the way and fading only near the floor. The chart has its
+   own saturated red and green; the colour runs between them in oklch, so a
+   mixed day passes through amber rather than mud. */
+.fd-plot { --fd-red: #FF4F4F; --fd-green: #34E07F; }
+.fd-bar i { --c: color-mix(in oklch, var(--fd-green) var(--mix, 0%), var(--fd-red)); position: absolute; left: 0; right: 0; bottom: 0; min-height: 3px; border-radius: 3px 3px 0 0;
+  background: linear-gradient(to bottom, color-mix(in srgb, var(--c) 52%, var(--card)), color-mix(in srgb, var(--c) 42%, var(--card)) 78%, color-mix(in srgb, var(--c) 16%, transparent));
+  box-shadow: 0 -4px 18px -8px var(--c); transform-origin: 50% 100%; transition: filter .15s; }
+.fd-bar i::before { content: ""; position: absolute; left: 0; right: 0; top: 0; height: 2px; border-radius: 2px; background: color-mix(in srgb, var(--c) 80%, #fff); box-shadow: 0 0 6px var(--c), 0 0 14px color-mix(in srgb, var(--c) 60%, transparent); }
+/* a bar bigger than the scale: cut by a break mark, its amount written above */
+.fd-bar i u { position: absolute; left: -2px; right: -2px; bottom: 93%; height: 5px; background: var(--card); transform: skewY(-12deg); }
+.fd-tag { position: absolute; left: 50%; top: 0; transform: translateX(-50%); font: 700 10px/1 var(--font-sans); white-space: nowrap; --c: color-mix(in oklch, var(--fd-green) var(--mix, 0%), var(--fd-red)); color: var(--c); text-shadow: 0 0 10px color-mix(in srgb, var(--c) 60%, transparent); font-variant-numeric: tabular-nums; pointer-events: none; }
+/* split: spending rises from the line in red, income hangs from it in green, each capped at its far end */
+.fd-plot.split .fd-bar i.up { --c: var(--fd-red); bottom: 36%; }
+.fd-plot.split .fd-bar i.down { --c: var(--fd-green); top: 64%; bottom: auto; border-radius: 0 0 3px 3px; transform-origin: 50% 0;
+  background: linear-gradient(to top, color-mix(in srgb, var(--c) 52%, var(--card)), color-mix(in srgb, var(--c) 42%, var(--card)) 78%, color-mix(in srgb, var(--c) 16%, transparent));
+  box-shadow: 0 4px 18px -8px var(--c); }
+.fd-plot.split .fd-bar i.down::before { top: auto; bottom: 0; }
+.fd-plot.split .fd-bar { border-radius: 5px; }
+.fd-y span.in { color: color-mix(in srgb, var(--good) 70%, var(--text-3)); }
+.fd-grid i.in { background: color-mix(in srgb, var(--good) 10%, var(--line)); }
+.fd-d { display: grid; place-items: center; font-size: 10.5px; font-variant-numeric: tabular-nums; border-radius: 6px; transition: color .15s, background-color .15s; }
+.fd-col:hover .fd-bar { background: color-mix(in srgb, var(--text) 5%, transparent); }
+.fd-col:hover .fd-bar i { filter: brightness(1.2) saturate(1.1); }
+.fin-loose { align-items: center; } .fin-loose .btn { margin-left: 4px; }
+.fd-col:hover .fd-d { color: var(--text); }
+.fd-col.on .fd-bar { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.fd-col.on .fd-bar i { filter: brightness(1.3) saturate(1.15); }
+.fd-col.on .fd-d { color: var(--on-accent); background: var(--accent); font-weight: 700; }
+.fd-col.later .fd-d { opacity: .4; }
+.fd-col:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+@container (max-width: 520px) { .fd-cols { gap: 2px; } .fd-d { font-size: 9px; } .fd-col:nth-child(even):not(.on) .fd-d { color: transparent; } }
+:root:not([data-motion="off"]) .fd-cols.draw .fd-bar i, :root:not([data-motion="off"]) .entering .fd-cols .fd-bar i { animation: bar-up .55s cubic-bezier(.2, .8, .2, 1) calc(var(--i) * 16ms + 80ms) both; }
+@keyframes bar-up { from { transform: scaleY(0); } to { transform: scaleY(1); } }
+.fin-tick { flex: none; display: grid; place-items: center; width: 16px; height: 16px; border-radius: 5px; border: 1.5px solid var(--c); background: color-mix(in srgb, var(--c) 18%, transparent); color: transparent; transition: background-color .15s, color .15s, box-shadow .15s; }
+.fin-tick svg { width: 11px; height: 11px; stroke-width: 3; }
+.fin-cat.on .fin-tick { background: var(--c); color: var(--bg); box-shadow: 0 0 10px -2px var(--c); }
+.fin-picked { display: flex; align-items: center; gap: 10px; margin-top: 8px; padding: 9px 10px; border-radius: var(--r-ctl); background: var(--card-2); font-size: 13px; color: var(--text-2); }
+.fin-picked b { color: var(--text); font-variant-numeric: tabular-nums; }
+.fin-picked .btn { margin-left: auto; }
+.fin-bulk { position: sticky; top: 64px; z-index: 3; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 4px 0 10px; padding: 10px 12px; border-radius: var(--r-ctl); border: 1px solid color-mix(in srgb, var(--accent) 45%, var(--line)); background: color-mix(in srgb, var(--accent) 8%, var(--card)); box-shadow: 0 10px 24px -16px rgba(0, 0, 0, .6); }
+.fin-bulk select { width: auto; min-width: 180px; height: 32px; }
+.fin-all { display: flex; align-items: center; gap: 8px; padding: 4px 2px 8px 12px; cursor: pointer; }
+/* checkboxes: a thin outline that lights up quietly, never a filled block */
+.fin-pick, .fin-all input { -webkit-appearance: none; appearance: none; position: relative; width: 16px; height: 16px; flex: none; margin: 0; cursor: pointer;
+  border: 1.5px solid color-mix(in srgb, var(--text-3) 70%, transparent); border-radius: 5px; background: transparent; transition: border-color .15s, background-color .15s, box-shadow .15s; }
+.fin-pick:hover, .fin-all input:hover { border-color: var(--text-2); }
+.fin-pick:checked, .fin-all input:checked { border-color: var(--accent); background: var(--accent-soft); box-shadow: 0 0 10px -3px var(--accent-glow); }
+.fin-pick:checked::after, .fin-all input:checked::after { content: ""; position: absolute; left: 4.5px; top: 1.5px; width: 4px; height: 8px; border: solid var(--accent-text); border-width: 0 2px 2px 0; transform: rotate(45deg); }
+.fin-pick:focus-visible, .fin-all input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.fin-tx.sel { background: color-mix(in srgb, var(--accent) 7%, transparent); }
+@media (max-width: 980px) { .fin-top { grid-template-columns: minmax(0, 1fr); } }
+@media (max-width: 560px) { .fin-stats { gap: 10px; } .fin-stats .stat-ico { display: none; } .fin-bulk { top: 56px; } .fin-tx select.fin-sel { margin-left: 26px; } }
+
+/* ── Habits and Goals, 5.4: notes, and a goal's links ── */
+.hab-notes { grid-column: 1 / -1; display: flex; flex-direction: column; gap: 6px; padding-top: 12px; border-top: 1px solid var(--line); cursor: auto; }
+.hab-notes textarea { min-height: 76px; background: transparent; }
+/* a habit's note, faint, beside its name; press it to open the notes */
+.hab-n-row { display: flex; align-items: baseline; gap: 12px; min-width: 0; }
+.hab-n-row .hab-n { flex: 0 1 auto; min-width: 0; }
+.hab-note-peek { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; padding: 0; border: 0; background: transparent; color: var(--text-3); font-size: 12.5px; text-align: left; cursor: pointer; transition: color .15s; }
+.hab-note-peek:hover { color: var(--text-2); }
+.hab-note-peek svg, .g-peek svg { width: 13px; height: 13px; flex: none; opacity: .85; }
+.hab-act .icon-btn.has:not(.on) { color: var(--c); }
+.g-notes { display: flex; flex-direction: column; gap: 8px; margin-top: 8px; padding-top: 12px; border-top: 1px dashed var(--line); cursor: auto; }
+.g-notes textarea { min-height: 70px; background: transparent; }
+.g-links { display: flex; flex-direction: column; gap: 4px; }
+.g-link { display: flex; align-items: center; gap: 4px; }
+.g-link a { flex: 1; min-width: 0; display: flex; align-items: center; gap: 9px; padding: 7px 10px; border: 1px solid var(--line); border-radius: var(--r-ctl); color: var(--text); text-decoration: none; transition: border-color .12s, background-color .12s; }
+.g-link a:hover { border-color: var(--c); background: color-mix(in srgb, var(--c) 8%, transparent); }
+.g-link a svg { width: 14px; height: 14px; flex: none; color: var(--c); }
+.g-link a .ell:first-of-type { flex: none; max-width: 60%; }
+.g-link-add .input { height: 34px; } .g-link-add .input[name="url"] { flex: 1.4; } .g-link-add .input[name="t"] { flex: 1; }
+/* in brief: a note's first line beside the name, links as chips under it */
+.goal-name { flex: 0 1 auto; min-width: 0; }
+.ms-n { display: flex; align-items: baseline; gap: 12px; min-width: 0; } .ms-name { flex: 0 1 auto; min-width: 0; }
+.g-peek { flex: 1 1 0; min-width: 0; display: flex; align-items: center; gap: 6px; font-size: 12.5px; font-weight: 400; color: var(--text-3); letter-spacing: 0; text-transform: none; }
+.goal-n .g-peek { margin-left: 6px; }
+.ms.done .g-peek { text-decoration: none; }
+.g-chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.ms-chips { margin: 2px 0 4px 34px; }
+.g-chip { display: inline-flex; align-items: center; gap: 6px; max-width: 240px; height: 26px; padding: 0 10px; border: 1px solid color-mix(in srgb, var(--c, var(--accent)) 35%, var(--line)); border-radius: 999px; font-size: 12px; color: var(--text-2); text-decoration: none; background: color-mix(in srgb, var(--c, var(--accent)) 6%, transparent); transition: border-color .12s, color .12s, background-color .12s; }
+.g-chip svg { width: 12px; height: 12px; flex: none; color: var(--c, var(--accent)); }
+.g-chip:hover { border-color: var(--c, var(--accent)); color: var(--text); background: color-mix(in srgb, var(--c, var(--accent)) 12%, transparent); }
+.g-notes-h { display: flex; align-items: center; gap: 10px; width: 100%; padding: 2px 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
+.g-notes-h .goal-chev { margin-left: auto; transform: rotate(180deg); }
+.g-notes.shut .g-notes-h .goal-chev { transform: none; }
+.g-notes-h:hover .label { color: var(--text-2); }
+@media (max-width: 560px) { .g-link-add { flex-wrap: wrap; } .g-link-add .input { flex-basis: 100%; } }

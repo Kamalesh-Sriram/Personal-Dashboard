@@ -15,14 +15,22 @@ const open = new Set();          // cards whose sub-tasks are expanded on the bo
 const TAG_COLORS = ['#8AB4F8', '#2BD4F0', '#2BF0A0', '#C58AF9', '#F28B82', '#F5A623', '#FFD93D', '#FF4D5E', '#9B6EF0', '#56CFB2'];
 const nextTagColor = used => TAG_COLORS.find(c => !used.some(u => (u || '').toLowerCase() === c.toLowerCase())) || TAG_COLORS[used.length % TAG_COLORS.length];
 const DONE_SHOWN = 25;
+/** Priority: green low, yellow medium, red high. Shown as a small flag in
+ *  that colour: a different shape from the tag's dot, so the two never mix. */
+export const PRIORITY = { low: { label: 'Low' }, med: { label: 'Medium' }, high: { label: 'High' } };
+export function priHtml(p, withLabel = false) {
+  const P = PRIORITY[p];
+  if (!P) return '';
+  return `<span class="pri pri-${p}" title="${P.label} priority">${icon('flag')}${withLabel ? `<span>${P.label}</span>` : `<span class="sr">${P.label} priority</span>`}</span>`;
+}
 
 function cardHtml(c, colId) {
   const st = S(), tag = st.tags.find(t => t.id === c.tagId);
   const subs = c.subs || [], sd = subs.filter(s => s.done).length, ms = E.cardMs(c.id);
   const run = E.runningActivity(), live = run && run.runCardId === c.id;
   const dl = c.deadline ? daysBetween(today(), c.deadline) : null;
-  return `<article class="kcard ${tag ? 'tagged' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-card="${esc(c.id)}" data-flip="c-${esc(c.id)}" data-act="card.edit" data-id="${esc(c.id)}" tabindex="0">
-    <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}<span class="grow"></span>
+  return `<article class="kcard ${tag ? 'tagged' : ''} ${live ? 'live' : ''} ${c.pri && colId !== 'done' ? 'p-' + c.pri : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-card="${esc(c.id)}" data-flip="c-${esc(c.id)}" data-act="card.edit" data-id="${esc(c.id)}" tabindex="0">
+    <div class="kcard-top">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}${colId !== 'done' ? priHtml(c.pri, true) : ''}<span class="grow"></span>
         ${colId !== 'done' ? `<button class="icon-btn sm" data-act="lock.in" data-card="${esc(c.id)}" title="${esc(L().lockIn)} on this task" aria-label="Start timer">${icon(live ? 'zap' : 'play')}</button>
         <button class="icon-btn sm" data-act="card.complete" data-id="${esc(c.id)}" title="Mark done" aria-label="Mark done">${icon('check')}</button>` : ''}</div>
     <div class="kcard-t">${esc(c.text)}</div>
@@ -48,7 +56,7 @@ function columnHtml(col) {
     cards = cards.slice(0, DONE_SHOWN);
   }
   const est = cards.reduce((n, c) => n + (c.est || 0), 0);
-  return `<section class="kcol" data-col="${esc(col.id)}" aria-label="${esc(col.name)}">
+  return `<section class="kcol" data-col="${esc(col.id)}" style="--cc:${safeColor(col.color, '#6FB1F0')}" aria-label="${esc(col.name)}">
     <header class="kcol-h"><span class="dot" style="background:${safeColor(col.color)}"></span><b class="grow ell">${esc(col.name)}</b>
       <span class="dim tiny">${(st.cards[col.id] || []).length}${est && col.id !== 'done' ? ' · ' + fmtMins(est) : ''}</span>
       ${col.id !== 'done' ? `<button class="icon-btn sm" data-act="card.new" data-col="${esc(col.id)}" title="Add a task here" aria-label="Add task to ${esc(col.name)}">${icon('plus')}</button>`
@@ -61,7 +69,9 @@ function columnHtml(col) {
 /* ── card editor ── */
 function openCard({ card = null, col = 'today', draft = null }) {
   const st = S();
-  const c = draft || card || { text: '', tagId: '', activityId: '', est: '', deadline: '', notes: '', subs: [] };
+  const c = draft || card || { text: '', tagId: '', activityId: '', est: '', deadline: '', notes: '', subs: [], pri: '' };
+  let pri = c.pri || '';
+  const priUi = () => [['', 'None'], ...Object.entries(PRIORITY).map(([k, v]) => [k, v.label])].map(([k, l]) => `<button type="button" class="${k === pri ? 'on' : ''}" data-pri="${k}">${k ? priHtml(k) : ''}${l}</button>`).join('');
   const subs = (c.subs || []).map(s => ({ ...s }));
   const subsHtml = () => subs.map((s, i) => `<div class="row sub-row">
       <button type="button" class="check sq ${s.done ? 'on' : ''}" data-sub-toggle="${i}" aria-label="Toggle step">${icon('check')}</button>
@@ -79,6 +89,7 @@ function openCard({ card = null, col = 'today', draft = null }) {
         <div class="field"><label>Estimate (min)</label><input class="input" type="number" name="est" min="0" max="6000" step="5" value="${c.est || ''}"></div>
         <div class="field"><label>Deadline</label><input class="input" type="date" name="deadline" value="${esc(c.deadline || '')}"></div>
       </div>
+      <div class="field"><label>Priority</label><div class="seg pri-seg" id="card-pri">${priUi()}</div></div>
       <div class="hint" id="card-logs"></div>
       <div class="field"><label>Steps</label><div id="subs" class="col" style="gap:6px">${subsHtml()}</div>
         <div class="row"><input class="input" id="sub-new" placeholder="Add a step and press Enter" maxlength="200"><button type="button" class="btn" id="sub-add" aria-label="Add step">${icon('plus')}</button></div></div>
@@ -86,7 +97,8 @@ function openCard({ card = null, col = 'today', draft = null }) {
     onMount: el => {
       const box = el.querySelector('#subs'), inp = el.querySelector('#sub-new'), tagSel = el.elements.tagId, logs = el.querySelector('#card-logs');
       const redraw = () => { box.innerHTML = subsHtml(); };
-      const actSel = el.elements.activityId;
+      const actSel = el.elements.activityId, priBox = el.querySelector('#card-pri');
+      priBox.addEventListener('click', e => { const b = e.target.closest('[data-pri]'); if (b) { pri = b.dataset.pri; priBox.innerHTML = priUi(); } });
       const logHint = () => {
         const own = st.activities.find(x => x.id === actSel.value), tag = st.tags.find(t => t.id === tagSel.value);
         const linked = tag && st.activities.find(x => x.id === tag.activityId);
@@ -108,7 +120,7 @@ function openCard({ card = null, col = 'today', draft = null }) {
     onSubmit: d => {
       const text = d.text.trim();
       if (!text) return false;
-      const fields = { text, tagId: d.tagId || null, activityId: d.activityId || null, est: Math.max(0, parseInt(d.est) || 0) || null, deadline: d.deadline || null, notes: d.notes.trim(), subs: subs.filter(s => s.t.trim()).map(s => ({ ...s, t: s.t.trim() })) };
+      const fields = { text, tagId: d.tagId || null, activityId: d.activityId || null, est: Math.max(0, parseInt(d.est) || 0) || null, deadline: d.deadline || null, pri: pri || null, notes: d.notes.trim(), subs: subs.filter(s => s.t.trim()).map(s => ({ ...s, t: s.t.trim() })) };
       if (card) {
         Object.assign(card, fields); touch(card);
         const f = E.findCard(card.id);
@@ -215,11 +227,11 @@ const view = {
   wide: true,
   render() {
     const st = S();
-    return `<div class="view-h"><h2>Board</h2>
+    return `<div class="view-h"><h2>Tasks</h2>
         <button class="btn sm ghost" data-act="board.tags">${icon('list')} Tags</button>
         <button class="btn sm ghost" data-act="board.columns">${icon('board')} Columns</button>
         <button class="btn sm primary" data-act="card.new" data-col="today">${icon('plus')} New task <span class="kbd" style="border-color:currentColor;color:inherit;opacity:.7">N</span></button></div>
-      <div class="board" data-scroll="board">${st.columns.map(columnHtml).join('')}</div>`;
+      <div class="board ${st.settings.colTint ? 'tinted' : ''}" data-scroll="board">${st.columns.map(columnHtml).join('')}</div>`;
   },
   mount(root) { const b = root.querySelector('.board'); if (b) wireDrag(b); },
   newCard(col = 'today') { openCard({ col }); }
@@ -242,7 +254,7 @@ registerActions({
     const f = E.findCard(d.id); if (!f) return;
     closeModal();
     const c = f.card;
-    openCard({ col: f.col === 'done' ? 'today' : f.col, draft: { text: c.text, tagId: c.tagId, activityId: c.activityId, est: c.est, deadline: c.deadline, notes: c.notes, subs: (c.subs || []).map(s => ({ id: uid(), t: s.t, done: false })) } });
+    openCard({ col: f.col === 'done' ? 'today' : f.col, draft: { text: c.text, tagId: c.tagId, activityId: c.activityId, est: c.est, deadline: c.deadline, pri: c.pri, notes: c.notes, subs: (c.subs || []).map(s => ({ id: uid(), t: s.t, done: false })) } });
   },
   'card.subs': d => { open.has(d.id) ? open.delete(d.id) : open.add(d.id); refresh(); },
   'card.subToggle': d => {

@@ -18,6 +18,7 @@ const fmtFull = ts => new Date(ts).toLocaleDateString(undefined, { weekday: 'sho
 const tonnes = kg => (kg >= 10000 ? (kg / 1000).toFixed(1) + ' t' : Math.round(kg).toLocaleString() + ' kg');
 const setText = s => (s.kg > 0 ? `${G.fmtKg(s.kg)} kg × ${s.reps || 0}` : s.reps ? `${s.reps} reps` : s.sec ? `${s.sec}s` : '-');
 const ago = ts => { const d = Math.floor((Date.now() - ts) / 86400000); return d <= 0 ? 'today' : d === 1 ? 'yesterday' : d < 14 ? `${d} days ago` : d < 70 ? `${Math.round(d / 7)} weeks ago` : `${Math.round(d / 30)} months ago`; };
+const cap = t => t.charAt(0).toUpperCase() + t.slice(1);
 const kindPill = k => `<span class="pill tiny-pill ${k === 'add' ? 'good' : k === 'deload' ? 'warn' : ''}">${k === 'add' ? 'Add weight' : k === 'deload' ? 'Back off' : k === 'time' ? 'Longer' : k === 'same' ? 'Repeat' : 'More reps'}</span>`;
 
 let wired = false, asked = false;
@@ -53,37 +54,42 @@ function setupHtml() {
     </div>`;
 }
 
-function statsHtml(sum) {
+const goal = () => Math.max(1, Math.min(14, Number(cfg().weekGoal) || 3));
+function statsHtml(sum, workouts) {
+  const ww = G.weeksWon(workouts, goal());
   const delta = sum.volPrev ? Math.round((sum.vol30 - sum.volPrev) / sum.volPrev * 100) : null;
   const stat = (label, big, small) => `<div><b class="num">${big}</b><span class="eyebrow">${label}</span><i>${small}</i></div>`;
   return `<div class="gym-stats">
     ${stat('This week', `${sum.thisWeek}`, `workout${sum.thisWeek === 1 ? '' : 's'}, ${sum.count30} in 30 days`)}
     ${stat('Volume, 30 days', tonnes(sum.vol30), delta === null ? 'no earlier month yet' : `${delta >= 0 ? '+' : ''}${delta}% on the month before`)}
     ${stat('Records this month', sum.records, sum.records ? 'new estimated maxes' : 'none yet')}
-    ${stat('Weeks in a row', sum.weekStreak, 'with at least one workout')}
+    ${stat('Weeks won', ww.won, `${goal()} or more workouts`)}
   </div>`;
 }
 
 /* ── the coach: your next session, exercise by exercise ── */
+/** What to do, as (sets) x (reps) | (weight). */
 function target(it) {
-  if (it.kind === 'time' || (!it.kg && !it.reps && it.sec)) return `${it.sets} × ${it.sec || it.last.sec || 0}s`;
-  const reps = it.kind === 'add' ? `${it.reps}+` : it.kind === 'same' ? String(it.reps) : it.kind === 'deload' ? `up to ${it.reps}` : String(it.reps);
-  return it.kg > 0 ? `${it.sets} × ${reps} at ${G.fmtKg(it.kg)} kg` : `${it.sets} × ${reps}`;
+  if (it.kind === 'time' || (!it.kg && !it.reps && it.sec)) return `${it.sets} x ${it.sec || it.last.sec || 0}s`;
+  return it.kg > 0 ? `${it.sets} x ${it.reps} | ${G.fmtKg(it.kg)} kg` : `${it.sets} x ${it.reps}`;
 }
 function coachHtml(workouts) {
   const split = cfg().split.length ? cfg().split : G.guessSplit(workouts), mine = cfg().split.length > 0;
-  const n = G.nextWorkout(workouts, split);
+  // a session you picked holds until a newer workout is logged, then the cycle takes over again
+  const latest = workouts.reduce((m, w) => Math.max(m, w.start), 0), p = cfg().pick;
+  const pick = p && p.after >= latest && split[p.slot] && split[p.slot] === p.title ? p.slot : null;
+  const n = G.nextWorkout(workouts, split, pick);
   const head = (right = '') => `<div class="card-h"><span class="eyebrow">Next workout</span>${right}
       <button class="btn sm ghost" data-act="gym.split">${icon('edit')} ${mine ? 'Edit split' : 'Set your split'}</button></div>`;
   if (!n || !n.title) return `${head()}<div class="empty">Tell the dashboard your split and it will line up your next session from the last time you did it.</div>`;
   return `${head(`<span class="tiny dim">${n.slot + 1} of ${n.of} in your split</span>`)}
     <div class="coach-h"><b class="coach-t">${esc(n.title)}</b>
-      <span class="muted">${n.lastDone ? `last done ${ago(n.lastDone)}` : 'not done before'}${mine ? '' : ' · split guessed from your history'}</span></div>
-    <div class="coach-split">${split.map((t, i) => `<span class="${i === n.slot ? 'on' : ''}">${esc(t)}</span>`).join('')}</div>
+      <span class="muted">${n.lastDone ? `last done ${ago(n.lastDone)}` : 'not done before'}</span></div>
+    <div class="coach-split" role="group" aria-label="Choose the session">${split.map((t, i) => `<button class="${i === n.slot ? 'on' : ''} ${i === n.due && n.due !== n.slot ? 'due' : ''}" data-act="gym.pick" data-i="${i}" aria-pressed="${i === n.slot}" title="${i === n.due ? 'Up next in your split' : ''}">${esc(t)}</button>`).join('')}</div>
     ${n.items.length ? `<div class="list coach-list">${n.items.map(it => `<button class="li coach-row" data-act="gym.exercise" data-key="${esc(it.key)}" ${it.key ? '' : 'disabled'}>
-        <div class="grow"><div class="row"><b class="ell">${esc(it.name)}</b>${kindPill(it.kind)}</div><div class="tiny dim">${esc(it.text)}</div></div>
+        <div class="grow"><div class="row"><b class="ell">${esc(it.name)}</b>${kindPill(it.kind)}</div></div>
         <div class="coach-do">${esc(target(it))}</div></button>`).join('')}</div>
-      <p class="hint" style="margin-top:10px">Built from your last ${esc(n.title)} session in this place of the split. Sets are your working sets; warm-ups are up to you.</p>`
+`
       : `<div class="empty">No earlier workout called "${esc(n.title)}" was found, so there is nothing to build it from. Check the names in your split.</div>`}`;
 }
 
@@ -100,18 +106,21 @@ function liftsHtml(workouts, exs) {
     return `<button class="li gym-next" data-act="gym.exercise" data-key="${esc(e.key)}">
       <div class="grow"><div class="row"><b class="ell">${esc(e.name)}</b>${s ? kindPill(s.kind) : ''}</div>
         ${s ? `<div class="gym-tip">${esc(s.text)}</div>` : ''}
-        <div class="tiny dim">Last time, ${ago(last.ts)}: ${last.top.kg > 0 ? `${G.fmtKg(last.top.kg)} kg × ${esc(sets)}` : esc(setText(last.top))}${e.best ? ` · best est. max ${G.fmtKg(Math.round(e.best * 2) / 2)} kg` : ''}</div></div>
+        <div class="tiny dim">${cap(ago(last.ts))}: ${last.top.kg > 0 ? `${G.fmtKg(last.top.kg)} kg × ${esc(sets)}` : esc(setText(last.top))}${e.best ? ` · best est. max ${G.fmtKg(Math.round(e.best * 2) / 2)} kg` : ''}</div></div>
       <div class="gym-spark">${sparkLine(e.sessions.slice(-10).map(x => x.e1rm || x.reps))}</div>
     </button>`; }).join('')}</div>
-    ${focus.length ? '' : '<p class="hint" style="margin-top:10px">These are picked by how often you do them. Press Choose lifts to decide for yourself.</p>'}`;
+`;
 }
 
+/** Workouts per week, against the goal: the bar's height is the number of
+ *  workouts, so weeks with the same count stand level, and the goal is a
+ *  line across them. Volume is in each bar's tooltip. */
 function weeksHtml(wk) {
-  const max = Math.max(1, ...wk.map(w => w.vol));
-  return `<div class="gym-weeks">${wk.map((w, i) => `<div class="gym-week" title="Week of ${fmtDay(w.start)}: ${w.count} workout${w.count === 1 ? '' : 's'}, ${tonnes(w.vol)}">
-      <div class="gym-week-bar"><i class="${i === wk.length - 1 ? 'now' : ''}" style="height:${Math.max(w.vol ? 4 : 0, w.vol / max * 100)}%"></i></div>
-      <b>${w.count || '·'}</b></div>`).join('')}</div>
-    <div class="tiny dim" style="margin-top:8px;text-align:center">Bars are weekly volume. The number under each is workouts that week.</div>`;
+  const g = goal(), top = Math.max(g, ...wk.map(w => w.count)) * 1.2, pct = v => (v / top * 100).toFixed(2);
+  const tone = (w, i) => (w.count >= g ? 'won' : i === wk.length - 1 ? 'now' : 'lost');
+  return `<div class="gym-weeks" style="--goal:${pct(g)}%">${wk.map((w, i) => `<div class="gym-week" title="Week of ${fmtDay(w.start)}: ${w.count} workout${w.count === 1 ? '' : 's'}, ${tonnes(w.vol)}${w.count >= g ? ', goal met' : i === wk.length - 1 ? ', under way' : ', below your goal'}">
+      <div class="gym-week-bar"><i class="${tone(w, i)}" style="height:${pct(w.count)}%"></i><u class="gym-goal-line" aria-hidden="true"></u></div>
+      <b>${w.count || '·'}</b></div>`).join('')}</div>`;
 }
 
 function exercisesHtml(all, templates) {
@@ -235,8 +244,9 @@ export default {
         <label class="btn sm ghost">${icon('upload')} Import file<input type="file" accept="${FILES}" data-change="gym.file" hidden></label>
         <button class="icon-btn sm" data-act="gym.manage" title="Manage gym data" aria-label="Manage gym data">${icon('settings')}</button></div>
       ${s.error ? `<div class="notice bad" style="margin-bottom:var(--gap)">${esc(s.error)}</div>` : ''}
-      <section class="card gym-weeks-card"><div class="card-h"><span class="eyebrow">Last 12 weeks</span></div>
-        <div class="gym-weeks-in">${weeksHtml(G.weeks(d.workouts, 12))}</div>${statsHtml(sum)}</section>
+      <section class="card gym-weeks-card"><div class="card-h"><span class="eyebrow">Last 12 weeks</span>
+          <span class="gym-goal" role="group" aria-label="Workouts a week goal"><span class="tiny dim">Goal</span><button class="icon-btn sm" data-act="gym.goal" data-d="-1" aria-label="Lower the goal" ${goal() <= 1 ? 'disabled' : ''}>−</button><b class="num">${goal()}</b><button class="icon-btn sm" data-act="gym.goal" data-d="1" aria-label="Raise the goal" ${goal() >= 14 ? 'disabled' : ''}>+</button><span class="tiny dim">a week</span></span></div>
+        <div class="gym-weeks-in">${weeksHtml(G.weeks(d.workouts, 12))}</div>${statsHtml(sum, d.workouts)}</section>
       <section class="card" style="margin-top:var(--gap)">${coachHtml(d.workouts)}</section>
       <div class="gym-grid">
         <section class="card">${liftsHtml(d.workouts, exs)}</section>
@@ -260,6 +270,14 @@ function recentCount(workouts, exs) {
 }
 
 registerActions({
+  'gym.pick': d => {
+    const d0 = Gym.cached(), ws = (d0 && d0.workouts) || [], g = cfg();
+    const split = g.split.length ? g.split : G.guessSplit(ws), i = +d.i;
+    const due = (G.nextWorkout(ws, split) || {}).slot;
+    g.pick = i === due ? null : { slot: i, title: split[i], after: ws.reduce((m, w) => Math.max(m, w.start), 0) };
+    save();
+  },
+  'gym.goal': d => { const g = cfg(); g.weekGoal = Math.max(1, Math.min(14, goal() + +d.d)); save(); },
   'gym.sync': () => Gym.syncAll(),
   'gym.check': async () => { const ok = await Gym.checkConfigured(); toast(ok ? 'Connected' : 'Not connected yet', ok ? 'Press Sync to read your history.' : 'No Hevy key, openGym server, or openGym backup bucket or WebDAV folder was found on the site. Add the settings in Netlify and redeploy.', { kind: ok ? 'good' : '', ms: 8000 }); },
   'gym.file': async (d, e, el) => {

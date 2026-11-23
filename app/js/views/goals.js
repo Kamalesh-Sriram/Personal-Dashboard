@@ -26,6 +26,42 @@ const find = d => {
   return { g, m, t };
 };
 const commit = g => { touch(g); save(); };
+/** A link as typed: "example.com/x" gets https:// in front; anything that is not web is refused. */
+export function cleanUrl(v) {
+  let u = String(v || '').trim();
+  if (!u) return '';
+  if (!/^[a-z][a-z0-9+.-]*:/i.test(u)) u = 'https://' + u;
+  try { const x = new URL(u); return /^https?:$/.test(x.protocol) && x.hostname.includes('.') ? x.href : ''; } catch { return ''; }
+}
+const hostOf = u => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+/** The first line of a note, shown faintly beside a name. */
+const notePeek = note => { const t = String(note || '').trim().split('\n')[0]; return t ? `<span class="g-peek" title="${esc(String(note).trim())}">${icon('note')}<span class="ell">${esc(t)}</span></span>` : ''; };
+/** Links as small chips under a goal or milestone; each opens in a new tab. */
+const linkChips = (links, cls = '') => ((links || []).length ? `<div class="g-chips ${cls}">${links.map(l => `<a class="g-chip" href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="${esc(l.url)}">${icon('link')}<span class="ell">${esc(l.t || hostOf(l.url))}</span></a>`).join('')}</div>` : '');
+/** On Save, a link still sitting in the milestone dialog's field is added, not lost. Returns true to keep the dialog open. */
+function el_pending() {
+  const u = document.getElementById('ms-url');
+  if (!u || !u.value.trim()) return false;
+  document.getElementById('ms-ladd').click();
+  return !!u.value.trim();          // still there: it was refused
+}
+const hasExtra = x => !!(String(x.notes || '').trim() || (x.links || []).length);
+/** The editable list of links in a dialog or panel, with the field to add one. */
+const linkRows = (links, del) => links.map((l, i) => `<div class="g-link"><a href="${esc(l.url)}" target="_blank" rel="noopener noreferrer" title="${esc(l.url)}">${icon('link')}<span class="ell">${esc(l.t || hostOf(l.url))}</span><span class="tiny dim ell">${esc(hostOf(l.url))}</span></a>
+    <button type="button" class="icon-btn sm" ${del(l, i)} aria-label="Remove link">${icon('x')}</button></div>`).join('');
+
+/** Notes and links: what the goal is for, and where its material lives.
+ *  The section folds away with its header; folded, the goal shows them in
+ *  brief instead (the note beside the name, the links under the progress). */
+function notesHtml(g) {
+  const links = g.links || [], shut = ui.goalNotesShut.has(g.id);
+  return `<div class="g-notes ${shut ? 'shut' : ''}">
+    <button class="g-notes-h" data-act="goal.notesToggle" data-id="${esc(g.id)}" aria-expanded="${!shut}"><span class="label">Notes and links</span>${shut && hasExtra(g) ? `<span class="tiny dim">${[String(g.notes || '').trim() ? 'note' : '', links.length ? `${links.length} link${links.length === 1 ? '' : 's'}` : ''].filter(Boolean).join(' · ')}</span>` : ''}<span class="goal-chev">${icon('down')}</span></button>
+    ${shut ? '' : `<textarea class="input" placeholder="Why this goal, what done looks like, anything to remember" maxlength="6000" data-change="goal.noteSave" data-id="${esc(g.id)}" data-fk="gn-${esc(g.id)}" aria-label="Notes for ${esc(g.name)}">${esc(g.notes || '')}</textarea>
+    ${links.length ? `<div class="g-links">${linkRows(links, l => `data-act="goal.linkDel" data-goal="${esc(g.id)}" data-id="${esc(l.id)}"`)}</div>` : ''}
+    <form class="row g-link-add" data-addlink data-goal="${esc(g.id)}"><input class="input" name="url" placeholder="Paste a link" maxlength="2000" aria-label="Link address" data-fk="gl-${esc(g.id)}"><input class="input" name="t" placeholder="Name (optional)" maxlength="80" aria-label="Link name" data-fk="glt-${esc(g.id)}"><button class="btn sm" type="submit">${icon('plus')} Link</button></form>`}
+  </div>`;
+}
 
 /* ── time: a task's own, a milestone's tasks added up, a goal's milestones added up ── */
 const msMs = (m, since) => E.taskMs(m.id, since) + (m.tasks || []).reduce((n, t) => n + E.taskMs(t.id, since), 0);
@@ -56,6 +92,7 @@ function timerBtn(id, name) {
 
 function goalHtml(g) {
   const u = goalUnits(g), open = ui.goalOpen.has(g.id);
+  const brief = !open || ui.goalNotesShut.has(g.id);       // notes and links in brief, when their section is not showing them
   const dl = g.deadline ? daysBetween(today(), g.deadline) : null;
   const run = E.runningActivity(), liveId = run ? run.runTaskId : null;
   const n = (g.milestones || []).length;
@@ -64,33 +101,36 @@ function goalHtml(g) {
     return `<div class="ms ${d ? 'done' : ''} ${liveId === m.id ? 'live' : ''}" data-id="${esc(m.id)}" data-goal="${esc(g.id)}" data-flip="m-${esc(m.id)}">
       <div class="row">
         <button class="check sq ${d ? 'on' : ''}" data-act="goal.msToggle" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-pressed="${d}" aria-label="Toggle milestone">${icon('check')}</button>
-        <button class="ms-n grow ell" data-act="goal.open" data-id="${esc(m.id)}" aria-expanded="${mo}">${esc(m.name)}</button>
+        <button class="ms-n grow" data-act="goal.open" data-id="${esc(m.id)}" aria-expanded="${mo}"><span class="ms-name ell">${esc(m.name)}</span>${notePeek(m.notes)}</button>
         ${timeEl('m:' + m.id)}
         ${ts.length ? `<span class="tiny dim">${ts.filter(t => t.done).length}/${ts.length}</span>` : (d ? '' : timerBtn(m.id, m.name))}
-        <button class="icon-btn sm" data-act="goal.msEdit" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Rename milestone">${icon('edit')}</button>
+        <button class="icon-btn sm" data-act="goal.msEdit" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Edit milestone">${icon('edit')}</button>
         <button class="icon-btn sm" data-act="goal.msDel" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" aria-label="Delete milestone">${icon('x')}</button>
       </div>
+      ${linkChips(m.links, 'ms-chips')}
       ${mo ? `<div class="ms-tasks" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}">${ts.map(t => `<div class="row g-task ${t.done ? 'tdone' : ''} ${liveId === t.id ? 'live' : ''}" data-id="${esc(t.id)}" data-flip="t-${esc(t.id)}">
           <button class="check sq ${t.done ? 'on' : ''}" data-act="goal.taskToggle" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" aria-pressed="${!!t.done}" aria-label="Toggle task">${icon('check')}</button>
           <span class="grow">${esc(t.name)}</span>
           ${timeEl('t:' + t.id)}
           ${t.done ? '' : timerBtn(t.id, t.name)}
-          <button class="icon-btn sm" data-act="goal.toBoard" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" title="Send to the board's Today column" aria-label="Send to board">${icon('board')}</button>
+          <button class="icon-btn sm" data-act="goal.toBoard" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" title="Send to Today on the Tasks tab" aria-label="Send to Tasks">${icon('board')}</button>
           <button class="icon-btn sm" data-act="goal.taskDel" data-goal="${esc(g.id)}" data-ms="${esc(m.id)}" data-task="${esc(t.id)}" aria-label="Delete task">${icon('x')}</button></div>`).join('')}
         <form class="row" data-addtask data-goal="${esc(g.id)}" data-ms="${esc(m.id)}"><input class="input" name="name" placeholder="Add a task" maxlength="160" data-fk="t-${esc(m.id)}" aria-label="Add a task"><button class="btn sm" type="submit" aria-label="Add">${icon('plus')}</button></form></div>` : ''}
     </div>`;
   }).join('');
   return `<article class="card goal ${open ? 'open' : ''}" data-id="${esc(g.id)}" data-flip="g-${esc(g.id)}" style="--c:${safeColor(g.color)}">
     <div class="row">
-      <button class="goal-n grow" data-act="goal.open" data-id="${esc(g.id)}" aria-expanded="${open}"><span class="dot" style="background:var(--c)"></span><span class="ell">${esc(g.name)}</span><span class="goal-chev">${icon('down')}</span></button>
+      <button class="goal-n grow" data-act="goal.open" data-id="${esc(g.id)}" aria-expanded="${open}"><span class="dot" style="background:var(--c)"></span><span class="goal-name ell">${esc(g.name)}</span><span class="goal-chev">${icon('down')}</span>${brief ? notePeek(g.notes) : ''}</button>
       ${dl !== null ? `<span class="pill ${dl < 0 ? 'bad' : dl <= 7 ? 'warn' : ''}">${dl < 0 ? Math.abs(dl) + 'd overdue' : dl === 0 ? 'due today' : dl + 'd left'}</span>` : ''}
       <b class="num" style="font-size:20px">${u.pct}%</b>
       <button class="icon-btn sm" data-act="goal.edit" data-id="${esc(g.id)}" aria-label="Edit goal">${icon('edit')}</button>
     </div>
     <div class="bar" style="margin-top:12px"><i style="width:${u.pct}%;background:var(--c)"></i></div>
     <div class="goal-meta"><span>${u.done} of ${u.tot} done</span><span>${n} milestone${n === 1 ? '' : 's'}</span>${g.deadline ? `<span>due ${fmtDate(g.deadline, { day: 'numeric', month: 'short', year: 'numeric' })}</span>` : ''}${timeEl('g:' + g.id, 'goal-spent')}</div>
+    ${brief ? linkChips(g.links) : ''}
     ${open ? `<div class="goal-body" data-goal="${esc(g.id)}">${ms || '<div class="empty" style="padding:8px 0">No milestones yet.</div>'}
-      <form class="row" data-addms data-goal="${esc(g.id)}"><input class="input" name="name" placeholder="Add a milestone" maxlength="120" data-fk="m-${esc(g.id)}" aria-label="Add a milestone"><button class="btn sm" type="submit">${icon('plus')} Milestone</button></form></div>` : ''}
+      <form class="row" data-addms data-goal="${esc(g.id)}"><input class="input" name="name" placeholder="Add a milestone" maxlength="120" data-fk="m-${esc(g.id)}" aria-label="Add a milestone"><button class="btn sm" type="submit">${icon('plus')} Milestone</button></form>
+      ${notesHtml(g)}</div>` : ''}
   </article>`;
 }
 
@@ -164,7 +204,7 @@ export default {
     const goals = S().goals;                 // every goal starts closed; opening one is remembered until the page reloads
     return `<div class="view-h"><h2>Goals</h2><button class="btn sm primary" data-act="goal.new">${icon('plus')} Goal</button></div>
       ${goals.length ? `<div class="goals-wrap"><div class="goals">${goals.map(goalHtml).join('')}</div><aside class="goals-side">${sideHtml()}</aside></div>`
-        : `<div class="card empty" style="padding:48px 16px">No goals yet. A goal here is something with an end: break it into milestones and tasks, time the work, and send tasks to the board when it is time.<br><button class="btn primary" data-act="goal.new">${icon('plus')} Add a goal</button></div>`}`;
+        : `<div class="card empty" style="padding:48px 16px">No goals yet. A goal here is something with an end: break it into milestones and tasks, time the work, and send tasks to the Tasks tab when it is time.<br><button class="btn primary" data-act="goal.new">${icon('plus')} Add a goal</button></div>`}`;
   },
   mount(root) {
     // Three lists nest here, and each can be put in order by dragging: the
@@ -172,7 +212,7 @@ export default {
     const list = root.querySelector('.goals');
     if (list) {
       const order = (arr, box, sel) => { const ids = [...box.querySelectorAll(':scope > ' + sel)].map(el => el.dataset.id), by = new Map(arr.map(x => [x.id, x])); return [...ids.map(id => by.get(id)).filter(Boolean), ...arr.filter(x => !ids.includes(x.id))]; };
-      const KEEP = 'input, select, .icon-btn, .check, form';
+      const KEEP = 'input, textarea, select, a, .icon-btn, .check, form, .g-notes';
       makeSortable(list, { item: '.g-task', container: '.ms-tasks', ignore: KEEP,
         onDrop({ to }) { const { g, m } = find(to.dataset); if (m) { m.tasks = order(m.tasks, to, '.g-task'); commit(g); } } });
       makeSortable(list, { item: '.ms', container: '.goal-body', ignore: KEEP + ', .ms-tasks',
@@ -180,6 +220,15 @@ export default {
       makeSortable(list, { item: '.goal', container: '.goals', ignore: KEEP + ', .goal-body',
         onDrop({ to }) { const st = S(); st.goals = order(st.goals, to, '.goal'); save(); } });
     }
+    root.querySelectorAll('form[data-addlink]').forEach(f => f.addEventListener('submit', e => {
+      e.preventDefault();
+      const g = S().goals.find(x => x.id === f.dataset.goal); if (!g) return;
+      const url = cleanUrl(f.elements.url.value);
+      if (!url) { toast('That is not a web link', 'Paste an address that starts with http:// or https://, or a site like example.com.', { kind: 'bad', ms: 5000 }); return; }
+      (g.links || (g.links = [])).push({ id: uid(), url, t: f.elements.t.value.trim() });
+      f.elements.url.value = ''; f.elements.t.value = '';
+      commit(g);
+    }));
     root.querySelectorAll('form[data-addms], form[data-addtask]').forEach(f => f.addEventListener('submit', e => {
       e.preventDefault();
       const name = f.elements.name.value.trim(); if (!name) return;
@@ -211,6 +260,8 @@ registerActions({
     if (!(await confirmDialog({ title: `Delete “${g.name}”?`, body: 'Its milestones and tasks go with it. The time you logged stays on the Track tab.', ok: 'Delete', danger: true }))) return;
     st.goals = st.goals.filter(x => x !== g); tombstone(g.id); closeModal(); save();
   },
+  'goal.noteSave': (d, e, el) => { const g = S().goals.find(x => x.id === d.id); if (!g || (g.notes || '') === el.value.trim()) return; g.notes = el.value.trim(); commit(g); },
+  'goal.linkDel': d => { const g = S().goals.find(x => x.id === d.goal); if (!g) return; g.links = (g.links || []).filter(l => l.id !== d.id); commit(g); },
   'goal.msToggle': d => {
     const { g, m } = find(d); if (!m) return;
     const ts = m.tasks || [];
@@ -220,9 +271,33 @@ registerActions({
   },
   'goal.msEdit': d => {
     const { g, m } = find(d); if (!m) return;
-    openModal({ title: 'Rename milestone', body: `<div class="field"><label>Milestone</label><input class="input" name="name" value="${esc(m.name)}" maxlength="120" required autofocus></div>`,
-      onSubmit: f => { if (!f.name.trim()) return false; m.name = f.name.trim(); commit(g); } });
+    const links = (m.links || []).map(l => ({ ...l }));
+    const rows = () => linkRows(links, (l, i) => `data-ldel="${i}"`) || '<div class="tiny dim">No links yet.</div>';
+    openModal({ title: 'Edit milestone', wide: true,
+      body: `<div class="field"><label>Milestone</label><input class="input" name="name" value="${esc(m.name)}" maxlength="120" required autofocus></div>
+        <div class="field"><label>Notes</label><textarea class="input" name="notes" maxlength="6000" placeholder="What done looks like, anything to remember">${esc(m.notes || '')}</textarea></div>
+        <div class="field"><label>Links</label><div class="g-links" id="ms-links">${rows()}</div>
+          <div class="row g-link-add" style="margin-top:6px"><input class="input" id="ms-url" placeholder="Paste a link" maxlength="2000" aria-label="Link address"><input class="input" id="ms-lt" placeholder="Name (optional)" maxlength="80" aria-label="Link name"><button type="button" class="btn sm" id="ms-ladd">${icon('plus')} Link</button></div></div>`,
+      onMount: el => {
+        const box = el.querySelector('#ms-links'), url = el.querySelector('#ms-url'), lt = el.querySelector('#ms-lt');
+        const add = () => {
+          if (!url.value.trim()) return;
+          const u = cleanUrl(url.value);
+          if (!u) { toast('That is not a web link', 'Paste an address that starts with http:// or https://, or a site like example.com.', { kind: 'bad', ms: 5000 }); return; }
+          links.push({ id: uid(), url: u, t: lt.value.trim() }); url.value = ''; lt.value = ''; box.innerHTML = rows(); url.focus();
+        };
+        el.querySelector('#ms-ladd').addEventListener('click', add);
+        [url, lt].forEach(i => i.addEventListener('keydown', e => { if (e.key === 'Enter') { e.preventDefault(); add(); } }));
+        box.addEventListener('click', e => { const x = e.target.closest('[data-ldel]'); if (x) { links.splice(+x.dataset.ldel, 1); box.innerHTML = rows(); } });
+      },
+      onSubmit: f => {
+        if (!f.name.trim()) return false;
+        if (el_pending(f)) return false;
+        m.name = f.name.trim(); m.notes = (f.notes || '').trim(); m.links = links;
+        commit(g);
+      } });
   },
+  'goal.notesToggle': d => { ui.goalNotesShut.has(d.id) ? ui.goalNotesShut.delete(d.id) : ui.goalNotesShut.add(d.id); refresh(); },
   'goal.msDel': async d => {
     const { g, m } = find(d); if (!m) return;
     if ((m.tasks || []).length && !(await confirmDialog({ title: `Delete “${m.name}”?`, body: 'Its tasks go with it.', ok: 'Delete', danger: true }))) return;

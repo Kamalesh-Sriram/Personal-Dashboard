@@ -51,7 +51,7 @@ function habitMap(h) {
   const t = today();
   return heatmap(date => {
     const v = h.history[date], due = E.isHabitDueOn(h, date);
-    const attrs = due ? `data-act="habit.toggle" data-id="${esc(h.id)}" data-date="${date}" role="button"` : '';
+    const attrs = due || v === 'done' || date === t ? `data-act="habit.toggle" data-id="${esc(h.id)}" data-date="${date}" role="button"` : '';
     if (v === 'done') return { cls: 'on', style: `background:${safeColor(h.color)}`, title: 'done: click to undo', attrs };
     if (v === 'rest') return { cls: 'rest', title: 'rest day (streak frozen)', attrs };
     if (v === 'missed') return { cls: 'miss', title: 'missed: click to correct', attrs };
@@ -69,12 +69,12 @@ function habitHtml(h, dueToday) {
   }
   const gained = s.doneToday ? Math.round(diff.gain * s.bonus) : 0;
   const toNext = s.milestone ? s.milestone - s.streak : null;
-  const openMap = ui.habOpen.has(h.id);
+  const openMap = ui.habOpen.has(h.id), openNotes = ui.habNotes.has(h.id), hasNotes = !!(h.notes || '').trim();
   return `<article class="hab ${s.doneToday ? 'done' : ''} ${dueToday ? '' : 'off'}" data-id="${esc(h.id)}" data-flip="h-${esc(h.id)}" style="--c:${safeColor(h.color)}">
-    <button class="check lg ${s.doneToday ? 'on' : ''}" data-act="habit.toggle" data-id="${esc(h.id)}" ${dueToday ? '' : 'disabled title="Not due today"'} aria-pressed="${s.doneToday}" aria-label="${esc(h.name)}">${icon('check')}</button>
+    <button class="check lg ${s.doneToday ? 'on' : ''}" data-act="habit.toggle" data-id="${esc(h.id)}" ${dueToday ? '' : 'title="Not due today, but doing it still earns XP"'} aria-pressed="${s.doneToday}" aria-label="${esc(h.name)}">${icon('check')}</button>
     <div class="hab-main">
-      <div class="hab-n">${esc(E.label(h))}</div>
-      <div class="tiny dim">${esc(scheduleLabel(h.schedule))} · ${diff.label}${h.lvXp > 0 ? ` · <span class="tone-accent">+${Math.round(h.lvXp * E.levelState().gain)} level XP</span>` : ''}${dueToday ? '' : ' · not due today'}</div>
+      <div class="hab-n-row"><div class="hab-n">${esc(E.label(h))}</div>${hasNotes && !openNotes ? `<button class="hab-note-peek ell" data-act="habit.notes" data-id="${esc(h.id)}" title="${esc(h.notes.trim())}">${icon('note')}<span class="ell">${esc(h.notes.trim().split('\n')[0])}</span></button>` : ''}</div>
+      <div class="tiny dim">${esc(scheduleLabel(h.schedule))} · ${diff.label}${h.lvXp > 0 ? ` · <span class="tone-accent">+${Math.round(h.lvXp * E.levelState().gain)} level XP</span>` : ''}${dueToday ? '' : s.doneToday ? ' · done on a day off' : ' · not due today'}</div>
       <div class="hab-week">${week.join('')}</div>
     </div>
     <div class="hab-streak ${s.streak >= 7 ? 'hot' : ''} ${s.frozen ? 'frozen' : ''}" title="${s.frozen ? 'Frozen for a rest day' : 'Current streak'}">
@@ -84,15 +84,18 @@ function habitHtml(h, dueToday) {
     </div>
     <div class="hab-xp">
       <div class="row between"><span><b>${s.lv.name}</b> <span class="dim">Lv ${s.lv.level}</span></span>
-        <span class="${gained ? 'xp-gain' : 'dim'}">${gained ? `+${gained} XP today` : dueToday ? `+${s.nextGain} XP when done` : ''}</span></div>
+        <span class="${gained ? 'xp-gain' : 'dim'}">${gained ? `+${gained} XP today` : `+${s.nextGain} XP when done`}</span></div>
       <div class="bar"><i style="width:${s.pct}%;background:var(--c)"></i></div>
       <div class="row between tiny dim"><span><b style="color:var(--text)">${s.xp}</b>${s.next ? ` / ${s.next.min} XP` : ' XP · mastered'}</span>
         <span>${toNext ? `${s.milestone}-day bonus in ${toNext} day${toNext === 1 ? '' : 's'}` : 'all streak bonuses unlocked'}</span></div>
     </div>
     <div class="hab-act">
+      <button class="icon-btn sm ${openNotes ? 'on' : ''} ${hasNotes ? 'has' : ''}" data-act="habit.notes" data-id="${esc(h.id)}" title="${hasNotes ? 'Notes' : 'Add notes'}" aria-expanded="${openNotes}" aria-label="Notes">${icon('note')}</button>
       <button class="icon-btn sm ${openMap ? 'on' : ''}" data-act="habit.map" data-id="${esc(h.id)}" title="Habit map" aria-expanded="${openMap}" aria-label="Show map">${icon('calendar')}</button>
       <button class="icon-btn sm" data-act="habit.edit" data-id="${esc(h.id)}" title="Edit" aria-label="Edit habit">${icon('edit')}</button>
     </div>
+    ${openNotes ? `<div class="hab-notes"><textarea class="input" placeholder="Why this habit matters, how you do it, what makes it easier…" maxlength="4000" data-change="habit.noteSave" data-id="${esc(h.id)}" data-fk="hn-${esc(h.id)}" aria-label="Notes for ${esc(h.name)}">${esc(h.notes || '')}</textarea></div>`
+      : ''}
     ${openMap ? `<div class="hab-map">${habitMap(h)}<div class="tiny dim">Click any due day to correct it. ${s.rate !== null ? `${s.rate}% kept overall · ${s.done} done, ${s.missed} missed.` : ''}</div></div>` : ''}
   </article>`;
 }
@@ -180,9 +183,10 @@ export default {
   },
   render() {
     const st = S(), t = today();
-    const due = st.habits.filter(h => E.isHabitDueOn(h, t)), off = st.habits.filter(h => !E.isHabitDueOn(h, t));
-    // a habit that has been ticked moves down to its own section, out of the way of what is left
-    const todo = due.filter(h => h.history[t] !== 'done'), done = due.filter(h => h.history[t] === 'done');
+    const due = st.habits.filter(h => E.isHabitDueOn(h, t)), off = st.habits.filter(h => !E.isHabitDueOn(h, t) && h.history[t] !== 'done');
+    // a habit that has been ticked moves down to its own section, out of the way of what is left;
+    // one done on a day it was not due joins it there
+    const todo = due.filter(h => h.history[t] !== 'done'), done = st.habits.filter(h => h.history[t] === 'done');
     if (!st.habits.length) return `<div class="view-h"><h2>Habits</h2></div>
       <div class="card empty" style="padding:48px 16px">No habits yet. Start with one or two you can actually keep.<br><button class="btn primary" data-act="habit.new">${icon('plus')} Add a habit</button></div>`;
     return `<div class="view-h"><h2>Habits</h2><button class="btn sm primary" data-act="habit.new">${icon('plus')} Habit</button></div>
@@ -193,7 +197,7 @@ export default {
       <div id="hab-lists">
         ${todo.length ? `<div class="habs">${todo.map(h => habitHtml(h, true)).join('')}</div>`
           : due.length ? `<div class="card empty hab-clear">${icon('check')} Every habit due today is done.</div>` : ''}
-        ${done.length ? `<div class="eyebrow hab-sec">Done today · ${done.length}</div><div class="habs">${done.map(h => habitHtml(h, true)).join('')}</div>` : ''}
+        ${done.length ? `<div class="eyebrow hab-sec">Done today · ${done.length}</div><div class="habs">${done.map(h => habitHtml(h, E.isHabitDueOn(h, t))).join('')}</div>` : ''}
         ${off.length ? `<div class="eyebrow hab-sec">Not due today</div><div class="habs">${off.map(h => habitHtml(h, false)).join('')}</div>` : ''}
       </div>`;
   }
@@ -202,6 +206,8 @@ export default {
 registerActions({
   'habit.new': () => openHabit(null),
   'habit.edit': d => { const h = S().habits.find(x => x.id === d.id); if (h) openHabit(h); },
+  'habit.notes': d => { ui.habNotes.has(d.id) ? ui.habNotes.delete(d.id) : ui.habNotes.add(d.id); refresh(); },
+  'habit.noteSave': (d, e, el) => { const h = S().habits.find(x => x.id === d.id); if (!h || (h.notes || '') === el.value.trim()) return; h.notes = el.value.trim(); touch(h); save(); },
   'habit.map': d => { ui.habOpen.has(d.id) ? ui.habOpen.delete(d.id) : ui.habOpen.add(d.id); refresh(); },
   'habit.delete': async d => {
     const st = S(), h = st.habits.find(x => x.id === d.id); if (!h) return;

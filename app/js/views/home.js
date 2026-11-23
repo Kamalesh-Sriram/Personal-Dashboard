@@ -9,6 +9,7 @@ import { ui, refresh } from '../bus.js';
 import { duelDial } from '../charts.js';
 import { L, objectiveRows, monthHtml } from '../flows.js';
 import { makeSortable } from '../drag.js';
+import { priHtml } from './board.js';
 import * as fx from '../fx.js';
 
 const tone = (ok, warn) => (ok ? 'good' : warn ? 'warn' : 'bad');
@@ -55,13 +56,23 @@ function duelHtml() {
       : show ? `<div class="pace tone-${gap >= 0 ? 'good' : 'bad'}">${standing}</div><div class="small muted" style="text-align:center">${his}</div>` : ''}
     ${show && duelHtml.line ? `<blockquote class="quote">${esc(duelHtml.line)}<cite>${name}</cite></blockquote>` : ''}`;
 }
-/** Streak and combo. Kept apart from the month's record above it, which is
- *  a button and must not be redrawn every second under the pointer. */
+/** Streak and what it takes to win the month. Kept apart from the month's
+ *  record above it, which is a button and must not be redrawn every second
+ *  under the pointer. */
 function statsHtml() {
-  const show = S().settings.modules.shadow, sb = E.scoreboard(), c = E.dayScore(today()).combo;
-  return `${show ? `<div><b class="num">${sb.streak}</b><span>Win streak</span></div>` : ''}
-      <div title="Working in back-to-back blocks multiplies your XP. A gap of more than 10 minutes, or a break, resets it."><b class="num ${c.mult > 1 ? 'tone-good' : ''}">${c.mult.toFixed(1)}×</b><span>${c.chain > 1 ? c.chain + ' blocks in a row' : 'Combo'}</span></div>`;
+  if (!S().settings.modules.shadow) return '';
+  const sb = E.scoreboard(), b = E.monthBoard(today().slice(0, 7));
+  const win = b.secured ? 'Won' : b.outOfReach ? '-' : `${b.need}<small>/${b.open}</small>`;
+  const tip = b.secured ? 'You have already won this month.' : b.outOfReach ? `The month is out of reach. Best finish: ${b.w + b.open} wins.` : `Win ${b.need} of the ${b.open} days left to win the month.`;
+  return `<div><b class="num">${sb.streak}</b><span>Win streak</span></div>
+      <div title="${esc(tip)}"><b class="num ${b.secured ? 'tone-good' : b.outOfReach ? 'tone-mute' : ''}">${win}</b><span>Days to win</span></div>`;
 }
+/** The combo beside Lock in: back-to-back blocks multiply what they pay. */
+function comboHtml() {
+  const c = E.dayScore(today()).combo;
+  return `<b class="num">${c.mult.toFixed(1)}×</b><span>${c.chain > 1 ? `Combo · ${c.chain} in a row` : 'Combo · chain blocks'}</span>`;
+}
+const comboTitle = 'Working in back-to-back blocks multiplies your XP. A gap of more than 10 minutes, or a break, resets it.';
 
 /* ── mission + lock in ── */
 function missionHtml() {
@@ -88,20 +99,23 @@ function lockHtml() {
     return `<div class="task ${tag ? 'tagged' : ''} ${isSel ? 'sel' : ''} ${live ? 'live' : ''}" ${tag ? `style="--c:${safeColor(tag.color)}"` : ''} data-act="home.select" data-nofx data-id="${esc(c.id)}" data-flip="c-${esc(c.id)}" role="button" tabindex="0" aria-pressed="${isSel}">
       <button class="check" data-act="card.complete" data-id="${esc(c.id)}" title="Mark as done" aria-label="Mark as done">${icon('check')}</button>
       <div class="grow"><div class="task-t">${esc(c.text)}</div>
-        <div class="task-m">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}
+        <div class="task-m">${tag ? `<span class="tag" style="color:${safeColor(tag.color)}"><i></i>${esc(tag.name)}</span>` : ''}${priHtml(c.pri, true)}
           ${c.est ? `<span>${fmtMins(c.est)}</span>` : ''}
           ${c.deadline ? `<span class="${c.deadline < today() ? 'tone-bad' : ''}">due ${fmtDate(c.deadline, { day: 'numeric', month: 'short' })}</span>` : ''}</div></div>
       <button class="icon-btn sm" data-act="lock.in" data-card="${esc(c.id)}" title="Start this task" aria-label="Start this task">${icon('play')}</button>
     </div>`;
   }).join('');
+  const up = E.dayScore(today()).combo.mult > 1;
+  const combo = `<span class="lock-combo ${up ? 'up' : ''}" id="home-combo" title="${esc(comboTitle)}">${comboHtml()}</span>`;
+  // the whole bar is one button: Lock in, or open the running timer; the combo is part of it
   return `
     ${running
-      ? `<button class="lockin running" data-act="focus.show"><span class="lockin-t">${icon('zap')} ${esc(E.label(running))} · <span id="home-run">${fmtTimer(Date.now() - running.lastStart)}</span></span>
-           <span class="lockin-s">Tap to open the focus view</span></button>`
-      : `<button class="lockin" data-act="lock.in"><span class="lockin-t">${icon('lock')} ${esc(L().lockIn)}</span>
-           <span class="lockin-s">${sel ? `${esc(sel.text.slice(0, 60))} · ${esc(E.label(act))}` : esc(E.label(act))}</span></button>`}
+      ? `<button class="lock-row running" data-act="focus.show"><span class="lockin running"><span class="lockin-t">${icon('zap')} ${esc(E.label(running))} · <span id="home-run">${fmtTimer(Date.now() - running.lastStart)}</span></span>
+           <span class="lockin-s">Tap to open the focus view</span></span>${combo}</button>`
+      : `<button class="lock-row" data-act="lock.in"><span class="lockin"><span class="lockin-t">${icon('lock')} ${esc(L().lockIn)}</span>
+           <span class="lockin-s">${sel ? `${esc(sel.text.slice(0, 60))} · ${esc(E.label(act))}` : esc(E.label(act))}</span></span>${combo}</button>`}
     <div class="card-h" style="margin:16px 0 8px"><span class="eyebrow">Top tasks</span>
-      <button class="btn sm ghost" data-act="nav.go" data-tab="board">${cards.length > TOP_TASKS ? `${cards.length - TOP_TASKS} more on the board` : 'Open the board'}</button></div>
+      <button class="btn sm ghost" data-act="nav.go" data-tab="board">${cards.length > TOP_TASKS ? `${cards.length - TOP_TASKS} more in Tasks` : 'Open Tasks'}</button></div>
     <div class="tasks">${rows || `<div class="empty" style="padding:10px 0 6px">No tasks for today yet.</div>`}</div>
     <form class="row" data-quickadd style="margin-top:10px">
       <input class="input" name="text" placeholder="Add a task for today" maxlength="200" data-fk="home-add" aria-label="Add a task for today">
@@ -183,8 +197,8 @@ export default {
           <button class="btn sm ${rest ? 'primary' : 'ghost'}" data-act="rest.toggle" title="A rest day is not scored. You have ${b.left} of ${b.allowed} left this week.">${icon('moon')} ${rest ? 'Rest day on' : 'Rest day'}</button>
           ${st.settings.modules.shadow ? `<button class="icon-btn sm" data-act="home.shadowInfo" title="Today's numbers" aria-label="Today's numbers">${icon('help')}</button>` : ''}</div>
         <div id="home-duel">${duelHtml()}</div>
-        ${st.settings.modules.shadow ? monthHtml(t.slice(0, 7), { link: true }) : ''}
-        <div class="mini-stats" id="home-stats">${statsHtml()}</div>
+        ${st.settings.modules.shadow ? monthHtml(t.slice(0, 7), { link: true, line: false }) : ''}
+        ${st.settings.modules.shadow ? `<div class="mini-stats" id="home-stats">${statsHtml()}</div>` : ''}
       </section>
       <section class="card home-main" aria-label="Mission and tasks">${missionHtml()}<div id="home-lock">${lockHtml()}</div></section>
       <section class="hud" id="home-hud" aria-label="Standing">${hudHtml()}</section>
@@ -219,6 +233,8 @@ export default {
     if (duel && !root.classList.contains('entering')) duel.innerHTML = duelHtml();
     const stats = root.querySelector('#home-stats');
     if (stats) stats.innerHTML = statsHtml();
+    const combo = root.querySelector('#home-combo');
+    if (combo) { combo.innerHTML = comboHtml(); combo.classList.toggle('up', E.dayScore(today()).combo.mult > 1); }
     const run = root.querySelector('#home-run'), a = E.runningActivity();
     if (run && a) run.textContent = fmtTimer(Date.now() - a.lastStart);
     if (new Date().getSeconds() % 15 === 0) { const hud = root.querySelector('#home-hud'); if (hud) hud.innerHTML = hudHtml(); }

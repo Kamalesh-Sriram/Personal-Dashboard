@@ -96,8 +96,7 @@ export default {
         <button class="icon-btn" data-act="cal.nav" data-d="1" aria-label="Next month">${icon('right')}</button></div>
       ${S().settings.modules.shadow && m <= t.slice(0, 7) ? `<section class="card month-card" aria-label="The month's record">${monthHtml(m)}</section>` : ''}
       <div class="card flush cal"><div class="cal-h">${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map(d => `<span>${d}</span>`).join('')}</div>
-        <div class="cal-g">${grid}</div></div>
-      <div class="tiny dim" style="margin-top:10px">A green day was won, a red day was lost, a blue day was a rest day. Tap a day for the detail.</div>`;
+        <div class="cal-g">${grid}</div></div>`;
   }
 };
 

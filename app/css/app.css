@@ -204,6 +204,11 @@ textarea.input { height: auto; min-height: 84px; padding: 10px 12px; resize: ver
 .input:focus { outline: none; border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-soft); }
 .input::placeholder { color: var(--text-3); }
 input[type="color"].input { padding: 4px; width: 56px; }
+/* dropdowns draw their own chevron, with room to breathe on the right */
+select.input { -webkit-appearance: none; appearance: none; padding-right: 36px; cursor: pointer;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%238C96A2' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat; background-position: right 13px center; background-size: 12px; }
+select.input:hover { border-color: color-mix(in srgb, var(--accent) 45%, var(--line-2)); }
 input[type="range"] { width: 100%; accent-color: var(--accent); }
 .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; }
 
@@ -293,6 +298,10 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .swatch { width: 34px; height: 34px; border-radius: 50%; border: 2px solid transparent; outline: 2px solid transparent; outline-offset: 2px; padding: 0; }
 .swatch.on { outline-color: var(--text); }
 .swatch.sm { width: 24px; height: 24px; }
+/* the last swatch opens the system colour picker */
+.swatch.custom { position: relative; overflow: hidden; cursor: pointer; background: conic-gradient(from 0deg, #FF453A, #F5A623, #FFD93D, #5FCB8B, #2BC4E0, #3D7BFF, #C58AF9, #EE5D8C, #FF453A); }
+.swatch.custom.on { background: var(--cc); }
+.swatch.custom input { position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%; height: 100%; border: 0; padding: 0; }
 
 /* ── responsive ── */
 @media (max-width: 1080px) {
@@ -334,6 +343,8 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .entering .bar > i { transform-origin: left; animation: grow-x .5s cubic-bezier(.2, .8, .2, 1) .12s both; }
 /* the XP dial sweeps up from empty, and the rival's pace after it */
 @keyframes arc-fill { from { stroke-dashoffset: 1; } to { stroke-dashoffset: 0; } }
+/* one part of a ring drawing itself in; hidden until its turn, so a round cap shows no dot early */
+@keyframes seg-draw { 0% { stroke-dashoffset: 1; opacity: 0; } 1% { opacity: 1; } 100% { stroke-dashoffset: 0; } }
 :root[data-motion="full"] .entering .dial-xp { stroke-dasharray: 1 1; animation: arc-fill .9s cubic-bezier(.2, .8, .2, 1) .1s both; }
 :root[data-motion="full"] .entering .dial-pace { stroke-dasharray: 1 1; animation: arc-fill .9s cubic-bezier(.2, .8, .2, 1) .25s both; }
 .shell { transition: grid-template-columns .18s cubic-bezier(.2, .8, .2, 1); }
@@ -364,10 +375,12 @@ input[type="range"] { width: 100%; accent-color: var(--accent); }
 .check.pop svg path { stroke-dasharray: 20; animation: check-draw .26s cubic-bezier(.6, 0, .3, 1) .1s both; }
 
 /* a row being chosen: a ring leaves its edge and light sweeps across it */
-@keyframes pick-ring { from { box-shadow: 0 0 0 0 var(--accent), inset 0 0 0 1px var(--accent); } to { box-shadow: 0 0 0 12px transparent, inset 0 0 0 1px var(--line-2); } }
+/* --pick is the picked thing's own colour (a task takes its tag's), else the accent */
+@keyframes pick-ring { from { box-shadow: 0 0 0 0 var(--pick, var(--accent)), inset 0 0 0 1px var(--pick, var(--accent)); } to { box-shadow: 0 0 0 12px transparent, inset 0 0 0 1px var(--pick-end, var(--line-2)); } }
+.task.tagged.fx-pick { --pick: var(--c); --pick-end: color-mix(in srgb, var(--c) 60%, transparent); }
 @keyframes pick-sweep { from { transform: translateX(-100%); } to { transform: translateX(100%); } }
 .fx-pick { position: relative; overflow: hidden; animation: pick-ring .5s cubic-bezier(.2, .8, .2, 1); }
-.fx-pick::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--accent) 26%, transparent) 50%, transparent 70%); animation: pick-sweep .55s ease-out both; }
+.fx-pick::after { content: ""; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(100deg, transparent 30%, color-mix(in srgb, var(--pick, var(--accent)) 26%, transparent) 50%, transparent 70%); animation: pick-sweep .55s ease-out both; }
 /* overlays drawn above the page: rays, a rising label, a sweep of light */
 #fx { position: fixed; inset: 0; z-index: 400; pointer-events: none; overflow: hidden; }
 .fx-burst { position: absolute; width: 0; height: 0; --c: var(--accent); }

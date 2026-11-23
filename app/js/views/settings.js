@@ -78,6 +78,9 @@ function layoutHtml() {
   return `<section class="card"><div class="card-h"><span class="eyebrow">Sidebar</span></div>
       ${row('Style', 'Rail keeps a slim strip of icons at the left that expands to show names. Hidden removes it entirely until you press the menu button. Phones always use the hidden style.', seg('settings.sidebar', [['rail', 'Icon rail'], ['hidden', 'Hidden']], s.sidebar))}
     </section>
+    <section class="card"><div class="card-h"><span class="eyebrow">Tasks</span></div>
+      ${row('Colour each column', 'Washes every column on the Tasks tab in its own colour, so Today, Next and the rest are told apart at a glance. Change the colours under Columns on that tab.', toggle('settings.colTint', s.colTint))}
+    </section>
     <section class="card"><div class="card-h"><span class="eyebrow">Tabs</span><span class="tiny dim">order sets the 1-9 shortcuts</span></div>
       <div class="list">${s.tabs.order.map((t, i) => `<div class="li"><span class="nav-ico">${icon(TAB_META[t].icon)}</span><span class="grow">${esc(TAB_META[t].label)}</span>
         <button class="icon-btn sm" data-act="set.tabMove" data-tab="${t}" data-d="-1" ${i === 0 ? 'disabled' : ''} aria-label="Move up">${icon('up')}</button>
@@ -92,13 +95,14 @@ function dayHtml() {
       ${row('Productive window', `The hours you intend to be working. The rival paces himself across it, and start delay is measured from its opening. ${dayOffsetMin() ? `These hours run past midnight, so your day does too: a new day starts at ${fmtMinOfDay(dayOffsetMin(), s.clock24)}, and anything before that still counts for the day before.` : 'For a day that runs past midnight, set an end time earlier than the start, for example 07:00 to 01:00.'}`,
         `<div class="row"><input class="input" type="time" value="${esc(s.window.start)}" data-change="set.window" data-path="settings.window.start" aria-label="Window start"><span>to</span><input class="input" type="time" value="${esc(s.window.end)}" data-change="set.window" data-path="settings.window.end" aria-label="Window end"></div>`)}
       ${row('24-hour clock', '', toggle('settings.clock24', s.clock24))}
-      ${row('Empty the Done column each morning', 'Yesterday\'s finished tasks are removed from the board at the start of each day. The day they were finished keeps the credit.', toggle('settings.autoClearDone', s.autoClearDone))}
+      ${row('Empty the Done column each morning', 'Yesterday\'s finished tasks are removed from the Tasks tab at the start of each day. The day they were finished keeps the credit.', toggle('settings.autoClearDone', s.autoClearDone))}
+      ${row(`How long ${esc(s.labels.lockIn)} holds`, `Seconds before Stop unlocks in the focus view. 0 lets you stop at once.`, num('settings.lockSecs', s.lockSecs, 0, 3600, 15))}
       ${row('Target focus hours a day', 'A full day at target is what the scale is drawn against. It is a reference, not the bar you are judged by.', num('settings.targets.hours', s.targets.hours, 1, 16, 0.5))}
       ${row('Target tasks a day', '', num('settings.targets.tasks', s.targets.tasks, 0, 30))}
       ${row('Currency', 'Three-letter code, used in Subscriptions.', text('settings.currency', s.currency, 'maxlength="3" style="width:96px;text-transform:uppercase"'))}
     </section>
     <section class="card"><div class="card-h"><span class="eyebrow">How XP is paid</span><button class="btn sm ghost" data-act="set.xpReset">Reset to defaults</button></div>
-      ${xpRow('perHour', 'Per focus hour', 'Deep activities earn this in full, Upkeep half, Tracked a token 15%. Back-to-back blocks multiply it up to 3×.', 0, 100)}
+      ${xpRow('perHour', 'Per focus hour', 'Deep activities earn this in full, Upkeep half, Tracked a token 15%. Back-to-back blocks multiply it up to 3×. A deep block pays by its focus rating: 5/5 in full, 4/5 80%, and so on. One not rated yet pays as a 3/5.', 0, 100)}
       ${xpRow('habit', 'Per habit checked', '', 0, 100)}
       ${xpRow('task', 'Per task completed', '', 0, 100)}
       ${xpRow('efficiency', 'Efficiency bonus (max)', 'Scaled by the average focus rating of your sessions.', 0, 100)}

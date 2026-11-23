@@ -291,8 +291,14 @@ button.month:hover .month-s { color: var(--text); }
    order, and widen when pointed at or picked. The middle is HTML on top. */
 .ring-wrap { position: relative; max-width: 330px; margin: 0 auto; }
 .ring24 { overflow: visible; }
-.ring-seg { fill: currentColor; stroke: none !important; opacity: var(--o, 1); cursor: pointer; outline: none; transform-box: view-box; transform-origin: 150px 150px; filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 50%, transparent)); transition: transform .24s cubic-bezier(.2, .8, .2, 1), opacity .2s, filter .2s; }
-.ring-seg:hover, .ring-seg.hot, .ring-seg.on, .ring-seg:focus-visible { opacity: 1; transform: scale(1.07); filter: drop-shadow(0 0 10px currentColor); }
+.ring-seg { fill: currentColor; stroke: none !important; opacity: var(--o, 1); cursor: pointer; outline: none; transition: opacity .2s; }
+/* Each block has two layers. The hit area does not move and covers the block at rest and grown,
+   so pointing just below a block cannot make it grow away from the cursor and back again. The
+   visible layer is the one that grows. */
+.ring-hit { fill: transparent; pointer-events: all; }
+.ring-vis { pointer-events: none; transform-box: view-box; transform-origin: 150px 150px; filter: drop-shadow(0 0 4px color-mix(in srgb, currentColor 50%, transparent)); transition: transform .24s cubic-bezier(.2, .8, .2, 1), filter .2s; }
+.ring-seg:hover, .ring-seg.hot, .ring-seg.on, .ring-seg:focus-visible { opacity: 1; }
+.ring-seg:hover .ring-vis, .ring-seg.hot .ring-vis, .ring-seg.on .ring-vis, .ring-seg:focus-visible .ring-vis { transform: scale(1.07); filter: drop-shadow(0 0 10px currentColor); }
 .ring24.picking .ring-seg:not(.on):not(.hot) { opacity: calc(var(--o, 1) * .4); }
 :root:not([data-motion="off"]) .ring-wrap.draw .ring-draw, :root:not([data-motion="off"]) .entering .ring-draw { stroke-dasharray: 1 1; animation: seg-draw var(--t) cubic-bezier(.33, .1, .3, 1) calc(var(--d) + 120ms) both; }
 .ring-hand { pointer-events: none; }

@@ -2,6 +2,13 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## 5.6.1
+
+### Fixed
+
+- **The 24-hour ring flickered** when the pointer rested just outside a block: the block grew away from the pointer, shrank back under it, and the middle of the ring kept switching between the block and the day's total. Each block now has a fixed hover area covering it at rest and grown, so it grows once and stays.
+- **Finance:** switching Day by day between Mixed and Split no longer makes the ring draw itself in again; only the bars do.
+
 ## 5.6.0
 
 ### Fixed

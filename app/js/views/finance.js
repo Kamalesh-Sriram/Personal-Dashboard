@@ -232,7 +232,7 @@ export default {
     const cur = mainCurrency(d.txs), all = d.txs.filter(t => t.cur === cur), other = d.txs.length - all.length;
     const year = ui.finView === 'year', ym = month(), y = +ym.slice(0, 4), cats = Fin.cats();
     const set = year ? F.inYear(all, y) : F.inMonth(all, ym);
-    const drawChart = ui.finDraw !== false || ui.entering;
+    const drawChart = ui.finDraw !== false || ui.entering || ui.finBarsDraw; ui.finBarsDraw = false;
     const prevYm = (() => { const p = new Date(y, +ym.slice(5) - 2, 1); return `${p.getFullYear()}-${pad(p.getMonth() + 1)}`; })();
     const t = F.totals(set, cats), prev = F.totals(year ? F.inYear(all, y - 1) : F.inMonth(all, prevYm), cats);
     const loose = set.filter(x => !x.cat).length, links = (s.bank && s.bank.links) || [], active = links.filter(l => l.status === 'active'), expired = links.filter(l => l.status === 'expired');
@@ -373,7 +373,7 @@ registerActions({
   },
   'fin.filter': d => { const c = picked(); ui.finCats = c.includes(d.cat) ? c.filter(x => x !== d.cat) : [...c, d.cat]; ui.finAll = false; refresh(); },
   'fin.filterOnly': d => { ui.finCats = [d.cat]; ui.finAll = false; ui.finScroll = true; refresh(); },
-  'fin.chart': d => { S().settings.finChart = d.v; ui.finDraw = true; save(); },
+  'fin.chart': d => { S().settings.finChart = d.v; ui.finBarsDraw = true; save(); },   // only the bars draw again: the ring stays as it is
   'fin.filterClear': () => { ui.finCats = []; refresh(); },
   'fin.day': d => { ui.finDay = ui.finDay === d.day ? null : d.day; ui.finAll = false; refresh(); },
   'fin.dayClear': () => { ui.finDay = null; refresh(); },

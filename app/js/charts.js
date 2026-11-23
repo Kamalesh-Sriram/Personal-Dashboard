@@ -113,7 +113,7 @@ export function dayRing({ sessions, win, nowMin = null, h24 = true, sel = null }
     masks += `<mask id="${id}" maskUnits="userSpaceOnUse" x="-20" y="-20" width="340" height="340"><path class="ring-draw" pathLength="1" d="${arcPath(cx, cy, R, a0 - 0.5, a1 + 0.5)}" stroke="#fff" stroke-width="${SW + 16}" fill="none" style="--d:${times[i].d}ms;--t:${times[i].dur}ms"/></mask>`;
     return `<g class="ring-seg ${sel != null && String(sel) === String(s.start) ? 'on' : ''}" style="--i:${i};--o:${s.opacity};color:${c}" stroke="${c}"
       data-seg="${i}" data-id="${esc(s.id)}" data-start="${s.start}" data-live="${s.live ? 1 : ''}" data-name="${esc(s.name)}" data-range="${esc(s.range)}" data-dur="${esc(s.dur)}"
-      tabindex="0" role="button" aria-label="${esc(s.title)}"><path d="${sectorPath(cx, cy, ro, ri, a0, a1)}" mask="url(#${id})"/></g>`;
+      tabindex="0" role="button" aria-label="${esc(s.title)}"><path class="ring-hit" d="${sectorPath(cx, cy, ro * 1.07 + 3, ri - 2, a0, a1)}"/><path class="ring-vis" d="${sectorPath(cx, cy, ro, ri, a0, a1)}" mask="url(#${id})"/></g>`;
   }).join('');
   let hand = '';
   if (nowMin !== null) {

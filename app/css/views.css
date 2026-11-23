@@ -578,12 +578,6 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .fin-cat.on { border-color: var(--c); background: color-mix(in srgb, var(--c) 10%, transparent); }
 .fin-cat-n { flex: 1; min-width: 0; font-size: 13.5px; }
 .fin-cat b { min-width: 84px; text-align: right; font-weight: 600; font-size: 13.5px; font-variant-numeric: tabular-nums; }
-.fin-year { display: grid; grid-template-columns: repeat(12, minmax(0, 1fr)); gap: 6px; align-items: end; }
-.fin-m { display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 4px 0; border: 0; border-radius: 6px; background: transparent; color: var(--text-3); font-size: 11px; }
-.fin-m:hover { background: var(--card-2); color: var(--text); } .fin-m.now { color: var(--accent-text); font-weight: 700; }
-.fin-m-bars { display: flex; align-items: flex-end; gap: 3px; width: 100%; height: 120px; padding: 0 3px; }
-.fin-m-bars i { flex: 1; border-radius: 3px 3px 1px 1px; min-height: 1px; }
-.fin-m-bars i.in { background: color-mix(in srgb, var(--good) 60%, transparent); } .fin-m-bars i.out { background: var(--accent); box-shadow: 0 0 10px -3px var(--accent-glow); }
 .fin-days { display: grid; grid-template-columns: repeat(var(--n), minmax(0, 1fr)); gap: 2px; align-items: end; height: 132px; }
 .fin-days i { display: block; border-radius: 2px 2px 0 0; background: color-mix(in srgb, var(--accent) 70%, var(--card-3)); }
 .fin-list { display: flex; flex-direction: column; }
@@ -648,7 +642,6 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
 .fin-stats .stat { min-width: 0; }
 .fin-stats .stat b.num { font-size: 22px; overflow-wrap: anywhere; }
 .fin-chart { display: flex; flex-direction: column; min-width: 0; }
-.fin-chart .fin-year { flex: 1; }
 .fd-read { display: flex; align-items: baseline; gap: 10px; min-height: 30px; margin: -2px 0 6px; flex-wrap: wrap; }
 .fd-read b { font: 650 22px/1 var(--font-display); font-variant-numeric: tabular-nums; }
 .fd-when { font-size: 12px; color: var(--text-3); text-transform: uppercase; letter-spacing: .08em; font-weight: 600; }
@@ -684,6 +677,10 @@ details.fold[open] > summary svg { transform: rotate(180deg); } details.fold[ope
   box-shadow: 0 4px 18px -8px var(--c); }
 .fd-plot.split .fd-bar i.down::before { top: auto; bottom: 0; }
 .fd-plot.split .fd-bar { border-radius: 5px; }
+/* the year view: income and spending side by side in each month */
+.fd-plot.pair .fd-bar i { width: calc(40% - 1px); }
+.fd-plot.pair .fd-bar i.in { --c: var(--fd-green); left: 10%; right: auto; }
+.fd-plot.pair .fd-bar i.out { --c: var(--fd-red); left: auto; right: 10%; }
 .fd-y span.in { color: color-mix(in srgb, var(--good) 70%, var(--text-3)); }
 .fd-grid i.in { background: color-mix(in srgb, var(--good) 10%, var(--line)); }
 .fd-d { display: grid; place-items: center; font-size: 10.5px; font-variant-numeric: tabular-nums; border-radius: 6px; transition: color .15s, background-color .15s; }

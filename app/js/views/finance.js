@@ -88,13 +88,6 @@ function catsHtml(t, cur) {
         ${on.length ? `<div class="fin-picked"><span>${on.length} picked · <b>${esc(money(chosenSum, cur))}</b></span><button class="btn sm ghost" data-act="fin.filterClear">Clear</button></div>` : ''}</div>
     </div>`;
 }
-function yearHtml(months, cur) {
-  const max = Math.max(1, ...months.map(m => Math.max(m.spent, m.income)));
-  return `<div class="fin-year">${months.map(m => `<button class="fin-m ${m.ym === today().slice(0, 7) ? 'now' : ''}" data-act="fin.month" data-ym="${m.ym}" title="${esc(monthName(m.ym))}: spent ${esc(money(m.spent, cur))}, income ${esc(money(m.income, cur))}">
-      <div class="fin-m-bars"><i class="in" style="height:${m.income / max * 100}%"></i><i class="out" style="height:${Math.max(0, m.spent) / max * 100}%"></i></div>
-      <span>${new Date(+m.ym.slice(0, 4), +m.ym.slice(5) - 1, 1).toLocaleDateString(undefined, { month: 'narrow' })}</span></button>`).join('')}</div>
-    <div class="tiny dim" style="margin-top:8px">Green is income, the accent is spending. Press a month to open it.</div>`;
-}
 /** Money out and money in for each day of a month. Same rules as the totals:
  *  transfers are left out, a refund lowers that day's spending. */
 function perDay(txs, ym) {
@@ -129,30 +122,36 @@ const dayLabel = (ym, d) => new Date(+ym.slice(0, 4), +ym.slice(5) - 1, d).toLoc
                in green, each on its own scale, so neither squashes the other. */
 const CAP = 84, OVER = 90;            // together: % of the bar area the scale fills, and how far a capped bar reaches
 const UP = 62, DOWN = 32, MID = 36;   // split: room above the line, room below it, and where the line sits (from the bottom)
-function dailyHtml(txs, ym, cur, draw) {
-  const { n, out, inc } = perDay(txs, ym);
-  const spentDay = out.map(o => Math.max(0, o)), tot = spentDay.map((o, i) => o + inc[i]);
-  const split = S().settings.finChart === 'split';
-  const sel = ui.finDay && ui.finDay.slice(0, 7) === ym ? +ui.finDay.slice(8) : 0;
-  const t = today(), now = t.slice(0, 7) === ym ? +t.slice(8) : ym < t.slice(0, 7) ? n + 1 : 0;
-  const maxOut = Math.max(...spentDay), maxIn = Math.max(...inc);
-  const sOut = niceScale(Math.max(1, maxOut > 0 ? maxOut : Math.max(...tot)));      // expenses set the scale
+/** The flow chart both views use: a column per day (month view) or per
+ *  month (year view), each a button with its label under it. items:
+ *  [{ label, short, out, inc, later, on, act }] where `act` is the button's
+ *  data attributes. In Mixed, one bar shaded red (spending) to green
+ *  (income), with spending setting the scale; in Split, spending above a
+ *  line and income below, each on its own scale. */
+function flowChart({ items, cur, draw, avg, avgLabel, picked, aria, split = false, pair = false }) {
+  const n = items.length;
+  const spent = items.map(x => Math.max(0, x.out)), inc = items.map(x => x.inc), tot = spent.map((o, i) => o + inc[i]);
+  const maxOut = Math.max(...spent), maxIn = Math.max(...inc);
+  // expenses set the scale; with the two side by side (the year view), the larger of the two does
+  const sOut = niceScale(Math.max(1, pair ? Math.max(maxOut, maxIn) : maxOut > 0 ? maxOut : Math.max(...tot)));
   const sIn = niceScale(Math.max(1, maxIn));
   let cols = '';
-  for (let i = 0; i < n; i++) {
-    const d = i + 1, o = spentDay[i], m = inc[i], label = dayLabel(ym, d), sum = o + m;
+  items.forEach((x, i) => {
+    const o = spent[i], m = inc[i], sum = o + m;
     let bar = '';
-    if (split) {
+    if (pair) {
+      bar = `${m > 0 ? `<i class="in" style="height:${(m / sOut.top * CAP).toFixed(2)}%"></i>` : ''}${o > 0 ? `<i class="out" style="height:${(o / sOut.top * CAP).toFixed(2)}%"></i>` : ''}`;
+    } else if (split) {
       bar = `${o > 0 ? `<i class="up" style="height:${(o / sOut.top * UP).toFixed(2)}%"></i>` : ''}${m > 0 ? `<i class="down" style="height:${(m / sIn.top * DOWN).toFixed(2)}%"></i>` : ''}`;
     } else if (sum > 0) {
       const over = sum > sOut.top, share = Math.round(m / sum * 100);
       bar = `<i class="${over ? 'over' : ''}" style="--mix:${share}%;height:${over ? OVER : (sum / sOut.top * CAP).toFixed(2)}%">${over ? '<u></u>' : ''}</i>${over ? `<b class="fd-tag ${m > o ? 'in' : ''}" style="--mix:${share}%">${m > o ? '+' : ''}${esc(compact(m > o ? m : sum, cur))}</b>` : ''}`;
     }
-    cols += `<button class="fd-col ${sel === d ? 'on' : ''} ${d > now ? 'later' : ''}" data-act="fin.day" data-day="${ym}-${String(d).padStart(2, '0')}"
-        data-label="${esc(label)}" data-out="${esc(money(o, cur))}" data-in="${esc(money(m, cur))}" style="--i:${i}"
-        aria-label="${esc(label)}: spent ${esc(money(o, cur))}${m ? `, income ${esc(money(m, cur))}` : ''}" aria-pressed="${sel === d}">
-      <span class="fd-bar">${bar}</span><span class="fd-d">${d}</span></button>`;
-  }
+    cols += `<button class="fd-col ${x.on ? 'on' : ''} ${x.later ? 'later' : ''}" ${x.act}
+        data-label="${esc(x.label)}" data-out="${esc(money(o, cur))}" data-in="${esc(money(m, cur))}" style="--i:${i}"
+        aria-label="${esc(x.label)}: spent ${esc(money(o, cur))}${m ? `, income ${esc(money(m, cur))}` : ''}" aria-pressed="${!!x.on}">
+      <span class="fd-bar">${bar}</span><span class="fd-d">${esc(x.short)}</span></button>`;
+  });
   let ys = '', grid = '';
   const tick = (at, txt, cls = '') => { ys += `<span class="${cls}" style="bottom:${at.toFixed(2)}%">${esc(txt)}</span>`; grid += `<i class="${cls}" style="bottom:${at.toFixed(2)}%"></i>`; };
   if (split) {
@@ -162,14 +161,36 @@ function dailyHtml(txs, ym, cur, draw) {
   } else {
     for (let k = 0; k <= sOut.steps; k++) tick(k / sOut.steps * CAP, compact(sOut.top * k / sOut.steps, cur), k === 0 ? 'base' : '');
   }
-  const spent = out.reduce((a2, v) => a2 + v, 0), days = Math.max(1, Math.min(n, now > n ? n : now || n));
-  return `<div class="fd-read" id="fd-read" data-avg="${esc(money(spent / days, cur))}">${dailyRead(sel ? { label: dayLabel(ym, sel), out: money(Math.max(0, out[sel - 1]), cur), in: money(inc[sel - 1], cur), picked: true } : null, money(spent / days, cur))}</div>
-    <div class="fd-plot ${split ? 'split' : ''}"><div class="fd-y">${ys}</div>
+  return `<div class="fd-read" id="fd-read" data-avg="${esc(avg)}" data-avglabel="${esc(avgLabel)}">${dailyRead(picked, avg, avgLabel)}</div>
+    <div class="fd-plot ${split ? 'split' : ''} ${pair ? 'pair' : ''}"><div class="fd-y">${ys}</div>
       <div class="fd-area"><div class="fd-grid" aria-hidden="true">${grid}</div>
-        <div class="fd-cols ${draw ? 'draw' : ''}" style="--n:${n}" role="group" aria-label="Spending and income for each day of ${esc(monthName(ym))}">${cols}</div></div></div>`;
+        <div class="fd-cols ${draw ? 'draw' : ''}" style="--n:${n}" role="group" aria-label="${esc(aria)}">${cols}</div></div></div>`;
 }
-function dailyRead(d, avg) {
-  if (!d) return `<span class="fd-when">Average a day</span><b>${esc(avg)}</b>`;
+function dailyHtml(txs, ym, cur, draw) {
+  const { n, out, inc } = perDay(txs, ym);
+  const sel = ui.finDay && ui.finDay.slice(0, 7) === ym ? +ui.finDay.slice(8) : 0;
+  const t = today(), now = t.slice(0, 7) === ym ? +t.slice(8) : ym < t.slice(0, 7) ? n + 1 : 0;
+  const items = Array.from({ length: n }, (_, i) => {
+    const d = i + 1;
+    return { label: dayLabel(ym, d), short: String(d), out: out[i], inc: inc[i], later: d > now, on: sel === d, act: `data-act="fin.day" data-day="${ym}-${String(d).padStart(2, '0')}"` };
+  });
+  const spent = out.reduce((a2, v) => a2 + v, 0), days = Math.max(1, Math.min(n, now > n ? n : now || n));
+  return flowChart({ items, cur, draw, split: S().settings.finChart === 'split', avg: money(spent / days, cur), avgLabel: 'Average a day', aria: `Spending and income for each day of ${monthName(ym)}`,
+    picked: sel ? { label: dayLabel(ym, sel), out: money(Math.max(0, out[sel - 1]), cur), in: money(inc[sel - 1], cur), picked: true } : null });
+}
+/** The year view: the same chart, a column per month with income (green) and spending (red) side by side. Pressing one opens it. */
+function yearHtml(months, cur, draw) {
+  const now = today().slice(0, 7);
+  const items = months.map(m => ({
+    label: monthName(m.ym), short: new Date(+m.ym.slice(0, 4), +m.ym.slice(5) - 1, 1).toLocaleDateString(undefined, { month: 'short' }),
+    out: m.spent, inc: m.income, later: m.ym > now, on: false, act: `data-act="fin.month" data-ym="${m.ym}"`
+  }));
+  const gone = months.filter(m => m.ym <= now), spent = gone.reduce((a2, m) => a2 + Math.max(0, m.spent), 0);
+  return flowChart({ items, cur, draw, pair: true, avg: money(spent / Math.max(1, gone.length), cur), avgLabel: 'Average a month', picked: null,
+    aria: `Spending and income for each month of ${months[0] ? months[0].ym.slice(0, 4) : ''}` });
+}
+function dailyRead(d, avg, avgLabel = 'Average a day') {
+  if (!d) return `<span class="fd-when">${esc(avgLabel)}</span><b>${esc(avg)}</b>`;
   return `<span class="fd-when">${esc(d.label)}</span><b>${esc(d.out)}</b><span class="fd-in-v">${d.in && !/^\D*0([.,]00)?\D*$/.test(d.in) ? `+${esc(d.in)} in` : ''}</span>${d.picked ? '<button class="btn sm ghost" data-act="fin.dayClear">Clear</button>' : ''}`;
 }
 function listHtml(txs, cur) {
@@ -220,7 +241,7 @@ export default {
     const chart = root.querySelector('.fd-cols'), read = root.querySelector('#fd-read');
     if (chart && read) {
       const back = read.innerHTML;
-      chart.addEventListener('pointerover', e => { const g = e.target.closest('.fd-col'); if (g) read.innerHTML = dailyRead({ label: g.dataset.label, out: g.dataset.out, in: g.dataset.in }, read.dataset.avg); });
+      chart.addEventListener('pointerover', e => { const g = e.target.closest('.fd-col'); if (g) read.innerHTML = dailyRead({ label: g.dataset.label, out: g.dataset.out, in: g.dataset.in }, read.dataset.avg, read.dataset.avglabel); });
       chart.addEventListener('pointerleave', () => { read.innerHTML = back; });
     }
     if (ui.finScroll) { ui.finScroll = false; const tx = root.querySelector('#fin-tx'); if (tx) tx.scrollIntoView({ behavior: 'smooth', block: 'start' }); }
@@ -249,7 +270,7 @@ export default {
         <button class="icon-btn" data-act="fin.nav" data-d="1" aria-label="Later">${icon('right')}</button>
         <span class="grow"></span>${segHtml('fin.view', [['month', 'Month'], ['year', 'Year']], year ? 'year' : 'month')}</div>
       <div class="fin-top">${statsHtml(t, prev, cur, year ? 'year' : 'month')}
-        <section class="card fin-chart"><div class="card-h"><span class="eyebrow">${year ? 'Month by month' : 'Day by day'}</span>${year ? '' : segHtml('fin.chart', [['together', 'Mixed'], ['split', 'Split']], S().settings.finChart === 'split' ? 'split' : 'together')}</div>${year ? yearHtml(F.yearMonths(all, y, cats), cur) : dailyHtml(set, ym, cur, drawChart)}</section></div>
+        <section class="card fin-chart"><div class="card-h"><span class="eyebrow">${year ? 'Month by month' : 'Day by day'}</span>${year ? '' : segHtml('fin.chart', [['together', 'Mixed'], ['split', 'Split']], S().settings.finChart === 'split' ? 'split' : 'together')}</div>${year ? yearHtml(F.yearMonths(all, y, cats), cur, drawChart) : dailyHtml(set, ym, cur, drawChart)}</section></div>
       ${loose ? `<div class="notice fin-loose" style="margin-top:var(--gap)">${icon('help')} <span>${loose} transaction${loose === 1 ? ' has' : 's have'} no category yet.</span><button class="btn sm" data-act="fin.filterOnly" data-cat="-">Show ${loose === 1 ? 'it' : 'them'}</button></div>` : ''}
       <section class="card" style="margin-top:var(--gap)"><div class="card-h"><span class="eyebrow">Where it went</span></div>${catsHtml(t, cur)}</section>
       <section class="card" id="fin-tx" style="margin-top:var(--gap)">${listHtml(set, cur)}</section>

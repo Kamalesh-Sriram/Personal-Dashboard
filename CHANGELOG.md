@@ -2,6 +2,12 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## 5.6.2
+
+### Changed
+
+- **Finance, year view:** Month by month uses the same bars as Day by day, rounded with glowing caps, rising in when the view opens, each month labelled, with its totals shown as you point at it. Each month keeps its green income bar and red spending bar side by side. The caption under it is gone.
+
 ## 5.6.1
 
 ### Fixed

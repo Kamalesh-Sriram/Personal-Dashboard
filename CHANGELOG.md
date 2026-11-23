@@ -2,6 +2,12 @@
 
 Each entry may end with an **After updating** line: something to do once, after your copy has the new version.
 
+## 5.5.1
+
+### Fixed
+
+- **A breathing High task's left edge was dimmer than other tasks'.** The glow now leaves the left edge alone, so it keeps the tag's full colour like every other task.
+
 ## 5.5.0
 
 ### Fixed
